@@ -1,0 +1,29 @@
+# HVAC barrel vent housings — sized for automotive interior dash registers.
+# Rotating barrel diffuser with horizontal or vertical blade stacks; the
+# housing accepts a circular barrel that pivots about the vent's flow axis.
+#
+# Dimensions in mm. axial_depth_mm is the host-side cylindrical recess depth
+# (the barrel cylinder slips into this pocket and is retained by snaps or a
+# bezel ring around outer_d_mm).
+schema_version: 1
+standard: "OEM dashboard barrel vent (typical passenger-car center stack)"
+defaults:
+  blade_count: 10
+  blade_thickness_mm: 1.2
+  blade_pitch_mm: 6.0
+sizes:
+  small_50:
+    outer_d_mm: 50.0
+    inner_d_mm: 44.0
+    axial_depth_mm: 35.0
+    bezel_thickness_mm: 1.5
+  standard_58:
+    outer_d_mm: 58.0
+    inner_d_mm: 52.0
+    axial_depth_mm: 40.0
+    bezel_thickness_mm: 1.5
+  large_72:
+    outer_d_mm: 72.0
+    inner_d_mm: 65.0
+    axial_depth_mm: 48.0
+    bezel_thickness_mm: 2.0

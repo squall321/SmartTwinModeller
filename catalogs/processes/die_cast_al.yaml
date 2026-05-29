@@ -1,0 +1,37 @@
+code: die_cast_al
+name: Aluminum Die Casting
+description: |
+  Mid-range watch / phone housing — molten Al injected into reusable steel mold.
+  Surface finish 후공정 (CNC / 표면 처리) 권장.
+
+rules:
+  min_wall_mm: 1.0
+  min_draft_deg: 1.0
+  undercut_allowed: false
+  min_fillet_r_mm: 0.5
+  max_aspect_ratio_pocket: 4.0
+  slide_core_cost_factor: 2.0
+
+# manifest 의 skill.manufacturing 과 cross-reference 검증용
+applicable_to_skills:
+  - box
+  - rounded_slab
+  - disc_with_dome
+  - extrude_pocket
+  - extrude_plateau
+  - extrude_through
+  - boss_with_hole
+  - rib
+  - mounting_pad
+  - fillet_edges_by_predicate
+  - chamfer_edges_by_predicate
+  - hole
+  - hole_array
+  - grille_pattern
+  - lug_pair
+  - crown_shaft_hole
+
+not_applicable_to:
+  - polymer_inlay        # 다른 material 필요
+  - antenna_slit         # 후가공으로
+  - swept_relief         # 곡선/복잡 가공 어려움 (post-machining)

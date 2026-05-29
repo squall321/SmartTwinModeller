@@ -1,0 +1,45 @@
+code: cnc_5axis
+name: CNC 5-Axis Milling
+description: |
+  5축 CNC — 곡면 가공, 일부 undercut 가능. 비용 ↑.
+
+rules:
+  min_wall_mm: 0.4
+  min_fillet_r_mm: 0.2
+  min_tool_radius_mm: 0.3
+  undercut_allowed: true     # 일부 (제한적)
+  max_aspect_ratio_pocket: 10.0
+  cost_factor_vs_3axis: 2.5
+
+applicable_to_skills:
+  # 5축은 거의 모든 skill 적용 가능
+  - box
+  - rounded_slab
+  - disc_with_dome
+  - extrude_pocket
+  - extrude_plateau
+  - extrude_through
+  - boss_with_hole
+  - rib
+  - snap_hook
+  - mounting_pad
+  - fillet_edges_by_predicate
+  - chamfer_edges_by_predicate
+  - variable_radius_fillet
+  - loft_side_profile
+  - hole
+  - hole_array
+  - grille_pattern
+  - lug_pair
+  - crown_shaft_hole
+  - o_ring_groove
+  - swept_relief
+  - antenna_slit
+  - polymer_inlay
+  - final_fillet_all_sharp_edges
+  - surface_offset
+  - tag_face
+  - subtract
+  - union
+
+not_applicable_to: []

@@ -1,0 +1,49 @@
+name: phase0_fixture_make
+description: |
+  합성 워치 STEP fixture 생성 + 로드 검증.
+  - fixtures/make_simple_watch.py 실행 → simple_watch.step + housing_only + 5 부품 STEP
+  - STEPCAFControl_Reader 로 어셈블리 트리 + 부품 네이밍 읽기
+  - 부품이 정확히 5개 (housing, display, battery, crown, lug_pair) 인지 확인
+  - viewport 캡처
+
+phase: 0
+
+inputs: []
+
+steps:
+  - kind: run_python
+    script: fixtures/make_simple_watch.py
+    timeout_s: 60
+  - kind: check_file_exists
+    paths:
+      - fixtures/simple_watch.step
+      - fixtures/simple_watch_housing_only.step
+      - fixtures/simple_watch_components/housing.step
+      - fixtures/simple_watch_components/display.step
+      - fixtures/simple_watch_components/battery.step
+      - fixtures/simple_watch_components/crown.step
+      - fixtures/simple_watch_components/lug_pair.step
+  - kind: read_xde_step
+    path: fixtures/simple_watch.step
+    as: assembly
+  - kind: check_parts
+    of: assembly
+    expected_names: [housing, display, battery, crown, lug_pair]
+    name_match: any_case
+  - kind: viewport_offscreen
+    load_step: fixtures/simple_watch.step
+    views: [iso, top, side, front, exploded]
+  - kind: face_count
+    of: assembly
+    parts:
+      housing: {min: 10, max: 30}     # 외피는 적당히 복잡
+      display: {min: 3,  max: 8}
+      battery: {min: 3,  max: 8}
+      crown:   {min: 3,  max: 8}
+      lug_pair: {min: 6, max: 20}
+
+expected:
+  outcome: PASS
+
+mail:
+  subject_template: "[PhoneDesigner] {scenario} — {outcome}"

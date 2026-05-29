@@ -1,0 +1,44 @@
+# Cylindrical dowel pins (ISO 2338 m6 / similar). All dimensions mm.
+#
+# - diameter_mm: nominal pin diameter
+# - press_fit_hole_mm: H7 hole (interference / press fit — pin retained by friction)
+# - slip_fit_hole_mm:  H8 hole (slip / location fit — pin can be inserted by hand)
+#
+# H7/H8 tolerance values are the *upper* limit for the nominal pin size;
+# we use the upper limit as the practical hole diameter so a CNC mill / drill
+# producing a hole at that diameter matches the intended fit.
+schema_version: 1
+standard: "ISO 2338 / DIN 7"
+pins:
+  "2":
+    diameter_mm: 2.0
+    press_fit_hole_mm: 2.010   # H7 upper for d=2
+    slip_fit_hole_mm:  2.014   # H8 upper for d=2
+  "2.5":
+    diameter_mm: 2.5
+    press_fit_hole_mm: 2.510
+    slip_fit_hole_mm:  2.514
+  "3":
+    diameter_mm: 3.0
+    press_fit_hole_mm: 3.010
+    slip_fit_hole_mm:  3.014
+  "4":
+    diameter_mm: 4.0
+    press_fit_hole_mm: 4.012
+    slip_fit_hole_mm:  4.018
+  "5":
+    diameter_mm: 5.0
+    press_fit_hole_mm: 5.012
+    slip_fit_hole_mm:  5.018
+  "6":
+    diameter_mm: 6.0
+    press_fit_hole_mm: 6.012
+    slip_fit_hole_mm:  6.018
+  "8":
+    diameter_mm: 8.0
+    press_fit_hole_mm: 8.015
+    slip_fit_hole_mm:  8.022
+  "10":
+    diameter_mm: 10.0
+    press_fit_hole_mm: 10.015
+    slip_fit_hole_mm:  10.022

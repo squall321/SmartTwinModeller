@@ -1,0 +1,72 @@
+# AS568 standard O-rings — sample of dash sizes 010..020.
+# cs_mm: cross-section (W). id_mm: inner Ø. od_mm: outer Ø (= id + 2*cs).
+# face_groove_width_mm = 1.36 * cs   (ISO 3601-2 axial face-seal groove width)
+# face_groove_depth_mm = 0.76 * cs   (ISO 3601-2 axial face-seal groove depth, no squeeze)
+# Key: "AS568-<dash>".
+o_rings:
+  "AS568-010":
+    cs_mm: 1.78
+    id_mm: 6.07
+    od_mm: 9.63
+    face_groove_width_mm: 2.4208
+    face_groove_depth_mm: 1.3528
+  "AS568-011":
+    cs_mm: 1.78
+    id_mm: 7.65
+    od_mm: 11.21
+    face_groove_width_mm: 2.4208
+    face_groove_depth_mm: 1.3528
+  "AS568-012":
+    cs_mm: 1.78
+    id_mm: 9.25
+    od_mm: 12.81
+    face_groove_width_mm: 2.4208
+    face_groove_depth_mm: 1.3528
+  "AS568-013":
+    cs_mm: 1.78
+    id_mm: 10.82
+    od_mm: 14.38
+    face_groove_width_mm: 2.4208
+    face_groove_depth_mm: 1.3528
+  "AS568-014":
+    cs_mm: 1.78
+    id_mm: 12.42
+    od_mm: 15.98
+    face_groove_width_mm: 2.4208
+    face_groove_depth_mm: 1.3528
+  "AS568-015":
+    cs_mm: 1.78
+    id_mm: 14.00
+    od_mm: 17.56
+    face_groove_width_mm: 2.4208
+    face_groove_depth_mm: 1.3528
+  "AS568-016":
+    cs_mm: 1.78
+    id_mm: 15.60
+    od_mm: 19.16
+    face_groove_width_mm: 2.4208
+    face_groove_depth_mm: 1.3528
+  "AS568-017":
+    cs_mm: 1.78
+    id_mm: 17.17
+    od_mm: 20.73
+    face_groove_width_mm: 2.4208
+    face_groove_depth_mm: 1.3528
+  "AS568-018":
+    cs_mm: 1.78
+    id_mm: 18.77
+    od_mm: 22.33
+    face_groove_width_mm: 2.4208
+    face_groove_depth_mm: 1.3528
+  "AS568-019":
+    cs_mm: 1.78
+    id_mm: 20.35
+    od_mm: 23.91
+    face_groove_width_mm: 2.4208
+    face_groove_depth_mm: 1.3528
+  "AS568-020":
+    cs_mm: 1.78
+    id_mm: 21.95
+    od_mm: 25.51
+    face_groove_width_mm: 2.4208
+    face_groove_depth_mm: 1.3528

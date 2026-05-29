@@ -1,0 +1,121 @@
+# Metric ISO threaded fastener dimensions.
+#
+# Sources:
+#   - ISO 261:1998  — coarse-pitch (outer_d, pitch)
+#   - ISO 273:1979  — clearance holes for fasteners (close / medium / coarse fits)
+#   - ISO 4762:2004 — hexagon socket head cap screws (head dia, head height)
+#   - ISO 10642:2004 — hexagon socket countersunk head screws (head dia, 90° angle)
+#   - tap_drill_mm  = outer_d - pitch  (standard rule for ISO metric coarse).
+#   - counterbore_d_iso_mm    = head_diameter_socket_mm + 0.4..0.8 mm (head clearance)
+#   - counterbore_depth_iso_mm = head_height_iso4762 + 0.1..0.4 mm (slight recess)
+#
+# All linear dimensions in millimetres. Angles in degrees.
+
+schema: threads_metric
+version: 1
+units: mm
+
+threads:
+  M2:
+    outer_d_mm: 2.0
+    pitch_mm: 0.4
+    tap_drill_mm: 1.6
+    clearance_close_mm: 2.2
+    clearance_medium_mm: 2.4
+    clearance_coarse_mm: 2.6
+    head_diameter_socket_mm: 3.8       # ISO 4762
+    counterbore_d_iso_mm: 4.4
+    counterbore_depth_iso_mm: 2.2
+    countersink_d_iso10642_mm: 4.0     # ISO 10642 90°
+    countersink_angle_deg: 90
+
+  M2.5:
+    outer_d_mm: 2.5
+    pitch_mm: 0.45
+    tap_drill_mm: 2.05
+    clearance_close_mm: 2.7
+    clearance_medium_mm: 2.9
+    clearance_coarse_mm: 3.1
+    head_diameter_socket_mm: 4.5
+    counterbore_d_iso_mm: 5.0
+    counterbore_depth_iso_mm: 2.7
+    countersink_d_iso10642_mm: 5.0
+    countersink_angle_deg: 90
+
+  M3:
+    outer_d_mm: 3.0
+    pitch_mm: 0.5
+    tap_drill_mm: 2.5
+    clearance_close_mm: 3.2
+    clearance_medium_mm: 3.4
+    clearance_coarse_mm: 3.6
+    head_diameter_socket_mm: 5.5
+    counterbore_d_iso_mm: 6.0
+    counterbore_depth_iso_mm: 3.3
+    countersink_d_iso10642_mm: 6.0
+    countersink_angle_deg: 90
+
+  M4:
+    outer_d_mm: 4.0
+    pitch_mm: 0.7
+    tap_drill_mm: 3.3
+    clearance_close_mm: 4.3
+    clearance_medium_mm: 4.5
+    clearance_coarse_mm: 4.8
+    head_diameter_socket_mm: 7.0
+    counterbore_d_iso_mm: 8.0
+    counterbore_depth_iso_mm: 4.4
+    countersink_d_iso10642_mm: 8.0
+    countersink_angle_deg: 90
+
+  M5:
+    outer_d_mm: 5.0
+    pitch_mm: 0.8
+    tap_drill_mm: 4.2
+    clearance_close_mm: 5.3
+    clearance_medium_mm: 5.5
+    clearance_coarse_mm: 5.8
+    head_diameter_socket_mm: 8.5
+    counterbore_d_iso_mm: 10.0
+    counterbore_depth_iso_mm: 5.4
+    countersink_d_iso10642_mm: 10.0
+    countersink_angle_deg: 90
+
+  M6:
+    outer_d_mm: 6.0
+    pitch_mm: 1.0
+    tap_drill_mm: 5.0
+    clearance_close_mm: 6.4
+    clearance_medium_mm: 6.6
+    clearance_coarse_mm: 7.0
+    head_diameter_socket_mm: 10.0
+    counterbore_d_iso_mm: 11.0
+    counterbore_depth_iso_mm: 6.5
+    countersink_d_iso10642_mm: 12.0
+    countersink_angle_deg: 90
+
+  M8:
+    outer_d_mm: 8.0
+    pitch_mm: 1.25
+    tap_drill_mm: 6.8
+    clearance_close_mm: 8.4
+    clearance_medium_mm: 9.0
+    clearance_coarse_mm: 10.0
+    head_diameter_socket_mm: 13.0
+    counterbore_d_iso_mm: 15.0
+    counterbore_depth_iso_mm: 8.6
+    countersink_d_iso10642_mm: 16.0
+    countersink_angle_deg: 90
+
+  M10:
+    outer_d_mm: 10.0
+    pitch_mm: 1.5
+    tap_drill_mm: 8.5
+    clearance_close_mm: 10.5
+    clearance_medium_mm: 11.0
+    clearance_coarse_mm: 12.0
+    head_diameter_socket_mm: 16.0
+    counterbore_d_iso_mm: 18.0
+    counterbore_depth_iso_mm: 10.6
+    countersink_d_iso10642_mm: 20.0
+    countersink_angle_deg: 90

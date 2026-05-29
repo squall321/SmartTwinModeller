@@ -1,0 +1,42 @@
+name: phase2_oem_watch_repro
+description: |
+  회사 컴 전용 — Galaxy Watch OEM Parasolid → STEP 의 reproduction.
+  PF-3 의 converted.step 가 reference/galaxy_watch/converted.step 에 있어야 함.
+
+  사용자 수기 plan (plans/galaxy_watch_outer.yaml) 이 작성되어 있어야 하지만,
+  Phase 2 시점에서는 plan 이 없을 수도 있어 의도적 SKIP 처리.
+
+  Phase 3 의 reverse engineer 가 자동 plan 생성 후 본 시나리오 의미 살아남.
+
+phase: 2
+
+# 회사 컴 전용 — reference/galaxy_watch/ 없으면 skip
+requires_oem: true
+
+inputs: []
+
+steps:
+  - kind: check_file_exists
+    paths: [reference/galaxy_watch/converted.step]
+  - kind: read_xde_step
+    path: reference/galaxy_watch/converted.step
+    as: oem_assembly
+  - kind: check_parts
+    of: oem_assembly
+    expected_names: [housing]
+    name_match: contains
+  - kind: viewport_offscreen
+    label: oem_reference
+    load_step: reference/galaxy_watch/converted.step
+    views: [iso, top, side, front]
+  - kind: system_info
+  - kind: log_summary
+    expect:
+      level_counts:
+        ERROR: {max: 0}
+
+expected:
+  outcome: PASS
+
+mail:
+  subject_template: "[PhoneDesigner] {scenario} — OEM CAD parts catalog"

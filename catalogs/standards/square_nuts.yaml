@@ -1,0 +1,25 @@
+# Square nuts per DIN 557 / ISO 8675-style geometry. All dimensions mm.
+#
+# - across_flats_mm: side length of the square (s)
+# - thickness_mm:    nominal nut height (m)
+#
+# Used by square nut-trap pockets. Pocket is a square prism of
+# (across_flats + clearance) by `thickness`.
+schema_version: 1
+standard: "DIN 557"
+nuts:
+  M3:
+    across_flats_mm: 5.5
+    thickness_mm:    1.8
+  M4:
+    across_flats_mm: 7.0
+    thickness_mm:    2.2
+  M5:
+    across_flats_mm: 8.0
+    thickness_mm:    2.7
+  M6:
+    across_flats_mm: 10.0
+    thickness_mm:    3.2
+  M8:
+    across_flats_mm: 13.0
+    thickness_mm:    4.0

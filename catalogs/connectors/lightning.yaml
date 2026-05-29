@@ -1,0 +1,9 @@
+# Apple Lightning receptacle (v1 host cutout).
+# Rounded-rectangle clearance for the Lightning plug shell.
+connectors:
+  "Apple_Lightning_v1":
+    cutout_w_mm: 7.05
+    cutout_h_mm: 1.7
+    inner_radius_mm: 0.85
+    recess_depth_mm: 6.5
+    bezel_chamfer_mm: 0.0

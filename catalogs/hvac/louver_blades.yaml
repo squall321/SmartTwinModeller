@@ -1,0 +1,26 @@
+# Louver blade geometry presets — single blade is a thin rectangular slot
+# with a small pivot pin at each end. Used inside barrel vents and rectangular
+# dash registers. Pitch is centerline-to-centerline along the array axis.
+schema_version: 1
+defaults:
+  blade_length_mm: 80.0
+  blade_width_mm: 8.0
+  blade_thickness_mm: 1.5
+  blade_pitch_mm: 12.0
+  pivot_d_mm: 2.0
+profiles:
+  fine:        # narrow vanes, dense pitch
+    blade_width_mm: 6.0
+    blade_thickness_mm: 1.0
+    blade_pitch_mm: 8.0
+    pivot_d_mm: 1.5
+  standard:
+    blade_width_mm: 8.0
+    blade_thickness_mm: 1.5
+    blade_pitch_mm: 12.0
+    pivot_d_mm: 2.0
+  coarse:
+    blade_width_mm: 12.0
+    blade_thickness_mm: 2.0
+    blade_pitch_mm: 18.0
+    pivot_d_mm: 2.5

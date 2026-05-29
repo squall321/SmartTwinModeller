@@ -1,0 +1,42 @@
+name: phase2_spaceclaim_sanity
+description: |
+  Phase 2 의 STEP export 가 SpaceClaim 에서 정상 import 되는지 확인.
+  본 시나리오 자체는 SpaceClaim 자동화 없이 STEP 파일 생성까지만.
+  사용자가 회사 컴에서 SpaceClaim 으로 manual import 후 결과 확인.
+
+  자동화된 항목:
+    - simple_watch_outer.yaml plan 실행 → STEP export
+    - exported.step 의 face count + volume 보고
+    - 사용자가 메일 받은 후 회사 컴 SpaceClaim 에서 manual import
+
+  manual 단계 (사용자):
+    1. 메일 첨부 zip 에서 reproduced.step 추출
+    2. SpaceClaim 실행 → File → Open → reproduced.step
+    3. 정상 import 확인 + face/edge tree 확인
+    4. 문제 발견 시 집 컴 Claude 에게 회신
+
+phase: 2
+
+inputs: []
+
+steps:
+  - kind: run_python
+    script: -m phone_designer generate --plan plans/simple_watch_outer.yaml --out run_logs/_tmp/spaceclaim_sanity.step
+    timeout_s: 120
+  - kind: check_file_exists
+    paths: [run_logs/_tmp/spaceclaim_sanity.step]
+  - kind: viewport_offscreen
+    label: spaceclaim_sanity
+    load_step: run_logs/_tmp/spaceclaim_sanity.step
+    views: [iso, top, side, front]
+  - kind: system_info
+  - kind: log_summary
+    expect:
+      level_counts:
+        ERROR: {max: 0}
+
+expected:
+  outcome: PASS
+
+mail:
+  subject_template: "[PhoneDesigner] {scenario} — STEP for SpaceClaim manual check"

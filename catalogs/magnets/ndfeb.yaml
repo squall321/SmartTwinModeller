@@ -1,0 +1,29 @@
+# NdFeB (neodymium) axial-magnetised disc magnets.
+# Common stack/closure/sensor magnets for consumer / wearable devices.
+# `magnet_d_mm` is the disc outer diameter, `magnet_t_mm` is the axial
+# thickness. The catalog drives `magnet_pocket_axial` — the pocket diameter
+# is derived per retention mode (press / glue / loose) and the depth is
+# `magnet_t_mm - proud_offset_mm` so the magnet sits very slightly proud of
+# the host face.
+# Units: mm.
+magnets:
+  N42_D5x2:
+    magnet_d_mm: 5.0
+    magnet_t_mm: 2.0
+    grade: N42
+    notes: "Ø5 × 2 mm NdFeB N42 disc — closure / sensor magnet"
+  N42_D6x2:
+    magnet_d_mm: 6.0
+    magnet_t_mm: 2.0
+    grade: N42
+    notes: "Ø6 × 2 mm NdFeB N42 disc — lid / strap closure"
+  N42_D8x3:
+    magnet_d_mm: 8.0
+    magnet_t_mm: 3.0
+    grade: N42
+    notes: "Ø8 × 3 mm NdFeB N42 disc — accessory mount"
+  N42_D10x3:
+    magnet_d_mm: 10.0
+    magnet_t_mm: 3.0
+    grade: N42
+    notes: "Ø10 × 3 mm NdFeB N42 disc — strong closure / mount"

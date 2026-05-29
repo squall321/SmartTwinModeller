@@ -1,0 +1,24 @@
+# Wire-harness clip mounting slot specs — slot is a rectangular pocket the
+# clip body slides into (J-1939 / SAE typical harness clips).
+#
+# All dimensions mm. depth_mm is the slot's host-side pocket depth (the clip
+# barb engages a ledge at this depth).
+schema_version: 1
+standard: "SAE J-1939 / OEM wire-harness P-clip mount"
+defaults:
+  slot_width_mm: 4.0
+  slot_length_mm: 8.0
+  depth_mm: 3.0
+sizes:
+  small_3x6:
+    slot_width_mm: 3.0
+    slot_length_mm: 6.0
+    depth_mm: 2.5
+  standard_4x8:
+    slot_width_mm: 4.0
+    slot_length_mm: 8.0
+    depth_mm: 3.0
+  large_6x12:
+    slot_width_mm: 6.0
+    slot_length_mm: 12.0
+    depth_mm: 4.0

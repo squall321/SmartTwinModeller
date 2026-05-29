@@ -1,0 +1,31 @@
+# NEMA stepper motor frame dimensions (mounting flange).
+# Reference: NEMA ICS 16-2001 / industry-standard stepper frames.
+#
+# Driven by `motor_flange_bolt_pattern` — clearance holes for the four
+# corner mounting bolts on a square motor face. `bolt_circle_d_mm` is the
+# diagonal across the bolt pattern (i.e. each bolt sits at radius
+# bolt_circle_d/2 from the face center at 45° + k*90°). `face_d_mm` is
+# the motor body width (the nominal square frame size).
+#
+# Units: mm.
+schema_version: 1
+standard: "NEMA ICS 16 / stepper motor mounting"
+motor_frames:
+  NEMA_17:
+    bolt_circle_d_mm: 31.0
+    hole_d_mm: 3.0
+    face_d_mm: 42.3
+    bolts: 4
+    notes: "NEMA 17 — 42 mm square frame, 4 × M3 clearance, 31 mm bolt circle"
+  NEMA_23:
+    bolt_circle_d_mm: 47.14
+    hole_d_mm: 5.0
+    face_d_mm: 56.4
+    bolts: 4
+    notes: "NEMA 23 — 56 mm square frame, 4 × M5 clearance, 47.14 mm bolt circle"
+  NEMA_34:
+    bolt_circle_d_mm: 69.6
+    hole_d_mm: 6.6
+    face_d_mm: 86.0
+    bolts: 4
+    notes: "NEMA 34 — 86 mm square frame, 4 × M6 clearance, 69.6 mm bolt circle"

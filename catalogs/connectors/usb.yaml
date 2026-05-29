@@ -1,0 +1,32 @@
+# Combined USB / connector cutout catalog.
+# Provides rounded-rectangle (or round) cutout dimensions for clearing the
+# molded receptacle housing of common connector families. cutout_w_mm is the
+# long (tongue) dimension, cutout_h_mm the short (thickness) dimension.
+# inner_radius_mm is the wire corner radius (typically half of cutout_h_mm).
+# recess_depth_mm is the cut depth INTO the host face. bezel_chamfer_mm is an
+# optional opening chamfer for visible bezel break.
+connectors:
+  "USB_C_Receptacle_v2":
+    cutout_w_mm: 9.0
+    cutout_h_mm: 3.4
+    inner_radius_mm: 1.65
+    recess_depth_mm: 7.35
+    bezel_chamfer_mm: 0.2
+  "USB_A_Receptacle":
+    cutout_w_mm: 13.0
+    cutout_h_mm: 5.6
+    inner_radius_mm: 0.5
+    recess_depth_mm: 14.0
+    bezel_chamfer_mm: 0.0
+  "Audio_Jack_3.5mm":
+    cutout_w_mm: 6.2
+    cutout_h_mm: 6.2
+    inner_radius_mm: 3.1
+    recess_depth_mm: 14.0
+    bezel_chamfer_mm: 0.0
+  "Apple_Lightning_v1":
+    cutout_w_mm: 7.05
+    cutout_h_mm: 1.7
+    inner_radius_mm: 0.85
+    recess_depth_mm: 6.5
+    bezel_chamfer_mm: 0.0

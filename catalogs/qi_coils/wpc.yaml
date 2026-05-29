@@ -1,0 +1,18 @@
+# Qi wireless charging coil reference dimensions per Wireless Power Consortium
+# (WPC) — receiver-side coil envelopes used to size handset pockets.
+# outer_d_mm : coil winding outer diameter (pocket diameter)
+# inner_d_mm : coil winding inner diameter (open hole / window)
+# thickness_mm : coil winding stack thickness (pocket depth)
+schema_version: 1
+standard: "WPC Qi"
+coils:
+  "Qi_A11":
+    outer_d_mm: 43.0
+    inner_d_mm: 20.0
+    thickness_mm: 1.0
+    notes: "WPC A11 reference receiver coil (single-coil 5 W)"
+  "Qi_A28":
+    outer_d_mm: 48.0
+    inner_d_mm: 20.0
+    thickness_mm: 1.2
+    notes: "WPC A28 reference receiver coil (medium power)"

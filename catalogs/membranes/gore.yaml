@@ -1,0 +1,16 @@
+# Gore acoustic vent membranes (ePTFE).
+# mounting_d_mm  : through hole diameter (the actual air passage).
+# membrane_d_mm  : recess (boss) diameter — where the membrane disc seats.
+# boss_height_mm : recess depth — how deep the membrane sinks into the housing.
+# Units: mm.
+membranes:
+  PMF_F25:
+    membrane_d_mm: 8.0
+    mounting_d_mm: 5.5
+    boss_height_mm: 0.3
+    notes: "Gore PMF F25 — protective vent for handsets/wearables"
+  Acoustic_Vent_LV85:
+    membrane_d_mm: 6.5
+    mounting_d_mm: 4.0
+    boss_height_mm: 0.25
+    notes: "Gore Acoustic Vent LV85 — IP-rated speaker/mic vent"

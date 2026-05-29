@@ -1,0 +1,54 @@
+name: phase2_simple_watch_repro
+description: |
+  simple_watch_outer.yaml plan 을 PlanExecutor 로 실행 → STEP export →
+  fixtures/simple_watch_housing_only.step 와 face count / volume / bbox 비교.
+
+phase: 2
+
+inputs:
+  - kind: plan
+    path: plans/simple_watch_outer.yaml
+  - kind: step
+    path: fixtures/simple_watch_housing_only.step
+
+steps:
+  - kind: import_check
+    modules:
+      - phone_designer.plan
+      - phone_designer.plan.executor
+      - phone_designer.plan.yaml_io
+  - kind: run_python
+    script: -m phone_designer generate --plan plans/simple_watch_outer.yaml --out run_logs/_tmp/reproduced.step --mode strict
+    timeout_s: 120
+  - kind: check_file_exists
+    paths: [run_logs/_tmp/reproduced.step]
+  - kind: viewport_offscreen
+    label: reproduced
+    load_step: run_logs/_tmp/reproduced.step
+    views: [iso, top, side, front]
+  - kind: viewport_offscreen
+    label: reference
+    load_step: fixtures/simple_watch_housing_only.step
+    views: [iso, top, side, front]
+  - kind: compare
+    a: run_logs/_tmp/reproduced.step
+    b: fixtures/simple_watch_housing_only.step
+    tolerances:
+      # Phase 1 plan 은 의도적으로 단순화 (배터리 cavity 없음, dome 없음, lug pad 외피에 미포함).
+      # 외피 reproduction 의 sanity 만 본다 — 본격 face-level 비교는 Phase 4 에서.
+      face_count_pct: 100
+      edge_count_pct: 100
+      volume_pct: 200
+      bbox_mm: 20
+  - kind: system_info
+  - kind: log_summary
+    expect:
+      level_counts:
+        ERROR: {max: 0}
+        WARNING: {max: 10}
+
+expected:
+  outcome: PASS
+
+mail:
+  subject_template: "[PhoneDesigner] {scenario} — {outcome}"

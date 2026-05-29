@@ -1,0 +1,42 @@
+# Christmas-tree (fir-tree) panel fasteners — ITW Fastex / TR Fastenings style.
+# Multiple flexible fins on a central post snap through a panel hole and
+# spring outward behind the panel. Common for interior trim panels.
+#
+# All dimensions mm. panel_thickness_mm is the host-side panel the post is
+# attached TO (the captive side); the mating panel pierced by the post is the
+# free side. fin_pitch_mm is the axial spacing between successive fin tips.
+schema_version: 1
+standard: "ITW Fastex CT-series / typical automotive interior fir-tree post"
+defaults:
+  fin_count: 3
+  fin_thickness_mm: 0.8
+  fin_pitch_mm: 2.5
+  tip_d_mm: 5.5            # tip diameter at fin top (smallest)
+  root_d_mm: 6.5           # base of fin at the trunk (post wall)
+  base_collar_d_mm: 10.0   # flange against panel face for retention
+  base_collar_h_mm: 1.0
+sizes:
+  hole_6_panel_2:
+    hole_d_mm: 6.0
+    panel_thickness_mm: 2.0
+    fin_count: 3
+    tip_d_mm: 5.5
+    root_d_mm: 6.5
+    fin_pitch_mm: 2.5
+    base_collar_d_mm: 10.0
+  hole_8_panel_3:
+    hole_d_mm: 8.0
+    panel_thickness_mm: 3.0
+    fin_count: 4
+    tip_d_mm: 7.5
+    root_d_mm: 8.5
+    fin_pitch_mm: 3.0
+    base_collar_d_mm: 13.0
+  hole_10_panel_4:
+    hole_d_mm: 10.0
+    panel_thickness_mm: 4.0
+    fin_count: 4
+    tip_d_mm: 9.5
+    root_d_mm: 10.5
+    fin_pitch_mm: 3.5
+    base_collar_d_mm: 15.0

@@ -1,0 +1,38 @@
+name: phase5_dfm_smoke
+description: |
+  Phase 5 DFM smoke — manufacturing tests + cli validate 의 정상 동작.
+
+phase: 5
+
+inputs: []
+
+steps:
+  - kind: import_check
+    modules:
+      - phone_designer.manufacturing
+      - phone_designer.manufacturing.budget
+      - phone_designer.manufacturing.processes
+      - phone_designer.manufacturing.dfm
+      - phone_designer.manufacturing.dfm.runner
+      - phone_designer.manufacturing.dfm.wall_thickness
+      - phone_designer.manufacturing.dfm.draft
+      - phone_designer.manufacturing.dfm.undercut
+      - simpleeval
+  - kind: run_python
+    script: -m pytest tests/manufacturing -v --tb=short
+    timeout_s: 120
+  - kind: run_python
+    script: -m phone_designer validate --plan plans/simple_watch_outer.yaml --budget catalogs/budgets/watch_al_unibody.yaml
+    timeout_s: 120
+  - kind: system_info
+  - kind: log_summary
+    expect:
+      level_counts:
+        ERROR: {max: 0}
+        WARNING: {max: 10}
+
+expected:
+  outcome: PASS
+
+mail:
+  subject_template: "[PhoneDesigner] {scenario} — {outcome}"

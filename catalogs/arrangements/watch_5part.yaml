@@ -1,0 +1,59 @@
+# 합성 워치 부품 배치 예 — display + battery + crown + sensor + coil
+housing_envelope_hint:
+  kind: disc
+  diameter: 44.0      # Galaxy Watch 44 외경
+  height: 11.0
+components:
+  - name: "Galaxy Watch 44 AMOLED"
+    category: display
+    source: CATALOG
+    bbox: {length: 33.4, width: 33.4, thickness: 2.7, is_circular: true}
+    pose: {x_mm: 0, y_mm: 0, z_mm: 5.65}
+    clearance: {side_mm: 0.3, back_mm: 0.5, top_mm: 0.3, thermal_zone_mm: 1.0}
+    mount_interface:
+      kind: adhesive_perimeter
+      width_mm: 1.5
+    ports:
+      - name: front_glass
+        pose_local: {z_mm: 1.35}
+        requires_housing_window: true
+        window_shape: {kind: circle, diameter: 34.0}
+
+  - name: "Watch Li-Po 350mAh"
+    category: battery
+    source: CATALOG
+    bbox: {length: 28.0, width: 28.0, thickness: 4.0, is_circular: true}
+    pose: {x_mm: 0, y_mm: 0, z_mm: 2.5}
+    clearance: {side_mm: 0.5, back_mm: 0.5, top_mm: 0.3, thermal_zone_mm: 1.5}
+
+  - name: "Standard Crown 4mm"
+    category: crown
+    source: CATALOG
+    bbox: {length: 4.0, width: 4.0, thickness: 4.5, is_circular: true}
+    pose: {x_mm: 22, y_mm: 0, z_mm: 5}
+    clearance: {side_mm: 0.2, back_mm: 0.3, top_mm: 0.3}
+    mount_interface: {kind: press_fit, interference_mm: 0.05}
+    ports:
+      - name: shaft_exit
+        pose_local: {x_mm: -2.5}
+        requires_housing_cutout: true
+        window_shape: {kind: circle, diameter: 2.5}
+
+  - name: "Heart Rate PPG Sensor"
+    category: sensor
+    source: CATALOG
+    bbox: {length: 8.0, width: 8.0, thickness: 2.0, is_circular: false}
+    pose: {x_mm: 0, y_mm: 0, z_mm: 1.0}
+    clearance: {side_mm: 0.5, back_mm: 0.3, top_mm: 0.3, thermal_zone_mm: 0.5}
+    ports:
+      - name: optical_window
+        pose_local: {z_mm: -1.0}
+        requires_housing_window: true
+        window_shape: {kind: circle, diameter: 6.0}
+
+  - name: "Wireless Charging Coil 25mm"
+    category: wireless_coil
+    source: CATALOG
+    bbox: {length: 25.0, width: 25.0, thickness: 1.0, is_circular: true}
+    pose: {x_mm: 0, y_mm: 0, z_mm: 0.5}
+    clearance: {side_mm: 0.3, back_mm: 0.3, top_mm: 0.3, thermal_zone_mm: 0.5}

@@ -1,0 +1,77 @@
+# Simple Watch Outer Shell — Phase 1 simplified reproduction
+#
+# Phase 1 의 8 skill (atomic + macro) 의 통합 시연.
+# fixtures/simple_watch_housing_only.step 의 face-level 비교 대상 (대략 일치 기대).
+#
+# NOTE: 본 plan 은 의도적으로 단순화되어 있다 — `disc_with_dome` 의 dome_rise_mm=0
+#   으로 flat top 으로 reproduction 한다. 실제 워치의 dome top + 그 위 display pocket
+#   조합은 Phase 1 의 능력 밖 (planar 이외의 face 위 pocket 미지원). Phase 4 에서
+#   polynomial_pocket / face-local coord 변환 후 본격 reproduction.
+#
+# 실행 (Phase 2 의 plan executor):
+#   python -m phone_designer generate --plan plans/simple_watch_outer.yaml --out out.step
+
+schema_version: 1
+plan_name: simple_watch_outer
+description: |
+  Phase 1 의 8 skill 통합 시연. Flat-top 단순화 reproduction.
+
+steps:
+  # 1. 외피 base — 원형 disc (dome 없이, Phase 1 의 face_named=top 호환)
+  - id: s1
+    skill: disc_with_dome
+    args:
+      diameter_mm: 44.0
+      height_mm: 11.0
+      dome_rise_mm: 0          # Phase 1: flat top (Phase 4 에서 dome 추가 예정)
+      corner_r_mm: 2.0
+
+  # 2. top face 에 디스플레이 step-down (얕은 원형 포켓)
+  - id: s2
+    skill: extrude_pocket
+    args:
+      face_selector:
+        kind: face_named
+        name: top
+      sketch:
+        kind: circle
+        diameter_mm: 33.4      # display 외경 + 0.2mm clearance
+      depth_mm: 0.5
+
+  # 3. 우측 측면 (X+ 방향) 크라운 샤프트 hole
+  - id: s3
+    skill: hole
+    args:
+      position: [22.0, 0.0, 6.5]
+      diameter_mm: 2.5
+      depth_mm: 5.0
+      direction: -X
+
+  # 4a. lug 우측 (Y+ 방향 through hole) — position must lie inside the disc
+  # (radius 22). y=20 keeps the hole entry within the body so the cut
+  # actually removes material.
+  - id: s4a
+    skill: hole
+    args:
+      position: [0.0, 20.0, 5.5]
+      diameter_mm: 1.5
+      depth_mm: null
+      direction: -Y
+
+  # 4b. lug 좌측 (Y- 방향 through hole)
+  - id: s4b
+    skill: hole
+    args:
+      position: [0.0, -20.0, 5.5]
+      diameter_mm: 1.5
+      depth_mm: null
+      direction: +Y
+
+  # 5. 외피의 측면 vertical edges 에 미세 chamfer (마감)
+  - id: s5
+    skill: chamfer_edges_by_predicate
+    args:
+      selector:
+        kind: axis_aligned_edges
+        axis: Z
+      width_mm: 0.3

@@ -1,0 +1,28 @@
+name: "Heart Rate PPG Sensor"
+category: sensor
+source: CATALOG
+bbox:
+  length: 8.0
+  width: 8.0
+  thickness: 2.0
+  is_circular: false
+pose:
+  x_mm: 0
+  y_mm: 0
+  z_mm: 1.5
+clearance:
+  side_mm: 0.5
+  back_mm: 0.3
+  thermal_zone_mm: 0.5
+mount_interface:
+  kind: adhesive_perimeter
+  width_mm: 1.0
+ports:
+  - name: optical_window
+    pose_local: {x_mm: 0, y_mm: 0, z_mm: -1.0}
+    requires_housing_window: true
+    window_shape:
+      kind: circle
+      diameter: 6.0
+description: |
+  PPG (Photoplethysmography) 심박/SpO2 센서. body 의 back face 에 광학 window 필요.

@@ -1,0 +1,40 @@
+name: phase3_topology_analysis
+description: |
+  Phase 3 topology analyzer 검증.
+  - fixtures/simple_watch.step 의 housing 부품 추출
+  - TopologyAnalyzer 실행 → fillet/hole/face_count 검출
+  - 결과를 stdout 으로 + capture log 에 기록
+
+phase: 3
+
+inputs: []
+
+steps:
+  - kind: import_check
+    modules:
+      - phone_designer.reference
+      - phone_designer.reference.step_reader
+      - phone_designer.reference.topology_analyzer
+      - phone_designer.reference.feature_to_plan
+  - kind: run_python
+    script: -m pytest tests/reference -v --tb=short
+    timeout_s: 120
+  - kind: read_xde_step
+    path: fixtures/simple_watch.step
+    as: assembly
+  - kind: check_parts
+    of: assembly
+    expected_names: [housing, display, battery, crown, lug_pair]
+    name_match: any_case
+  - kind: system_info
+  - kind: log_summary
+    expect:
+      level_counts:
+        ERROR: {max: 0}
+        WARNING: {max: 5}
+
+expected:
+  outcome: PASS
+
+mail:
+  subject_template: "[PhoneDesigner] {scenario} — {outcome}"

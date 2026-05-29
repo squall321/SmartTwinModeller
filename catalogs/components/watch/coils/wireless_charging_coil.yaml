@@ -1,0 +1,24 @@
+name: "Wireless Charging Coil 25mm"
+category: wireless_coil
+source: CATALOG
+bbox:
+  length: 25.0
+  width: 25.0
+  thickness: 1.0
+  is_circular: true
+pose:
+  x_mm: 0
+  y_mm: 0
+  z_mm: 1.0
+clearance:
+  side_mm: 0.3
+  back_mm: 0.3
+  thermal_zone_mm: 0.5
+mount_interface:
+  kind: adhesive_perimeter
+  width_mm: 1.0
+ports:
+  - name: flex_lead
+    pose_local: {x_mm: 0, y_mm: 12, z_mm: 0}
+description: |
+  Qi 무선충전 코일 — 외경 25mm, 두께 1mm. 위치 = battery 와 가깝게 (PPG 센서와 겹침 주의).

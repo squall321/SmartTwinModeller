@@ -1,0 +1,54 @@
+# Internal retaining rings per DIN 472. All dimensions in mm.
+#
+# - bore_d_mm:        nominal bore diameter the ring snaps into
+# - groove_d_mm:      diameter at the bottom of the bore groove (> bore_d)
+# - groove_width_mm:  axial width of the groove (slightly > ring thickness)
+#
+# Values are taken from the DIN 472 table for standard series.
+schema_version: 1
+standard: "DIN 472"
+rings:
+  "8":
+    bore_d_mm: 8.0
+    groove_d_mm: 8.4
+    groove_width_mm: 0.90
+  "10":
+    bore_d_mm: 10.0
+    groove_d_mm: 10.4
+    groove_width_mm: 1.10
+  "12":
+    bore_d_mm: 12.0
+    groove_d_mm: 12.5
+    groove_width_mm: 1.10
+  "15":
+    bore_d_mm: 15.0
+    groove_d_mm: 15.7
+    groove_width_mm: 1.10
+  "16":
+    bore_d_mm: 16.0
+    groove_d_mm: 16.8
+    groove_width_mm: 1.10
+  "18":
+    bore_d_mm: 18.0
+    groove_d_mm: 19.0
+    groove_width_mm: 1.10
+  "20":
+    bore_d_mm: 20.0
+    groove_d_mm: 21.0
+    groove_width_mm: 1.10
+  "22":
+    bore_d_mm: 22.0
+    groove_d_mm: 23.0
+    groove_width_mm: 1.10
+  "25":
+    bore_d_mm: 25.0
+    groove_d_mm: 26.2
+    groove_width_mm: 1.30
+  "28":
+    bore_d_mm: 28.0
+    groove_d_mm: 29.4
+    groove_width_mm: 1.30
+  "30":
+    bore_d_mm: 30.0
+    groove_d_mm: 31.4
+    groove_width_mm: 1.30

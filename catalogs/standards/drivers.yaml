@@ -1,0 +1,47 @@
+# Driver recess standards (DIN ISO / industry conventions).
+#
+# Units: mm. Sizes are nominal driver-tip dimensions used to build the cutter
+# that subtracts material from the host body in the *_recess skills.
+#
+# - hex_socket: ISO 4762 / DIN 912 internal hex (Allen). Sized by across-flats
+#   (AF) distance, i.e. the inscribed-circle diameter of the hex.
+# - torx: ISO 10664. Sized by tip nominal series (T6..T30) with the major
+#   (tip) Ø and a typical socket depth used as a default cut depth fallback.
+# - phillips: ANSI ASME B18.6.3 type I-A. Sized PH0..PH3 with major Ø and
+#   the standard included angle (26° between opposing flutes is the canonical
+#   geometric figure used in approximate CAD recess models).
+
+name: drivers
+units: mm
+
+hex_socket:
+  # across-flats (AF) in mm. The cutter is a regular hexagon whose
+  # inscribed-circle diameter == af_mm (flat-to-flat).
+  "1.5": { across_flats_mm: 1.5 }
+  "2":   { across_flats_mm: 2.0 }
+  "2.5": { across_flats_mm: 2.5 }
+  "3":   { across_flats_mm: 3.0 }
+  "4":   { across_flats_mm: 4.0 }
+  "5":   { across_flats_mm: 5.0 }
+  "6":   { across_flats_mm: 6.0 }
+  "8":   { across_flats_mm: 8.0 }
+
+torx:
+  # major_diameter_mm = tip outer circle Ø (point-to-point of the 6-point star).
+  # depth_mm = nominal min socket depth (used as a sane default cap).
+  T6:  { major_diameter_mm: 1.75, depth_mm: 1.40 }
+  T8:  { major_diameter_mm: 2.40, depth_mm: 1.75 }
+  T10: { major_diameter_mm: 2.80, depth_mm: 2.05 }
+  T15: { major_diameter_mm: 3.35, depth_mm: 2.40 }
+  T20: { major_diameter_mm: 3.95, depth_mm: 2.85 }
+  T25: { major_diameter_mm: 4.50, depth_mm: 3.20 }
+  T30: { major_diameter_mm: 5.60, depth_mm: 3.80 }
+
+phillips:
+  # major_diameter_mm = nominal recess outside Ø at the surface.
+  # included_angle_deg = 26° per ANSI Type I-A (canonical figure used for
+  # geometric reconstruction; real bits also use 92° flute angle).
+  PH0: { major_diameter_mm: 1.93, included_angle_deg: 26.0 }
+  PH1: { major_diameter_mm: 2.79, included_angle_deg: 26.0 }
+  PH2: { major_diameter_mm: 4.20, included_angle_deg: 26.0 }
+  PH3: { major_diameter_mm: 6.00, included_angle_deg: 26.0 }

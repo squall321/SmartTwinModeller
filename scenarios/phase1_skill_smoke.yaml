@@ -1,0 +1,42 @@
+name: phase1_skill_smoke
+description: |
+  Phase 1 의 skill framework smoke test.
+  - 등록된 모든 skill 의 manifest 생성 + JSON 검증
+  - 첫 3 skill (box, rounded_slab, fillet_edges_by_predicate) 단위 테스트 실행
+  - history_rule enum + freeze 동작 확인
+
+phase: 1
+
+inputs: []
+
+steps:
+  - kind: import_check
+    modules:
+      - build123d
+      - OCP
+      - phone_designer
+      - phone_designer.skills
+      - phone_designer.skills.create.box
+      - phone_designer.skills.create.rounded_slab
+      - phone_designer.skills.modify_curvature.fillet_predicate
+      - phone_designer.skills.export_manifest
+  - kind: run_python
+    script: -m phone_designer.skills.export_manifest --out manifest.json
+    timeout_s: 30
+  - kind: check_file_exists
+    paths: [manifest.json]
+  - kind: run_python
+    script: -m pytest tests/skills -v
+    timeout_s: 120
+  - kind: system_info
+  - kind: log_summary
+    expect:
+      level_counts:
+        ERROR: {max: 0}
+        WARNING: {max: 5}
+
+expected:
+  outcome: PASS
+
+mail:
+  subject_template: "[PhoneDesigner] {scenario} — {outcome}"

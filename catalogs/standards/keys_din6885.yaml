@@ -1,0 +1,77 @@
+# Parallel keys per DIN 6885 (Form A). All dimensions in mm.
+#
+# Each entry is selected by the shaft diameter range it serves; the key here
+# maps shaft_d_mm (nominal upper end of the range) → key geometry.
+#
+# - key_width_mm:           b — cross-section width of the key
+# - key_height_mm:          h — cross-section height of the key
+# - shaft_keyseat_depth_mm: t1 — depth of the keyway cut into the shaft
+# - hub_keyseat_depth_mm:   t2 — depth of the keyway cut into the hub bore
+#
+# DIN 6885-1 table excerpt (shaft diameter ranges over which the key applies):
+#   6  < d ≤ 8   → 2 × 2,  t1=1.2, t2=1.0
+#   8  < d ≤ 10  → 3 × 3,  t1=1.8, t2=1.4
+#  10  < d ≤ 12  → 4 × 4,  t1=2.5, t2=1.8
+#  12  < d ≤ 17  → 5 × 5,  t1=3.0, t2=2.3
+#  17  < d ≤ 22  → 6 × 6,  t1=3.5, t2=2.8
+#  22  < d ≤ 30  → 8 × 7,  t1=4.0, t2=3.3
+#  30  < d ≤ 38  → 10 × 8, t1=5.0, t2=3.3
+#  38  < d ≤ 44  → 12 × 8, t1=5.0, t2=3.3
+#  44  < d ≤ 50  → 14 × 9, t1=5.5, t2=3.8
+schema_version: 1
+standard: "DIN 6885-1 Form A"
+keys:
+  "8":
+    shaft_d_mm: 8.0
+    key_width_mm: 2.0
+    key_height_mm: 2.0
+    shaft_keyseat_depth_mm: 1.2
+    hub_keyseat_depth_mm: 1.0
+  "10":
+    shaft_d_mm: 10.0
+    key_width_mm: 3.0
+    key_height_mm: 3.0
+    shaft_keyseat_depth_mm: 1.8
+    hub_keyseat_depth_mm: 1.4
+  "12":
+    shaft_d_mm: 12.0
+    key_width_mm: 4.0
+    key_height_mm: 4.0
+    shaft_keyseat_depth_mm: 2.5
+    hub_keyseat_depth_mm: 1.8
+  "17":
+    shaft_d_mm: 17.0
+    key_width_mm: 5.0
+    key_height_mm: 5.0
+    shaft_keyseat_depth_mm: 3.0
+    hub_keyseat_depth_mm: 2.3
+  "22":
+    shaft_d_mm: 22.0
+    key_width_mm: 6.0
+    key_height_mm: 6.0
+    shaft_keyseat_depth_mm: 3.5
+    hub_keyseat_depth_mm: 2.8
+  "30":
+    shaft_d_mm: 30.0
+    key_width_mm: 8.0
+    key_height_mm: 7.0
+    shaft_keyseat_depth_mm: 4.0
+    hub_keyseat_depth_mm: 3.3
+  "38":
+    shaft_d_mm: 38.0
+    key_width_mm: 10.0
+    key_height_mm: 8.0
+    shaft_keyseat_depth_mm: 5.0
+    hub_keyseat_depth_mm: 3.3
+  "44":
+    shaft_d_mm: 44.0
+    key_width_mm: 12.0
+    key_height_mm: 8.0
+    shaft_keyseat_depth_mm: 5.0
+    hub_keyseat_depth_mm: 3.3
+  "50":
+    shaft_d_mm: 50.0
+    key_width_mm: 14.0
+    key_height_mm: 9.0
+    shaft_keyseat_depth_mm: 5.5
+    hub_keyseat_depth_mm: 3.8

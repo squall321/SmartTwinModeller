@@ -1,0 +1,56 @@
+# Metric deep-groove ball bearings — bore × outer × width (mm).
+# Reference: ISO 15 dimension series 60xx/62xx + miniature 608/625.
+# Key: ISO bearing designation. Values: bore_id_mm, outer_d_mm, width_mm.
+bearings:
+  "608":
+    bore_id_mm: 8
+    outer_d_mm: 22
+    width_mm: 7
+  "625":
+    bore_id_mm: 5
+    outer_d_mm: 16
+    width_mm: 5
+  "6000":
+    bore_id_mm: 10
+    outer_d_mm: 26
+    width_mm: 8
+  "6001":
+    bore_id_mm: 12
+    outer_d_mm: 28
+    width_mm: 8
+  "6002":
+    bore_id_mm: 15
+    outer_d_mm: 32
+    width_mm: 9
+  "6003":
+    bore_id_mm: 17
+    outer_d_mm: 35
+    width_mm: 10
+  "6004":
+    bore_id_mm: 20
+    outer_d_mm: 42
+    width_mm: 12
+  "6005":
+    bore_id_mm: 25
+    outer_d_mm: 47
+    width_mm: 12
+  "6006":
+    bore_id_mm: 30
+    outer_d_mm: 55
+    width_mm: 13
+  "6200":
+    bore_id_mm: 10
+    outer_d_mm: 30
+    width_mm: 9
+  "6201":
+    bore_id_mm: 12
+    outer_d_mm: 32
+    width_mm: 10
+  "6202":
+    bore_id_mm: 15
+    outer_d_mm: 35
+    width_mm: 11
+  "6203":
+    bore_id_mm: 17
+    outer_d_mm: 40
+    width_mm: 12

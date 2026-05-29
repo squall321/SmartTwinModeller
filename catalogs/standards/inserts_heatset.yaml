@@ -1,0 +1,29 @@
+# Heat-set threaded inserts (brass, knurled) for thermoplastic
+# Typical short-style (e.g. Tappex / E-Z LOK / Trisert) dimensions.
+# Units: mm.
+#
+# Pilot hole diameter is the recommended molded/drilled boss bore — slightly
+# smaller than the insert outer_d so the knurls bite as the heated insert is
+# pressed in. Length is the nominal insert length (also the minimum pilot
+# hole depth before override).
+inserts:
+  M2:
+    outer_d_mm: 3.2
+    length_mm: 3.4
+    pilot_hole_d_mm: 3.0
+  M2.5:
+    outer_d_mm: 3.6
+    length_mm: 4.0
+    pilot_hole_d_mm: 3.4
+  M3:
+    outer_d_mm: 4.0
+    length_mm: 5.7
+    pilot_hole_d_mm: 3.8
+  M4:
+    outer_d_mm: 5.6
+    length_mm: 8.1
+    pilot_hole_d_mm: 5.4
+  M5:
+    outer_d_mm: 6.4
+    length_mm: 9.5
+    pilot_hole_d_mm: 6.2

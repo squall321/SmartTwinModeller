@@ -1,0 +1,6 @@
+allowed_processes:
+  - die_cast_al
+  - cnc_3axis
+complexity_budget: high
+draft_relaxation: strict
+slide_core: false

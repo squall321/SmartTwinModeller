@@ -1,0 +1,44 @@
+code: cnc_3axis
+name: CNC 3-Axis Milling
+description: |
+  3축 CNC 가공 — 알루미늄 unibody, 베젤, 마감. undercut 불가.
+
+rules:
+  min_wall_mm: 0.5
+  min_fillet_r_mm: 0.3
+  min_tool_radius_mm: 0.5
+  undercut_allowed: false
+  max_aspect_ratio_pocket: 6.0
+
+applicable_to_skills:
+  # CNC 는 거의 모든 형상 가공 가능 (undercut 제외)
+  - box
+  - rounded_slab
+  - disc_with_dome
+  - extrude_pocket
+  - extrude_plateau
+  - extrude_through
+  - boss_with_hole
+  - rib
+  - snap_hook
+  - mounting_pad
+  - fillet_edges_by_predicate
+  - chamfer_edges_by_predicate
+  - variable_radius_fillet
+  - hole
+  - hole_array
+  - grille_pattern
+  - lug_pair
+  - crown_shaft_hole
+  - o_ring_groove
+  - swept_relief
+  - antenna_slit
+  - polymer_inlay     # 사후 인레이 별도 공정
+  - final_fillet_all_sharp_edges
+  - surface_offset
+  - tag_face
+  - subtract
+  - union
+
+not_applicable_to:
+  - loft_side_profile    # 비-prismatic 곡면은 5축 권장

@@ -1,0 +1,64 @@
+name: phase0_env_smoke
+description: |
+  Phase 0 환경 셋업 검증.
+  - 모든 의존성 import OK
+  - PyVista viewport 1프레임 offscreen 캡처
+  - (선택) 메일 전송 dry-run (--mail 플래그)
+  - run_logs/<ts>/ 디렉토리에 모든 산출물 적재
+
+phase: 0
+
+inputs: []     # 별도 입력 없음
+
+steps:
+  - kind: import_check
+    modules:
+      - build123d
+      - pyvista
+      - pyvistaqt
+      - PySide6
+      - anthropic
+      - pydantic
+      - yaml
+      - typer
+      - loguru
+      - keyring
+      - simpleeval
+      - trimesh
+      - pygltflib
+      - OCP
+  - kind: viewport_offscreen
+    primitive: box           # 임의 박스 1개 그리기
+    size: [10, 10, 10]
+    views: [iso, top, side, front]
+  - kind: system_info
+    capture:
+      - python_version
+      - os
+      - occt_version
+      - build123d_version
+      - pyvista_version
+  - kind: log_summary
+    expect:
+      level_counts:
+        ERROR: {max: 0}
+        WARNING: {max: 3}      # import 경고 등 minor
+
+expected:
+  outcome: PASS
+
+# 메일 전송 옵션 (CLI 의 --mail 또는 UI 의 Send Report)
+mail:
+  subject_template: "[PhoneDesigner] {scenario} — {outcome}"
+  body_template: |
+    Scenario: {scenario}
+    Outcome:  {outcome}
+    Started:  {started_at}
+    Duration: {duration_s}s
+    Host:     {hostname}
+    Run dir:  {run_dir}
+
+    Top-level log counts:
+    {log_summary}
+
+    See attached zip for full log + screenshots + meta.

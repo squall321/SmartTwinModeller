@@ -1,0 +1,29 @@
+# Radial shaft lip seals per ISO 6194 — shaft × housing × width (mm).
+# Key: nominal designation "shaft_d x housing_d x width".
+schema_version: 1
+standard: "ISO 6194"
+seals:
+  "8x16x5":
+    shaft_d_mm: 8
+    housing_d_mm: 16
+    width_mm: 5
+  "10x22x7":
+    shaft_d_mm: 10
+    housing_d_mm: 22
+    width_mm: 7
+  "12x22x7":
+    shaft_d_mm: 12
+    housing_d_mm: 22
+    width_mm: 7
+  "15x30x7":
+    shaft_d_mm: 15
+    housing_d_mm: 30
+    width_mm: 7
+  "20x32x7":
+    shaft_d_mm: 20
+    housing_d_mm: 32
+    width_mm: 7
+  "25x42x7":
+    shaft_d_mm: 25
+    housing_d_mm: 42
+    width_mm: 7

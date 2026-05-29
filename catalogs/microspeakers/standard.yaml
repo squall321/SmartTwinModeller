@@ -1,0 +1,32 @@
+# Microspeaker driver back-volume / port chamber specifications.
+# `chamber_d_min_mm` is the minimum acoustic chamber diameter the driver
+# requires for nominal Fs/back-volume. `chamber_h_mm` is the typical chamber
+# height including driver thickness. `port_d_mm` / `port_L_mm` are nominal
+# Helmholtz port suggestions (overrideable by the caller).
+# Frame shelf is a small recessed shoulder where the driver frame sits.
+# Units: mm.
+speakers:
+  11x15_Square:
+    chamber_d_min_mm: 11.0
+    chamber_h_mm: 15.0
+    frame_d_mm: 12.5
+    frame_shelf_h_mm: 0.5
+    port_d_mm: 3.0
+    port_L_mm: 8.0
+    notes: "Generic 11x15 mm square microspeaker"
+  Speaker_11x15:
+    chamber_d_min_mm: 15.0
+    chamber_h_mm: 11.0
+    frame_d_mm: 16.5
+    frame_shelf_h_mm: 0.5
+    port_d_mm: 3.0
+    port_L_mm: 8.0
+    notes: "11x15 driver — chamber dia 15 mm, depth 11 mm, port 3x8 mm"
+  Speaker_8x12:
+    chamber_d_min_mm: 12.0
+    chamber_h_mm: 8.0
+    frame_d_mm: 13.0
+    frame_shelf_h_mm: 0.4
+    port_d_mm: 2.5
+    port_L_mm: 6.0
+    notes: "8x12 driver — chamber dia 12 mm, depth 8 mm, port 2.5x6 mm"

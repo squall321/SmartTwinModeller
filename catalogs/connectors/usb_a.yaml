@@ -1,0 +1,10 @@
+# USB Type-A receptacle cutouts.
+# Rounded-rectangle clearance for the standard USB-A shell. Long/short
+# dimensions, corner radius and recess depth as for usb_c.yaml.
+connectors:
+  "USB_A_Receptacle":
+    cutout_w_mm: 13.0
+    cutout_h_mm: 5.6
+    inner_radius_mm: 0.5
+    recess_depth_mm: 14.0
+    bezel_chamfer_mm: 0.0

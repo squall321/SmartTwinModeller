@@ -1,0 +1,42 @@
+# Helicoil (wire thread) inserts — ISO metric STI (Screw Thread Insert) data.
+# `tap_drill_mm` is the recommended STI tap drill diameter for the threaded
+# bore that receives the wire coil. Free-running insert lengths are listed by
+# the standard length multiples 1xD / 1.5xD / 2xD (D = nominal screw size).
+# Units: mm.
+inserts:
+  M3:
+    tap_drill_mm: 3.10
+    lengths_mm:
+      "1xD":   3.0
+      "1.5xD": 4.5
+      "2xD":   6.0
+  M4:
+    tap_drill_mm: 4.10
+    lengths_mm:
+      "1xD":   4.0
+      "1.5xD": 6.0
+      "2xD":   8.0
+  M5:
+    tap_drill_mm: 5.15
+    lengths_mm:
+      "1xD":   5.0
+      "1.5xD": 7.5
+      "2xD":  10.0
+  M6:
+    tap_drill_mm: 6.15
+    lengths_mm:
+      "1xD":   6.0
+      "1.5xD": 9.0
+      "2xD":  12.0
+  M8:
+    tap_drill_mm: 8.20
+    lengths_mm:
+      "1xD":   8.0
+      "1.5xD": 12.0
+      "2xD":  16.0
+  M10:
+    tap_drill_mm: 10.30
+    lengths_mm:
+      "1xD":  10.0
+      "1.5xD": 15.0
+      "2xD":  20.0

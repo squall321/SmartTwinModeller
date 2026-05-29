@@ -1,0 +1,40 @@
+code: sheet_metal_stamp
+name: Sheet Metal Stamping
+description: |
+  판금 프레스 — 균일 두께 판재의 굽힘 / 펀칭. 백 커버, 브래킷 등.
+
+rules:
+  min_wall_mm: 0.4       # 판재 두께 ≥ 0.4mm
+  uniform_thickness: true
+  min_fillet_r_mm: 0.4   # 보통 두께와 같은 R
+  min_bend_radius_factor: 1.0   # R / thickness ≥ 1.0
+  undercut_allowed: false
+
+applicable_to_skills:
+  # 판금은 prismatic + 굽힘 형상만
+  - box                  # 단순 box-like sheet
+  - extrude_through      # 펀칭 가능
+  - hole
+  - hole_array
+  - grille_pattern
+  - chamfer_edges_by_predicate
+
+not_applicable_to:
+  - disc_with_dome       # 곡면 dome 은 deep-draw 필요 (별도 공정)
+  - extrude_pocket       # 두께 변화 불가
+  - extrude_plateau      # 균일 두께
+  - boss_with_hole       # 두께 변화 / overhang
+  - rib                  # 두께 변화
+  - mounting_pad
+  - snap_hook            # plastic only
+  - polynomial_pocket
+  - variable_radius_fillet
+  - loft_side_profile
+  - swept_relief
+  - antenna_slit
+  - polymer_inlay
+  - crown_shaft_hole
+  - lug_pair
+  - o_ring_groove
+  - surface_offset       # uniform thickness 위반
+  - rounded_slab         # slab > 균일 두께 판재 (얇으면 가능)

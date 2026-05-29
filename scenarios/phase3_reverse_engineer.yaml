@@ -1,0 +1,51 @@
+name: phase3_reverse_engineer
+description: |
+  Phase 3 의 reverse engineer 전체 사이클.
+  - fixtures/simple_watch.step 의 housing → 자동 plan → 실행 → STEP export
+  - 자동 plan 결과 vs 원본 housing 의 face count / volume / bbox 비교
+  - viewport 캡처 (auto-reproduce + 원본 overlay 두 PNG)
+
+phase: 3
+
+inputs: []
+
+steps:
+  - kind: run_python
+    script: -m phone_designer reproduce
+            --reference fixtures/simple_watch_housing_only.step
+            --out run_logs/_tmp/auto_repro.step
+            --plan-out run_logs/_tmp/auto_repro_plan.yaml
+    timeout_s: 120
+  - kind: check_file_exists
+    paths:
+      - run_logs/_tmp/auto_repro.step
+      - run_logs/_tmp/auto_repro_plan.yaml
+  - kind: viewport_offscreen
+    label: auto_reproduced
+    load_step: run_logs/_tmp/auto_repro.step
+    views: [iso, top, side, front]
+  - kind: viewport_offscreen
+    label: original_housing
+    load_step: fixtures/simple_watch_housing_only.step
+    views: [iso, top, side, front]
+  - kind: compare
+    a: run_logs/_tmp/auto_repro.step
+    b: fixtures/simple_watch_housing_only.step
+    tolerances:
+      # 자동 plan 은 Phase 3 v1 (base + fillet + hole) 만 — pocket/plateau/lug 등은
+      # 아직 reverse engineer 안 됨. tolerance 매우 관대.
+      face_count_pct: 200
+      edge_count_pct: 200
+      volume_pct: 300
+      bbox_mm: 20
+  - kind: system_info
+  - kind: log_summary
+    expect:
+      level_counts:
+        ERROR: {max: 0}
+
+expected:
+  outcome: PASS
+
+mail:
+  subject_template: "[PhoneDesigner] {scenario} — {outcome}"

@@ -1,0 +1,34 @@
+code: injection_mold_pa
+name: Polyamide Injection Molding
+description: |
+  Plastic housing — polyamide (또는 PC/ABS) 사출. low-cost watch / phone 내부 부품.
+
+rules:
+  min_wall_mm: 0.8
+  min_draft_deg: 0.5
+  undercut_allowed: false
+  min_fillet_r_mm: 0.3
+  max_wall_variation_pct: 25
+  boss_d_over_wall_ratio_recommended: 2.0
+
+applicable_to_skills:
+  - box
+  - rounded_slab
+  - disc_with_dome
+  - extrude_pocket
+  - extrude_plateau
+  - extrude_through
+  - boss_with_hole
+  - rib
+  - snap_hook
+  - mounting_pad
+  - fillet_edges_by_predicate
+  - chamfer_edges_by_predicate
+  - hole
+  - hole_array
+  - grille_pattern
+  - lug_pair
+  - crown_shaft_hole
+
+not_applicable_to:
+  - antenna_slit          # plastic 은 이미 절연

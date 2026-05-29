@@ -1,0 +1,27 @@
+name: "Standard Crown 4mm"
+category: crown
+source: CATALOG
+bbox:
+  length: 4.0
+  width: 4.0
+  thickness: 4.5
+  is_circular: true
+pose:
+  x_mm: 22
+  y_mm: 0
+  z_mm: 5
+clearance:
+  side_mm: 0.2
+  back_mm: 0.3
+mount_interface:
+  kind: press_fit
+  interference_mm: 0.05
+ports:
+  - name: shaft_exit
+    pose_local: {x_mm: -2.5, y_mm: 0, z_mm: 0}
+    requires_housing_cutout: true
+    window_shape:
+      kind: circle
+      diameter: 2.5
+description: |
+  표준 회전 크라운 — 외경 4mm, 길이 4.5mm. 베어링 + 샤프트 필요.

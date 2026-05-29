@@ -1,0 +1,6 @@
+allowed_processes:
+  - injection_mold_pa
+  - cnc_3axis
+complexity_budget: medium
+draft_relaxation: moderate
+slide_core: false

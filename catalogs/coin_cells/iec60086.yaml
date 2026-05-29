@@ -1,0 +1,33 @@
+# Primary coin/button cells per IEC 60086-3 (lithium CR series, silver SR,
+# alkaline LR). Dimensions are nominal — use side_clearance_mm in the skill to
+# account for tolerance.
+# diameter_mm : cell outer diameter
+# thickness_mm : cell overall height (depth of cavity)
+schema_version: 1
+standard: "IEC 60086-3"
+cells:
+  "CR2032":
+    diameter_mm: 20.0
+    thickness_mm: 3.2
+    chemistry: "Li/MnO2"
+    nominal_voltage_v: 3.0
+  "CR2025":
+    diameter_mm: 20.0
+    thickness_mm: 2.5
+    chemistry: "Li/MnO2"
+    nominal_voltage_v: 3.0
+  "CR2016":
+    diameter_mm: 20.0
+    thickness_mm: 1.6
+    chemistry: "Li/MnO2"
+    nominal_voltage_v: 3.0
+  "SR41":
+    diameter_mm: 7.9
+    thickness_mm: 3.6
+    chemistry: "Ag2O/Zn"
+    nominal_voltage_v: 1.55
+  "LR44":
+    diameter_mm: 11.6
+    thickness_mm: 5.4
+    chemistry: "Alkaline/Zn-MnO2"
+    nominal_voltage_v: 1.5

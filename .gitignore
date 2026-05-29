@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+.env
+
+# OS
+Thumbs.db
+.DS_Store
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# Phone Designer 런타임 / 생성물
+manifest.json
+run_logs/
+fixtures/simple_watch*.step
+fixtures/simple_watch_components/
+*.step
+!fixtures/_template_*.step    # template STEP 은 commit (있다면)
+
+# Reference 자산 — OEM 비공개
+reference/galaxy_watch/
+reference/*.x_t
+reference/*.x_b
+reference/*.iges
+reference/*.igs
+
+# iPhone teardown 은 보유 (Phase 9) — Phase 9 시 별도 결정
+# iphone/
+
+# Tessellation / cache
+*.tessellated
+*.cache
+
+# 로깅
+*.log
+*.jsonl
+
+# 임시 export
+exports/
+out/
+
+# 자동 생성 측정 보고서 (Phase 0+ 자가검증 시나리오의 산출물)
+docs/reports/
+!docs/reports/README.md

@@ -1,0 +1,14 @@
+# USB Type-C receptacle cutouts.
+# Outer host-shell cutout dimensions (rounded-rectangle) for clearing the
+# molded receptacle housing. cutout_w_mm is the long (tongue) dimension,
+# cutout_h_mm the short (thickness) dimension. inner_radius_mm is the wire
+# corner radius of the cutout (typically half of cutout_h_mm). recess_depth_mm
+# is the cut depth INTO the host face (from the face plane). bezel_chamfer_mm
+# is an optional opening chamfer for visible bezel break.
+connectors:
+  "USB_C_Receptacle_v2":
+    cutout_w_mm: 9.0
+    cutout_h_mm: 3.4
+    inner_radius_mm: 1.65
+    recess_depth_mm: 7.35
+    bezel_chamfer_mm: 0.2

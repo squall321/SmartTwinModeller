@@ -1,0 +1,11 @@
+# 3.5 mm TRS/TRRS audio jack.
+# Round cutout: cutout_w_mm == cutout_h_mm == jack barrel clearance Ø.
+# inner_radius_mm = cutout_w_mm/2 (pure circle). recess_depth_mm covers the
+# barrel insertion length from the face plane.
+connectors:
+  "Audio_Jack_3.5mm":
+    cutout_w_mm: 6.2
+    cutout_h_mm: 6.2
+    inner_radius_mm: 3.1
+    recess_depth_mm: 14.0
+    bezel_chamfer_mm: 0.0

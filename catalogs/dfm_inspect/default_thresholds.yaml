@@ -1,0 +1,30 @@
+name: default_thresholds
+description: |
+  Default thresholds used by the inspect/dfm_* skills to classify regions as
+  thin / thick / risky. Values are conservative defaults — process-specific
+  catalogs (cnc_3axis.yaml, injection_mold_pa.yaml) override at planner time.
+
+wall_thickness:
+  # mm — below this the region is flagged as a thin_region
+  thin_threshold_mm: 0.8
+  # mm — above this it is flagged as a thick_region (sink-mark/cooling risk)
+  thick_threshold_mm: 4.0
+  # mm — ray hits closer than this are treated as numerical noise / discarded
+  false_positive_floor_mm: 0.05
+  # mm — start the inward ray this far inside the body to avoid the seed face
+  start_offset_mm: 0.01
+
+undercut:
+  # cos(angle) below which a face is considered an undercut for the given pull
+  # direction. -0.1 ≈ a face that points more than ~5.7° opposite to pull.
+  dot_threshold: -0.1
+
+cosmetic:
+  # ray hits this close to the viewer-side face center → unobstructed cosmetic
+  hit_eps_mm: 0.1
+
+sink_mark:
+  # rib_thickness / wall_thickness above this fraction → sink-mark risk
+  rib_to_wall_ratio: 0.6
+  # min rib thickness in mm — ribs thinner than this are ignored
+  min_rib_thickness_mm: 0.3
