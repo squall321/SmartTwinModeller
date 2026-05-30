@@ -275,6 +275,41 @@ import phone_designer.skills.inspect.cross_section_at_features  # noqa: F401
 import phone_designer.skills.inspect.auto_datum_planes  # noqa: F401
 import phone_designer.skills.inspect.principal_axes  # noqa: F401
 
+# Round 5 — 3D-printing DFM + mold depth + GD&T ext + assembly depth + catalog backbone + LLM control + viz tessellation
+from phone_designer.skills.inspect.overhang_check import OverhangCheck
+from phone_designer.skills.inspect.support_volume_estimate import SupportVolumeEstimate
+from phone_designer.skills.inspect.bridge_length_check import BridgeLengthCheck
+from phone_designer.skills.inspect.orientation_optimize import OrientationOptimize
+from phone_designer.skills.modify_3dprint.add_support_brim import AddSupportBrim
+import phone_designer.skills.modify_mold.cooling_channel_path  # noqa: F401
+import phone_designer.skills.inspect.gating_position_candidates  # noqa: F401
+import phone_designer.skills.modify_mold.runner_diameter_calc  # noqa: F401
+import phone_designer.skills.modify_mold.slide_action_geometry  # noqa: F401
+import phone_designer.skills.modify_mold.ejector_pin_pattern  # noqa: F401
+import phone_designer.skills.inspect.datum_target_assign  # noqa: F401
+import phone_designer.skills.inspect.basic_dimension_attach  # noqa: F401
+import phone_designer.skills.inspect.projected_tolerance_zone  # noqa: F401
+import phone_designer.skills.inspect.mmc_lmc_modifier  # noqa: F401
+import phone_designer.skills.inspect.runout_check  # noqa: F401
+import phone_designer.skills.inspect.feature_control_frame_compose  # noqa: F401
+import phone_designer.skills.assembly.exploded_view  # noqa: F401
+import phone_designer.skills.assembly.sub_assembly_tag  # noqa: F401
+import phone_designer.skills.assembly.auto_place_fasteners  # noqa: F401
+import phone_designer.skills.assembly.bolt_pattern_recognize  # noqa: F401
+import phone_designer.skills.assembly.check_clearance_full  # noqa: F401
+from phone_designer.skills.inspect import catalog_lookup
+from phone_designer.skills.inspect import catalog_search
+import phone_designer.skills.inspect.suggest_selector_from_phrase  # noqa: F401
+import phone_designer.skills.inspect.predict_post_conditions  # noqa: F401
+import phone_designer.skills.inspect.explain_skill_failure  # noqa: F401
+import phone_designer.skills.inspect.find_similar_skills  # noqa: F401
+import phone_designer.skills.inspect.plan_diff  # noqa: F401
+import phone_designer.skills.inspect.face_tessellate  # noqa: F401
+import phone_designer.skills.inspect.edge_polyline_extract  # noqa: F401
+import phone_designer.skills.inspect.curvature_at_point  # noqa: F401
+import phone_designer.skills.inspect.normal_map_compute  # noqa: F401
+import phone_designer.skills.inspect.color_by_property  # noqa: F401
+
 from phone_designer.skills._registry import registry
 from phone_designer.skills._selectors import selector_json_schemas
 
