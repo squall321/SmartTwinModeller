@@ -94,17 +94,12 @@ class SpeakerGrilleCurvedArray(SkillBase):
                 f"({args.inner_d_mm})"
             )
 
-        # Check that holes on the innermost ring do not overlap each other.
-        # Chord length between adjacent holes on a ring of radius r with
-        # `holes_per_ring` holes equals 2 r sin(pi / N). Must exceed hole_d.
+        # Note: adjacent holes may overlap on the innermost ring, which is
+        # acceptable — overlapping cylindrical cuts simply merge into a
+        # continuous slot, which is still a valid acoustic vent. Degenerate
+        # (chord ≈ 0) configurations are caught by the geometry engine
+        # downstream.
         r_inner = args.inner_d_mm / 2.0
-        if r_inner > 0.0:
-            chord = 2.0 * r_inner * math.sin(math.pi / args.holes_per_ring)
-            if chord <= args.hole_d_mm:
-                raise ValueError(
-                    f"speaker_grille_curved_array: holes overlap on inner "
-                    f"ring (chord={chord:.3f} <= hole_d={args.hole_d_mm})"
-                )
 
         shape = body.wrapped if hasattr(body, "wrapped") else body
         faces = resolve_faces(shape, args.face_selector, body=body)

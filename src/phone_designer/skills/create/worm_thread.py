@@ -139,9 +139,12 @@ class WormThread(SkillBase):
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
         from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut
-        from OCP.BRepOffsetAPI import BRepOffsetAPI_MakePipe
+        from OCP.BRepOffsetAPI import BRepOffsetAPI_MakePipeShell
         from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
         from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+        from OCP.TopAbs import TopAbs_WIRE
+        from OCP.TopExp import TopExp_Explorer
+        from OCP.TopoDS import TopoDS
         from build123d import Part
 
         m = args.module_mm
@@ -174,14 +177,29 @@ class WormThread(SkillBase):
             raise RuntimeError("worm_thread: shaft cylinder failed")
         shaft = cyl.Shape()
 
-        # 2. Helix + V-profile sweep.
+        # 2. Helix + V-profile sweep. We use MakePipeShell with Frenet frame
+        # mode (and MakeSolid) so the swept body is a true solid that boolean
+        # subtraction can consume — the simpler BRepOffsetAPI_MakePipe path
+        # produced a degenerate shell on tight helices.
         helix = _build_helix_wire(R, axial_pitch, turns)
-        profile = _build_v_profile_face(R, thread_height, thread_angle_deg=60.0)
-        pipe = BRepOffsetAPI_MakePipe(helix, profile)
-        pipe.Build()
-        if not pipe.IsDone():
+        profile_face = _build_v_profile_face(
+            R, thread_height, thread_angle_deg=60.0,
+        )
+        # Extract the bounding wire from the V-profile face for MakePipeShell.
+        wexp = TopExp_Explorer(profile_face, TopAbs_WIRE)
+        if not wexp.More():
+            raise RuntimeError("worm_thread: V-profile wire missing")
+        profile_wire = TopoDS.Wire_s(wexp.Current())
+
+        ps = BRepOffsetAPI_MakePipeShell(helix)
+        ps.SetMode(True)  # Frenet frame
+        ps.Add(profile_wire)
+        ps.Build()
+        if not ps.IsDone():
             raise RuntimeError("worm_thread: pipe sweep failed")
-        thread_solid = pipe.Shape()
+        if not ps.MakeSolid():
+            raise RuntimeError("worm_thread: pipe sweep MakeSolid failed")
+        thread_solid = ps.Shape()
 
         # 3. Cut the thread groove from the shaft.
         cut = BRepAlgoAPI_Cut(shaft, thread_solid)

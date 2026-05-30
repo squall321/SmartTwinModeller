@@ -189,22 +189,13 @@ class ZebraStripeView(SkillBase):
             except Exception:
                 continue
 
-            # collect unique parent faces
-            face_iter = face_list
+            # collect unique parent faces.
+            # TopTools_ListOfShape is directly Python-iterable on this OCP
+            # build; TopTools_ListIteratorOfListOfShape is not exported.
             parents: list = []
             try:
-                it = face_iter.cbegin() if hasattr(face_iter, "cbegin") else None
-            except Exception:
-                it = None
-            # generic iteration via Extent/First/Last is awkward — use explicit loop
-            try:
-                n_parents = face_list.Extent()
-                # OCCT TopTools_ListOfShape supports First/Last/iter via TopTools_ListIteratorOfListOfShape
-                from OCP.TopTools import TopTools_ListIteratorOfListOfShape
-                lit = TopTools_ListIteratorOfListOfShape(face_list)
-                while lit.More():
-                    parents.append(TopoDS.Face_s(lit.Value()))
-                    lit.Next()
+                for fshape in face_list:
+                    parents.append(TopoDS.Face_s(fshape))
             except Exception:
                 pass
 

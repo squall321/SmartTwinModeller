@@ -162,10 +162,7 @@ class ContinuityAudit(SkillBase):
         from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
         from OCP.TopExp import TopExp
         from OCP.TopoDS import TopoDS
-        from OCP.TopTools import (
-            TopTools_IndexedDataMapOfShapeListOfShape,
-            TopTools_ListIteratorOfListOfShape,
-        )
+        from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
 
         from phone_designer.skills._resolvers import _all_edges
 
@@ -190,10 +187,10 @@ class ContinuityAudit(SkillBase):
 
             parents = []
             try:
-                lit = TopTools_ListIteratorOfListOfShape(face_list)
-                while lit.More():
-                    parents.append(TopoDS.Face_s(lit.Value()))
-                    lit.Next()
+                # TopTools_ListOfShape is directly Python-iterable on this OCP
+                # build; TopTools_ListIteratorOfListOfShape is not exported.
+                for fshape in face_list:
+                    parents.append(TopoDS.Face_s(fshape))
             except Exception:
                 continue
 

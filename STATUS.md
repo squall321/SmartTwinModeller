@@ -4,14 +4,14 @@
 
 ## 한 줄 요약
 
-LLM-driven parametric CAD skill library — build123d / OCCT 기반. **220 등록 skill / 16 카테고리 / 18+ 표준 카탈로그 / 74 테스트 파일**. Watch housing v0 자동합성 동작, 다음은 다양한 제품 도메인 확장.
+LLM-driven parametric CAD skill library — build123d / OCCT 기반. **258 등록 skill / 16 카테고리 / 18+ 표준 카탈로그 / 74 테스트 파일**. Watch housing v0 자동합성 동작, 다음은 다양한 제품 도메인 확장.
 
 ## 무엇을 가능하게 했나
 
 ### 1) Skill 시스템 (LLM tool catalog 의 기반)
 
 - **@skill 데코레이터** — Pydantic Args + post_conditions + history_rules + manufacturing 메타데이터 + manifest.json export
-- **220 atomic/macro skill** 이 16 카테고리에 걸쳐 등록됨 (manifest.json 으로 LLM 이 발견 가능)
+- **258 atomic/macro skill** 이 16 카테고리에 걸쳐 등록됨 (manifest.json 으로 LLM 이 발견 가능)
 - **Post-condition framework** — 매 skill 실행 후 volume_decreased / volume_increased / face_count_changed / body_present 자동 검증, silent no-op 봉쇄
 - **Selector 시스템** — 16개 selector (atomic 11 + combo 5) 로 face/edge 매칭, face_named heuristic + tagged selector v2 (cross-step tag chain via EntityHistoryMap)
 - **SelectorFreeze** — matched_count + sha256 topology_signature 로 plan 결정성 보장
@@ -37,6 +37,23 @@ LLM-driven parametric CAD skill library — build123d / OCCT 기반. **220 등�
 | **modify_fillet** | 3 | (variants of fillet) |
 | **modify_antenna** | 2 | antenna_slit, polymer_inlay |
 | **modify_plateau** | 1 | extrude_plateau |
+
+### 2.5) Reverse engineering (38 new skills, 2 new categories)
+
+복잡한 STEP/IGES 파일을 받아 feature catalog 와 Plan(YAML) 으로 역공학하는 파이프라인이 추가됨.
+
+- **Shape healing (repair/ — 5 skills)** — shape_heal (broken topology 일반 복구), sew_faces_to_shell (open shell 봉합), close_shell_to_solid (shell→solid), simplify_to_canonical (B-Spline → analytic 평면/원통/구/원뿔/원환), remove_micro_features (sliver face / 짧은 edge 제거)
+- **Feature classifiers (inspect/)** — classify_pockets (blind / through / stepped / conical / spherical), classify_holes (simple / counterbore / countersink / threaded — 자동 표준 thread 매칭), detect_bosses, detect_ribs, detect_standoffs, detect_lugs
+- **Best-fit primitives (inspect/)** — fit_plane, fit_cylinder, fit_sphere, fit_cone, fit_torus — 임의 face/face cluster 에서 RANSAC + least-squares 로 analytic primitive 추출
+- **Topology graph (inspect/)** — face_adjacency_graph (face 노드 + shared edge 엣지), edge_concavity_classify (convex / concave / smooth / tangent), vertex_connectivity (vertex valence + incident face/edge)
+- **Symmetry detection (inspect/)** — detect_mirror_symmetry (plane 후보 + matched face pair score), detect_rotational_symmetry (축 + order n + tolerance)
+- **Pattern detection (inspect/)** — detect_linear_array (step vector + count), detect_circular_array (축 + 각 step + count)
+- **Standard part matching (inspect/)** — match_standard_hole (threads_metric/imperial vs measured d/depth), match_standard_bearing (608/625/6000 series), match_standard_oring (AS568 dash), identify_fastener_recess (hex / Torx / Phillips / Pozidriv)
+- **Plan reconstruction (reverse_engineer/ — 2 skills)** — extract_feature_catalog (healed solid → FeatureCatalog JSON), plan_from_feature_catalog (FeatureCatalog → Plan YAML, hole/pocket/boss/fillet/chamfer skill 호출 자동 생성)
+- **File I/O (io/)** — iges_import, iges_export, brep_import, brep_export (OCCT native), step_export_v2 (AP242, PMI hint)
+- **Auto-dimensioning & cross-sections (inspect/)** — auto_dimension (feature 자동 치수 산출), auto_datum_planes (principal axes 기반 datum 3 plane), cross_section_at_features (각 feature 중심 단면), principal_axes (관성 텐서 기반 주축)
+
+이로써 SmartTwinModeller 는 generative CAD (Plan → STEP) 뿐 아니라 역방향 (STEP → Plan) 도 가능해진 양방향 파이프라인이 됨.
 
 ### 3) 표준 카탈로그 (ISO/DIN/ANSI/AS568)
 

@@ -235,6 +235,46 @@ import phone_designer.skills.inspect.pocket_aspect_ratio_check  # noqa: F401
 from phone_designer.skills.create.gear_helical_involute import GearHelicalInvolute
 from phone_designer.skills.create.worm_thread import WormThread
 
+# Reverse-engineering boost — repair / inspect / reverse_engineer / io
+import phone_designer.skills.repair.shape_heal  # noqa: F401
+import phone_designer.skills.repair.sew_faces_to_shell  # noqa: F401
+import phone_designer.skills.repair.close_shell_to_solid  # noqa: F401
+import phone_designer.skills.repair.simplify_to_canonical  # noqa: F401
+import phone_designer.skills.repair.remove_micro_features  # noqa: F401
+from phone_designer.skills.inspect.face_adjacency_graph import FaceAdjacencyGraph
+from phone_designer.skills.inspect.edge_concavity_classify import EdgeConcavityClassify
+from phone_designer.skills.inspect.vertex_connectivity import VertexConnectivity
+import phone_designer.skills.inspect.fit_plane  # noqa: F401
+import phone_designer.skills.inspect.fit_cylinder  # noqa: F401
+import phone_designer.skills.inspect.fit_sphere  # noqa: F401
+import phone_designer.skills.inspect.fit_cone  # noqa: F401
+import phone_designer.skills.inspect.fit_torus  # noqa: F401
+import phone_designer.skills.inspect.classify_pockets  # noqa: F401
+import phone_designer.skills.inspect.classify_holes  # noqa: F401
+import phone_designer.skills.inspect.detect_bosses  # noqa: F401
+import phone_designer.skills.inspect.detect_ribs  # noqa: F401
+import phone_designer.skills.inspect.detect_standoffs  # noqa: F401
+import phone_designer.skills.inspect.detect_lugs  # noqa: F401
+import phone_designer.skills.inspect.detect_mirror_symmetry  # noqa: F401
+import phone_designer.skills.inspect.detect_rotational_symmetry  # noqa: F401
+import phone_designer.skills.inspect.detect_linear_array  # noqa: F401
+import phone_designer.skills.inspect.detect_circular_array  # noqa: F401
+import phone_designer.skills.inspect.match_standard_hole  # noqa: F401
+import phone_designer.skills.inspect.match_standard_bearing  # noqa: F401
+import phone_designer.skills.inspect.match_standard_oring  # noqa: F401
+import phone_designer.skills.inspect.identify_fastener_recess  # noqa: F401
+import phone_designer.skills.reverse_engineer.extract_feature_catalog  # noqa: F401
+import phone_designer.skills.reverse_engineer.plan_from_feature_catalog  # noqa: F401
+from phone_designer.skills.io.iges_import import IgesImport
+from phone_designer.skills.io.iges_export import IgesExport
+from phone_designer.skills.io.brep_import import BrepImport
+from phone_designer.skills.io.brep_export import BrepExport
+from phone_designer.skills.io.step_export_v2 import StepExportV2
+import phone_designer.skills.inspect.auto_dimension  # noqa: F401
+import phone_designer.skills.inspect.cross_section_at_features  # noqa: F401
+import phone_designer.skills.inspect.auto_datum_planes  # noqa: F401
+import phone_designer.skills.inspect.principal_axes  # noqa: F401
+
 from phone_designer.skills._registry import registry
 from phone_designer.skills._selectors import selector_json_schemas
 
