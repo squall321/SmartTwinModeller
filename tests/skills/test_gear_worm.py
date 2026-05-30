@@ -138,10 +138,11 @@ def test_worm_thread_volume_and_bbox():
     R = 10.0
     L = 30.0
     v_full = math.pi * R * R * L
-    # Removed volume is a small fraction of the shaft — expect 0.6·v_full
-    # ≤ v ≤ v_full.
-    assert 0.5 * v_full <= v <= v_full, (
-        f"worm volume {v:.2f} not in [{0.5 * v_full:.2f},{v_full:.2f}]"
+    # Removed volume is a small fraction of the shaft — expect 0.5·v_full
+    # ≤ v ≤ v_full (plus tiny OCCT floating-point slack).
+    upper = v_full * (1 + 1e-4)
+    assert 0.5 * v_full <= v <= upper, (
+        f"worm volume {v:.2f} not in [{0.5 * v_full:.2f},{upper:.2f}]"
     )
 
     xmin, ymin, zmin, xmax, ymax, zmax = _bbox(r.body)
