@@ -158,7 +158,13 @@ class SupportVolumeEstimate(SkillBase):
         ndown = (-bdir[0], -bdir[1], -bdir[2])
 
         shape = _occt_shape(body)
-        plate_min, _plate_max = _project_extents(shape, bdir)
+        # The build plate sits BELOW the body in world space — at the body's
+        # minimum extent along the world's gravity direction (which we take
+        # to be -Z). Support material falls from each overhang face down
+        # onto this plate. The build_direction parameter only affects WHICH
+        # faces are classified as overhangs (via the angle test below); the
+        # geometric drop distance is measured in the world Z axis.
+        plate_z, _body_max_z = _project_extents(shape, (0.0, 0.0, 1.0))
 
         faces = _all_faces(shape)
         per_face: list[dict[str, Any]] = []
@@ -168,11 +174,15 @@ class SupportVolumeEstimate(SkillBase):
             if res is None:
                 continue
             (nx, ny, nz), (cx, cy, cz), area = res
-            # angle vs -build_direction
+            # angle vs -build_direction.
+            # angle == 0  → face points straight down (pure overhang).
+            # angle == 90 → vertical side wall (not an overhang).
+            # We flag any face whose normal lies WITHIN max_overhang_deg of
+            # -build_direction, matching overhang_check.
             dot_ndown = nx * ndown[0] + ny * ndown[1] + nz * ndown[2]
             dot_clamped = max(-1.0, min(1.0, dot_ndown))
             angle_deg = math.degrees(math.acos(dot_clamped))
-            if angle_deg <= args.max_overhang_deg:
+            if angle_deg >= args.max_overhang_deg:
                 continue
             # face is an overhang. Projected footprint along build_direction:
             #   projected_area = area * |dot(normal, build_direction)|
@@ -180,9 +190,9 @@ class SupportVolumeEstimate(SkillBase):
             # to the build direction)
             dot_build = nx * bdir[0] + ny * bdir[1] + nz * bdir[2]
             projected_area = area * abs(dot_build)
-            # drop height: distance from face centroid down to the build plate
-            cproj = cx * bdir[0] + cy * bdir[1] + cz * bdir[2]
-            drop_h = max(0.0, cproj - plate_min)
+            # drop height: vertical world-Z distance from the face centroid
+            # down to the build plate (at body min Z).
+            drop_h = max(0.0, cz - plate_z)
             vol = projected_area * drop_h * args.support_density
             total_vol += vol
             per_face.append({

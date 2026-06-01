@@ -1,0 +1,44 @@
+# Temperature sensor footprints for wearables / industrial assemblies.
+# Used by modify_pocket/temperature_sensor_pocket.py to recess the sensor body
+# into a host face.
+#
+# package      : "TO-39" | "DFN" (informational)
+# body_w_mm    : pocket width (X)
+# body_h_mm    : pocket depth (Y)  — for circular packages w == h
+# body_t_mm    : pocket depth into face (Z)
+# corner_r_mm  : pocket corner fillet radius (0 = sharp / circular)
+# is_circular  : true → circular pocket of diameter body_w_mm; rectangle otherwise
+# clearance_mm : default extra material added to W/H (per side)
+schema_version: 1
+standard: "internal"
+sensors:
+  "mlx90614":
+    package: "TO-39"
+    body_w_mm: 8.1
+    body_h_mm: 8.1
+    body_t_mm: 4.1
+    corner_r_mm: 4.05
+    is_circular: true
+    clearance_mm: 0.1
+    interface: "I2C"
+    notes: "Melexis MLX90614 non-contact IR temperature sensor (TO-39 can)."
+  "si705x":
+    package: "DFN-6"
+    body_w_mm: 3.0
+    body_h_mm: 3.0
+    body_t_mm: 0.8
+    corner_r_mm: 0.2
+    is_circular: false
+    clearance_mm: 0.1
+    interface: "I2C"
+    notes: "Silicon Labs Si705x DFN-6 digital temperature sensor."
+  "ntc_0603":
+    package: "0603"
+    body_w_mm: 1.6
+    body_h_mm: 0.8
+    body_t_mm: 0.45
+    corner_r_mm: 0.1
+    is_circular: false
+    clearance_mm: 0.1
+    interface: "analog"
+    notes: "NTC thermistor 0603 SMD — contact temperature sensing."

@@ -1,0 +1,41 @@
+# Metallic plating finishes (electroless / electrolytic).
+#
+# `thickness_um` is the deposited layer per side. The part grows by exactly
+# `thickness_um` per plated side — for double-sided plating multiply ×2 for
+# diameters / shaft fits.
+# `corrosion_rating` is a 1..5 scale (5 = best salt-spray resistance per
+# ASTM B117).
+schema_version: 1
+family: plating
+finishes:
+  Nickel_Electroless_15um:
+    process: "electroless_nickel_phosphorus"
+    thickness_um: 15.0
+    hardness_hv: 550
+    color: "satin_silver"
+    corrosion_rating: 4
+    notes: "EN, mid-phos; conformal coverage on complex geometry; good wear."
+
+  Zinc_Chromate_8um:
+    process: "electrolytic_zinc_with_chromate_seal"
+    thickness_um: 8.0
+    hardness_hv: 130
+    color: "silver_blue"
+    corrosion_rating: 3
+    notes: "Cost-effective steel corrosion protection; trivalent chromate."
+
+  Chrome_25um:
+    process: "electrolytic_hard_chrome"
+    thickness_um: 25.0
+    hardness_hv: 900
+    color: "bright_chrome"
+    corrosion_rating: 5
+    notes: "Hard chrome on shafts / pistons; finish-grind after plating."
+
+  Gold_Flash_0.5um:
+    process: "electrolytic_gold_flash_over_nickel"
+    thickness_um: 0.5
+    hardness_hv: 150
+    color: "gold"
+    corrosion_rating: 5
+    notes: "Connector contacts; requires Ni underplate (not in this growth)."

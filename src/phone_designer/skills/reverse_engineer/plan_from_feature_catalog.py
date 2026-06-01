@@ -330,6 +330,7 @@ def _build_plan(catalog: dict) -> dict:
         steps.append(_hole_step(i, h, sm))
 
     return {
+        "schema_version": 1,
         "plan_name": "reconstructed_plan",
         "steps": steps,
     }

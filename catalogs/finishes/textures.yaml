@@ -1,0 +1,78 @@
+# Tool-side surface textures (mold-tech / VDI).
+#
+# `ra_um`         — target arithmetic-mean roughness on the molded part (μm).
+# `etch_depth_um` — peak-to-valley etch depth on the steel tool (μm).
+# `draft_delta_deg` — ADDITIONAL draft (deg) required above the base draft
+#   for safe ejection without scuffing the texture. Add to nominal draft.
+#
+# VDI 3400 grades (mfg-standard ladder of spark-erosion finishes):
+#   15 → fine, 21 → medium-fine, 27 → medium, 33 → coarse, 39 → very-coarse.
+#
+# Mold-Tech grades (chemical etch, common on cosmetic surfaces):
+#   MT11005 (fine grain), MT11020 (medium), MT11030 (coarse leather).
+schema_version: 1
+family: textures
+textures:
+  VDI3400_15:
+    process: "edm_vdi_3400"
+    grade: 15
+    ra_um: 0.4
+    etch_depth_um: 4
+    draft_delta_deg: 0.5
+    notes: "Fine spark-eroded surface; near-matte appearance."
+
+  VDI3400_21:
+    process: "edm_vdi_3400"
+    grade: 21
+    ra_um: 1.4
+    etch_depth_um: 9
+    draft_delta_deg: 1.0
+    notes: "Medium-fine; uniform matte."
+
+  VDI3400_27:
+    process: "edm_vdi_3400"
+    grade: 27
+    ra_um: 5.0
+    etch_depth_um: 22
+    draft_delta_deg: 1.5
+    notes: "Medium; common housing matte."
+
+  VDI3400_33:
+    process: "edm_vdi_3400"
+    grade: 33
+    ra_um: 12.0
+    etch_depth_um: 45
+    draft_delta_deg: 2.0
+    notes: "Coarse; strong tactile feel."
+
+  VDI3400_39:
+    process: "edm_vdi_3400"
+    grade: 39
+    ra_um: 27.0
+    etch_depth_um: 90
+    draft_delta_deg: 3.0
+    notes: "Very coarse; pebble-like."
+
+  MoldTech_MT11005:
+    process: "chemical_etch_mold_tech"
+    grade: "MT-11005"
+    ra_um: 1.0
+    etch_depth_um: 12
+    draft_delta_deg: 1.0
+    notes: "Fine grain texture; consumer-electronics housings."
+
+  MoldTech_MT11020:
+    process: "chemical_etch_mold_tech"
+    grade: "MT-11020"
+    ra_um: 3.0
+    etch_depth_um: 40
+    draft_delta_deg: 2.0
+    notes: "Medium grain; standard cosmetic surface."
+
+  MoldTech_MT11030:
+    process: "chemical_etch_mold_tech"
+    grade: "MT-11030"
+    ra_um: 8.0
+    etch_depth_um: 75
+    draft_delta_deg: 3.0
+    notes: "Coarse leather grain; premium feel; deep undercut risk."

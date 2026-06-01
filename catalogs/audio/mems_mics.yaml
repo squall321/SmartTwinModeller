@@ -1,0 +1,50 @@
+# MEMS microphone boot pocket specifications.
+#
+# Each entry describes a bottom-port (or top-port) MEMS digital microphone
+# package — the boot pocket on the host wall must (a) seat the package above a
+# small acoustic boot cavity that aligns with the sound port and (b) carry an
+# O-ring groove around the port for an acoustic seal against the PCB / gasket.
+#
+# Geometry fields (units: mm):
+#   package_w_mm, package_l_mm — package footprint
+#   package_h_mm               — package height (boot recess depth)
+#   sound_port_d_mm            — acoustic port diameter through the package
+#   sound_port_offset_mm       — port offset from package centre (0 = centered)
+#   boot_cavity_d_mm           — boot cavity diameter under the port
+#   boot_cavity_h_mm           — boot cavity depth (acoustic volume)
+#   oring_id_mm / oring_cs_mm  — O-ring inner-diameter & cross-section
+#   notes                      — free-form description
+mics:
+  sph0645:
+    package_w_mm: 3.5
+    package_l_mm: 2.65
+    package_h_mm: 0.98
+    sound_port_d_mm: 0.4
+    sound_port_offset_mm: 0.0
+    boot_cavity_d_mm: 1.6
+    boot_cavity_h_mm: 0.7
+    oring_id_mm: 1.8
+    oring_cs_mm: 0.5
+    notes: "Knowles SPH0645LM4H I2S MEMS — bottom-port"
+  im69d130:
+    package_w_mm: 4.0
+    package_l_mm: 3.0
+    package_h_mm: 1.2
+    sound_port_d_mm: 0.5
+    sound_port_offset_mm: 0.6
+    boot_cavity_d_mm: 1.8
+    boot_cavity_h_mm: 0.8
+    oring_id_mm: 2.0
+    oring_cs_mm: 0.6
+    notes: "Infineon IM69D130 high-AOP MEMS — bottom-port, offset acoustic port"
+  mp34dt06:
+    package_w_mm: 3.0
+    package_l_mm: 4.0
+    package_h_mm: 1.0
+    sound_port_d_mm: 0.44
+    sound_port_offset_mm: 0.0
+    boot_cavity_d_mm: 1.7
+    boot_cavity_h_mm: 0.75
+    oring_id_mm: 1.9
+    oring_cs_mm: 0.5
+    notes: "STMicro MP34DT06J PDM MEMS — bottom-port"

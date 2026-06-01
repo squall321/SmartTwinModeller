@@ -310,6 +310,37 @@ import phone_designer.skills.inspect.curvature_at_point  # noqa: F401
 import phone_designer.skills.inspect.normal_map_compute  # noqa: F401
 import phone_designer.skills.inspect.color_by_property  # noqa: F401
 
+# Round 6 — product domains (3D-print extras + FEM/CAE bridge + surface finishes + biometric + phone-deep + audio-deep)
+from phone_designer.skills.modify_3dprint.raft_add import RaftAdd  # noqa: F401
+from phone_designer.skills.modify_3dprint.support_tree_path import SupportTreePath  # noqa: F401
+from phone_designer.skills.modify_3dprint.infill_region_tag import InfillRegionTag  # noqa: F401
+from phone_designer.skills.inspect.slicer_hints import SlicerHints  # noqa: F401
+import phone_designer.skills.fem_cae.export_mesh_for_fem  # noqa: F401
+import phone_designer.skills.fem_cae.boundary_condition_tag  # noqa: F401
+import phone_designer.skills.fem_cae.material_property_tag  # noqa: F401
+import phone_designer.skills.inspect.modal_frequency_estimate  # noqa: F401
+import phone_designer.skills.inspect.stress_concentration_predict  # noqa: F401
+import phone_designer.skills.modify_finish.apply_anodize  # noqa: F401
+import phone_designer.skills.modify_finish.apply_paint  # noqa: F401
+import phone_designer.skills.modify_finish.apply_plating  # noqa: F401
+import phone_designer.skills.modify_finish.apply_texture_region  # noqa: F401
+import phone_designer.skills.modify_pocket.emi_gasket_groove  # noqa: F401
+import phone_designer.skills.modify_pocket.capacitive_touch_pad  # noqa: F401
+import phone_designer.skills.modify_pocket.ecg_electrode_pad  # noqa: F401
+import phone_designer.skills.modify_pocket.heart_rate_optical_dome  # noqa: F401
+import phone_designer.skills.modify_boss.haptic_motor_mount  # noqa: F401
+import phone_designer.skills.modify_pocket.temperature_sensor_pocket  # noqa: F401
+import phone_designer.skills.modify_pocket.face_id_pocket  # noqa: F401
+import phone_designer.skills.modify_pocket.nfc_coil_pocket  # noqa: F401
+import phone_designer.skills.modify_pocket.antenna_isolation_slit  # noqa: F401
+import phone_designer.skills.modify_pocket.esim_chip_pocket  # noqa: F401
+import phone_designer.skills.modify_boss.side_button_dome_mount  # noqa: F401
+import phone_designer.skills.modify_curvature.waveguide_horn_profile  # noqa: F401
+import phone_designer.skills.modify_pocket.bass_reflex_port_flared  # noqa: F401
+import phone_designer.skills.modify_pocket.anechoic_chamber_liner_mount  # noqa: F401
+import phone_designer.skills.modify_pocket.mems_mic_boot_pocket  # noqa: F401
+import phone_designer.skills.modify_pocket.speaker_baffle_window  # noqa: F401
+
 from phone_designer.skills._registry import registry
 from phone_designer.skills._selectors import selector_json_schemas
 

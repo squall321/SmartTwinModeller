@@ -126,18 +126,16 @@ class OverhangCheck(SkillBase):
             if res is None:
                 continue
             (nx, ny, nz), _c, area = res
-            # angle between -build_direction and outward normal
+            # angle between -build_direction and outward normal.
+            # angle == 0  → face points straight down (pure overhang).
+            # angle == 90 → face is a vertical side wall (self-supporting).
+            # angle == 180→ face points straight up (top, no support).
+            # The classic "45° rule" flags faces whose normal lies WITHIN
+            # max_angle_deg of -build_direction, i.e. angle_deg < threshold.
             dot = nx * ndown[0] + ny * ndown[1] + nz * ndown[2]
             dot_clamped = max(-1.0, min(1.0, dot))
             angle_deg = math.degrees(math.acos(dot_clamped))
-            needs_support = angle_deg > args.max_angle_deg and angle_deg < 90.0 + 1e-6
-            # A face whose normal points exactly opposite to build_direction
-            # (angle == 0) is downward-facing — needs support unless it sits
-            # on the build plate. We mark every downward-tilted face that
-            # exceeds the threshold, including pure down (angle = 0).
-            # Refine: angle < max_angle_deg AND dot > 0 (downward-facing).
-            # Spec asked "angle > max_angle_deg → overhang". So:
-            is_overhang = (angle_deg > args.max_angle_deg)
+            is_overhang = (angle_deg < args.max_angle_deg)
             overhangs.append({
                 "face_idx": idx,
                 "angle_deg": round(angle_deg, 2),

@@ -1,0 +1,35 @@
+# Wet-spray / powder paint finishes.
+#
+# `thickness_um` is the cured film thickness per side (~50 μm typical for
+# spray paint over primer). `dimensional_growth_um` is the resulting
+# per-side build-up (= thickness, paint does not penetrate substrate).
+# `durability_rating` is a 1..5 scale (5 = best resistance to scratch / UV).
+schema_version: 1
+family: paint
+finishes:
+  Paint_Pantone_Cool_Gray_9:
+    process: "wet_spray_acrylic"
+    pantone: "Pantone Cool Gray 9 C"
+    color: "cool_gray"
+    thickness_um: 50.0
+    dimensional_growth_um: 50.0
+    durability_rating: 3
+    notes: "Generic cool-gray housing paint; topcoat over primer."
+
+  Paint_Pantone_Black_6:
+    process: "wet_spray_acrylic"
+    pantone: "Pantone Black 6 C"
+    color: "black"
+    thickness_um: 50.0
+    dimensional_growth_um: 50.0
+    durability_rating: 3
+    notes: "Deep black housing paint; visible fingerprints."
+
+  Paint_Pantone_Red_032_C:
+    process: "wet_spray_acrylic"
+    pantone: "Pantone Red 032 C"
+    color: "red"
+    thickness_um: 50.0
+    dimensional_growth_um: 50.0
+    durability_rating: 3
+    notes: "Vivid red; UV-sensitive — limit outdoor exposure."

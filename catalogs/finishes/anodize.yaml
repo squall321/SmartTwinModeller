@@ -1,0 +1,74 @@
+# Aluminium anodize finishes.
+#
+# Type II  — Sulfuric-acid anodize, decorative + protective, dyeable.
+# Type III — Hard-coat anodize (a.k.a. hardcoat), thicker, ~2x hardness.
+#
+# `dimensional_growth_um_per_side` is the build-up per surface; the part grows
+# by ~½ of the coating thickness on each side (the other half penetrates the
+# substrate). Apply ×2 for hole diameters / pin-to-pin spacing.
+#
+# Per spec keys:
+#   thickness_um, hardness_hv, color, max_substrate_temp_c,
+#   dimensional_growth_um_per_side
+schema_version: 1
+family: anodize
+finishes:
+  Anodize_Type_II:
+    process: "sulfuric_anodize_type_II"
+    thickness_um: 25.0
+    hardness_hv: 250
+    color: "matte_black"
+    pantone: null
+    max_substrate_temp_c: 105
+    dimensional_growth_um_per_side: 12.5
+    notes: "MIL-A-8625 Type II Class 2 (dyed), matte black; suitable for cosmetic housings."
+
+  Anodize_Type_III:
+    process: "hardcoat_anodize_type_III"
+    thickness_um: 50.0
+    hardness_hv: 500
+    color: "dark_gray"
+    pantone: null
+    max_substrate_temp_c: 105
+    dimensional_growth_um_per_side: 25.0
+    notes: "MIL-A-8625 Type III hardcoat; wear surfaces, hinges, slide rails."
+
+  Anodize_Type_II_Clear:
+    process: "sulfuric_anodize_type_II_clear"
+    thickness_um: 15.0
+    hardness_hv: 250
+    color: "clear"
+    pantone: null
+    max_substrate_temp_c: 105
+    dimensional_growth_um_per_side: 7.5
+    notes: "MIL-A-8625 Type II Class 1 (undyed); natural silvery finish."
+
+  Anodize_Color_Red:
+    process: "sulfuric_anodize_type_II_dyed"
+    thickness_um: 20.0
+    hardness_hv: 250
+    color: "red"
+    pantone: "Pantone 186 C"
+    max_substrate_temp_c: 105
+    dimensional_growth_um_per_side: 10.0
+    notes: "Dyed red Type II; UV-sensitive — limit outdoor exposure."
+
+  Anodize_Color_Blue:
+    process: "sulfuric_anodize_type_II_dyed"
+    thickness_um: 20.0
+    hardness_hv: 250
+    color: "blue"
+    pantone: "Pantone 286 C"
+    max_substrate_temp_c: 105
+    dimensional_growth_um_per_side: 10.0
+    notes: "Dyed blue Type II."
+
+  Anodize_Color_Gold:
+    process: "sulfuric_anodize_type_II_dyed"
+    thickness_um: 20.0
+    hardness_hv: 250
+    color: "gold"
+    pantone: "Pantone 871 C"
+    max_substrate_temp_c: 105
+    dimensional_growth_um_per_side: 10.0
+    notes: "Dyed gold Type II; champagne tone."

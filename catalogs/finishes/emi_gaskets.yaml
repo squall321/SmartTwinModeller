@@ -1,0 +1,52 @@
+# EMI/EMC conductive gasket catalog (form-in-place + foam).
+#
+# `cs_mm`                   — gasket cross-section diameter (the bead height/
+#                              compression dimension before squeeze).
+# `conductivity_db`         — shielding effectiveness at 1 GHz (dB).
+# `recommended_groove_w_mm` — groove WIDTH for the gasket (typ. ≈ 1.0×cs for
+#                              FIP, 1.5×cs for foam to account for sidewall
+#                              clearance).
+# `recommended_groove_d_mm` — groove DEPTH (≈ 0.7×cs to leave room for the
+#                              compressed gasket without bottoming out).
+schema_version: 1
+family: emi_gaskets
+gaskets:
+  Chomerics_CHO-FORM_5550_0.5mm:
+    process: "form_in_place_dispensed"
+    vendor: "Parker Chomerics"
+    series: "CHO-FORM 5550"
+    cs_mm: 0.5
+    conductivity_db: 80
+    recommended_groove_w_mm: 0.60
+    recommended_groove_d_mm: 0.35
+    notes: "FIP silver-Ni silicone; ground plane bonding."
+
+  Chomerics_CHO-FORM_5550_1.0mm:
+    process: "form_in_place_dispensed"
+    vendor: "Parker Chomerics"
+    series: "CHO-FORM 5550"
+    cs_mm: 1.0
+    conductivity_db: 90
+    recommended_groove_w_mm: 1.10
+    recommended_groove_d_mm: 0.70
+    notes: "FIP silver-Ni silicone; standard cs."
+
+  Chomerics_CHO-FORM_5550_1.5mm:
+    process: "form_in_place_dispensed"
+    vendor: "Parker Chomerics"
+    series: "CHO-FORM 5550"
+    cs_mm: 1.5
+    conductivity_db: 100
+    recommended_groove_w_mm: 1.65
+    recommended_groove_d_mm: 1.05
+    notes: "FIP silver-Ni silicone; higher attenuation, larger bead."
+
+  Parker_E-Foam_4880:
+    process: "die_cut_conductive_foam"
+    vendor: "Parker"
+    series: "E-Foam 4880"
+    cs_mm: 2.0
+    conductivity_db: 70
+    recommended_groove_w_mm: 3.00
+    recommended_groove_d_mm: 1.40
+    notes: "Ni-Cu PU foam strip; mechanical compression mount."

@@ -1,0 +1,44 @@
+# Haptic motor footprints — LRA (linear resonant actuator) and ERM (eccentric
+# rotating mass) coin/bar motors. Used by modify_boss/haptic_motor_mount.py to
+# size a cylindrical seat (mount cradle) for the motor body.
+#
+# diameter_mm  : motor outer diameter (or short-side of bar motor)
+# length_mm    : motor length along axis (thickness for coin LRA, length for ERM bar)
+# seat_clearance_mm : default radial clearance added to the seat (per side)
+# motor_kind   : "lra" (linear resonant actuator) | "erm" (eccentric rotating mass)
+# nominal_voltage_v / rated_current_ma : informational; not used by geometry
+schema_version: 1
+standard: "internal"
+motors:
+  "lra_10x3":
+    motor_kind: "lra"
+    diameter_mm: 10.0
+    length_mm: 3.0
+    seat_clearance_mm: 0.15
+    nominal_voltage_v: 2.0
+    rated_current_ma: 80.0
+    notes: "Coin-style LRA — Z-axis resonance, common in wearables."
+  "lra_8x3":
+    motor_kind: "lra"
+    diameter_mm: 8.0
+    length_mm: 3.0
+    seat_clearance_mm: 0.15
+    nominal_voltage_v: 2.0
+    rated_current_ma: 60.0
+    notes: "Smaller coin LRA for compact wearables."
+  "erm_4x14":
+    motor_kind: "erm"
+    diameter_mm: 4.0
+    length_mm: 14.0
+    seat_clearance_mm: 0.2
+    nominal_voltage_v: 3.0
+    rated_current_ma: 90.0
+    notes: "Cylindrical ERM bar motor — radial vibration."
+  "erm_6x14":
+    motor_kind: "erm"
+    diameter_mm: 6.0
+    length_mm: 14.0
+    seat_clearance_mm: 0.2
+    nominal_voltage_v: 3.0
+    rated_current_ma: 110.0
+    notes: "Larger ERM bar for stronger tactile feedback."
