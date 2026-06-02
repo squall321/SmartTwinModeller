@@ -14,6 +14,7 @@ from phone_designer.skills.io.brep_export import BrepExport
 from phone_designer.skills.io.brep_import import BrepImport
 from phone_designer.skills.io.iges_export import IgesExport
 from phone_designer.skills.io.iges_import import IgesImport
+from phone_designer.skills.io.mesh_decimate import MeshDecimate
 from phone_designer.skills.io.step_export_v2 import StepExportV2
 from phone_designer.skills.io.stl_export import StlExport
 from phone_designer.skills.io.stl_import import StlImport
@@ -23,4 +24,5 @@ __all__ = [
     "IgesImport", "IgesExport",
     "BrepImport", "BrepExport",
     "StepExportV2",
+    "MeshDecimate",
 ]

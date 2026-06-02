@@ -56,6 +56,38 @@ python -m phone_designer test --scenario phase0_env_smoke
 
 상세 절차: [lat.md/setup.md](lat.md/setup.md).
 
+## CI gates
+
+- **Full pytest** (informational): `pytest -q` — runs the entire suite incl. slow/UI cases; not all results block merge.
+- **Round-trip strict gate** (must-pass): `$env:FIDELITY_STRICT="1"; pytest -m fidelity`
+  — every parametrized round-trip case is a hard FAIL. Any new code that breaks
+  the reverse-engineering pipeline (cube collapse OR volume drift > tolerance)
+  blocks merge.
+  - Convenience wrapper: `pwsh scripts\ci_fidelity_gate.ps1`
+  - Default (no env var): same test runs but currently-failing cases are
+    reported as `xfail` so local dev runs stay green.
+
+## Reverse-engineering corpus testing
+
+OEM STEP/IGES/BREP 묶음에 대해 `extract_feature_catalog → plan_from_feature_catalog →
+PlanExecutor` 파이프라인을 일괄 실행하고 fidelity 보고서를 생성:
+
+```powershell
+# 1. 파일을 corpus/oem/ 아래로 드롭 (confidential — .gitignore 가 막아줌)
+copy C:\drops\AcmeWatch_v3.step corpus\oem\acme\
+
+# 2. 실행
+phone-designer corpus-test                                # 기본: corpus/oem/, docs/oem_corpus_report.md
+phone-designer corpus-test --dir corpus\oem\acme `
+                            --report-out docs\acme_report.md `
+                            --tolerance-pct 25.0
+```
+
+`corpus/oem/_sample/` 에 in-repo smoke fixture 가 있어 CLI 자체는 git
+클론 직후에도 동작. 보고서는 `original_vol / regen_vol / drift % /
+face_count / status (PASS / DRIFT / CUBE_COLLAPSE / EXEC_FAIL / ERROR)` 컬럼의
+마크다운 테이블. exit code `0 = all within tolerance`, 그 외 `1`.
+
 ## 주요 문서
 
 - 전체 계획: [lat.md/plan.md](lat.md/plan.md)

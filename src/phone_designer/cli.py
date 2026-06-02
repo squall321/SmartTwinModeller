@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 import typer
 
@@ -439,6 +440,188 @@ def inspect(
     if plan is None and step is None:
         typer.echo("[hint] --plan 또는 --step 지정. 빈 GUI 는 `phone-designer ui`.")
     raise typer.Exit(run_inspector(plan=plan, step=step, reference=reference))
+
+
+@app.command("corpus-test")
+def corpus_test(
+    dir: Path = typer.Option(
+        Path("corpus/oem/"), "--dir", help="OEM 파일 디렉토리 (재귀 탐색)"
+    ),
+    report_out: Path = typer.Option(
+        Path("docs/oem_corpus_report.md"), "--report-out",
+        help="markdown 보고서 출력 경로",
+    ),
+    tolerance_pct: float = typer.Option(
+        30.0, "--tolerance-pct",
+        help="원본 대비 regen 부피 drift 허용 % (이내 = pass)",
+    ),
+):
+    """OEM corpus 전체에 대해 RE 파이프라인 (extract → plan → executor) 을
+    실행하고 fidelity 보고서를 생성.
+
+    각 파일에 대해:
+      1. STEP/IGES/BREP import → 원본 측정 (vol, face_count, bbox)
+      2. extract_feature_catalog 로 catalog 추출
+      3. plan_from_feature_catalog 로 plan 합성
+      4. PlanExecutor 로 실행 → regen body 측정
+      5. cube collapse (face_count <= 6 & regen 만) + drift % 판정
+
+    exit 0  = 모든 파일이 tolerance 이내
+    exit 1  = 1개 이상 violate / error
+    """
+    from phone_designer.plan.executor import PlanExecutor
+    from phone_designer.plan.model import Plan
+    from phone_designer.scenarios.runner import _load_step_shape, _shape_metrics
+    from phone_designer.skills.reverse_engineer.extract_feature_catalog import (
+        ExtractFeatureCatalog,
+    )
+    from phone_designer.skills.reverse_engineer.plan_from_feature_catalog import (
+        PlanFromFeatureCatalog,
+    )
+
+    suffixes = {".step", ".stp", ".iges", ".igs", ".brep"}
+    if not dir.exists():
+        typer.echo(f"[error] corpus dir not found: {dir}", err=True)
+        raise typer.Exit(code=2)
+
+    files = sorted(
+        p for p in dir.rglob("*")
+        if p.is_file() and p.suffix.lower() in suffixes
+    )
+    if not files:
+        typer.echo(f"[warn] no STEP/IGES/BREP files under {dir}", err=True)
+
+    rows: list[dict[str, Any]] = []
+    for src in files:
+        rel = src.relative_to(dir) if src.is_relative_to(dir) else src
+        typer.echo(f">>> {rel}")
+        row: dict[str, Any] = {
+            "file": str(rel).replace("\\", "/"),
+            "original_vol": None,
+            "regen_vol": None,
+            "drift_pct": None,
+            "original_faces": None,
+            "regen_faces": None,
+            "status": "ERROR",
+            "error": "",
+        }
+        try:
+            shape = _load_step_shape(src)
+            orig = _shape_metrics(shape)
+            row["original_vol"] = float(orig["volume"])
+            row["original_faces"] = int(orig["face_count"])
+
+            # build123d Part wrapper expected downstream by skills
+            try:
+                from build123d import Part
+                body = Part(shape)
+            except Exception:
+                body = shape
+
+            # extract → plan
+            cat_res = ExtractFeatureCatalog().apply(body, {})
+            catalog = cat_res.extras.get("feature_catalog", {})
+            plan_res = PlanFromFeatureCatalog().apply(body, {"catalog": catalog})
+            plan_dict = plan_res.extras.get("generated_plan") or {}
+            if not plan_dict or not plan_dict.get("steps"):
+                row["status"] = "NO_PLAN"
+                row["error"] = "plan_from_feature_catalog returned empty steps"
+                rows.append(row)
+                continue
+
+            plan = Plan.model_validate(plan_dict)
+            exec_res = PlanExecutor(plan).run()
+            if exec_res.final_body is None:
+                row["status"] = "EXEC_FAIL"
+                row["error"] = (
+                    f"executor outcome={exec_res.outcome}, "
+                    f"errors={exec_res.error_count}"
+                )
+                rows.append(row)
+                continue
+
+            regen_shape = (
+                exec_res.final_body.wrapped
+                if hasattr(exec_res.final_body, "wrapped")
+                else exec_res.final_body
+            )
+            regen = _shape_metrics(regen_shape)
+            row["regen_vol"] = float(regen["volume"])
+            row["regen_faces"] = int(regen["face_count"])
+
+            ov = row["original_vol"] or 0.0
+            rv = row["regen_vol"] or 0.0
+            drift = (
+                abs(ov - rv) / max(abs(ov), 1e-9) * 100.0 if ov else float("inf")
+            )
+            row["drift_pct"] = round(drift, 2)
+
+            # cube-collapse heuristic — regen has only a base box surviving.
+            cube_collapse = (
+                row["regen_faces"] is not None
+                and row["regen_faces"] <= 6
+                and (row["original_faces"] or 0) > 6
+            )
+            if cube_collapse:
+                row["status"] = "CUBE_COLLAPSE"
+                row["error"] = (
+                    f"regen face_count={row['regen_faces']} "
+                    f"(orig={row['original_faces']})"
+                )
+            elif drift <= tolerance_pct:
+                row["status"] = "PASS"
+            else:
+                row["status"] = "DRIFT"
+                row["error"] = f"drift {drift:.1f}% > tol {tolerance_pct}%"
+
+        except Exception as e:
+            row["status"] = "ERROR"
+            row["error"] = f"{type(e).__name__}: {e}"
+        rows.append(row)
+
+    # ── Render markdown report ────────────────────────────────────────────
+    report_out.parent.mkdir(parents=True, exist_ok=True)
+    lines: list[str] = []
+    lines.append("# OEM Corpus Fidelity Report")
+    lines.append("")
+    lines.append(f"- corpus dir: `{dir}`")
+    lines.append(f"- tolerance:  ±{tolerance_pct:.1f}% volume drift")
+    lines.append(f"- files:      {len(rows)}")
+    n_pass = sum(1 for r in rows if r["status"] == "PASS")
+    lines.append(f"- passed:     {n_pass} / {len(rows)}")
+    lines.append("")
+    lines.append(
+        "| file | orig_vol (mm³) | regen_vol (mm³) | drift % | "
+        "orig_faces | regen_faces | status | error |"
+    )
+    lines.append("|---|---:|---:|---:|---:|---:|---|---|")
+    for r in rows:
+        def _fmt(v, suffix=""):
+            if v is None:
+                return "—"
+            if isinstance(v, float):
+                return f"{v:.2f}{suffix}"
+            return f"{v}{suffix}"
+        lines.append(
+            f"| {r['file']} | {_fmt(r['original_vol'])} | "
+            f"{_fmt(r['regen_vol'])} | {_fmt(r['drift_pct'])} | "
+            f"{_fmt(r['original_faces'])} | {_fmt(r['regen_faces'])} | "
+            f"{r['status']} | {r['error']} |"
+        )
+    lines.append("")
+    report_out.write_text("\n".join(lines), encoding="utf-8")
+    typer.echo(f">>> report: {report_out}")
+
+    failed = [r for r in rows if r["status"] != "PASS"]
+    if failed:
+        typer.echo(
+            f">>> {len(failed)}/{len(rows)} file(s) failed "
+            f"(tolerance {tolerance_pct}%)",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    typer.echo(f">>> all {len(rows)} file(s) within tolerance")
+    raise typer.Exit(code=0)
 
 
 @app.command()

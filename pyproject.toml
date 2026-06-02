@@ -74,4 +74,5 @@ markers = [
     "llm: tests that call real Claude API",
     "ui: tests that require Qt event loop",
     "requires_oem: tests that need OEM CAD (회사 컴 only)",
+    "fidelity: round-trip RE pipeline fidelity gate (CI must-pass when FIDELITY_STRICT=1)",
 ]

@@ -45,6 +45,16 @@ reference/*.igs
 # iPhone teardown 은 보유 (Phase 9) — Phase 9 시 별도 결정
 # iphone/
 
+# OEM corpus — confidential drops. The _sample/ subdir is whitelisted so the
+# in-repo smoke fixture stays tracked.
+corpus/oem/**/*.step
+corpus/oem/**/*.STEP
+corpus/oem/**/*.stp
+corpus/oem/**/*.iges
+corpus/oem/**/*.igs
+corpus/oem/**/*.brep
+!corpus/oem/_sample/**
+
 # Tessellation / cache
 *.tessellated
 *.cache
