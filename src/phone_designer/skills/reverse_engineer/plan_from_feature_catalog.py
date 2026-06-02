@@ -143,14 +143,23 @@ def _hole_step(
 
     # ── thread spec source: prefer the hole's own standard_match (which
     #    classify_holes attached), fall back to the per-hole standard match
-    #    pulled from extract_feature_catalog.standard_matches.
-    thread_spec = None
+    #    pulled from extract_feature_catalog.standard_matches. Both sources
+    #    are gated by a confidence floor (0.6) — below that we treat the
+    #    match as noise and fall back to the raw geometric hole, avoiding
+    #    bogus thread specs from coarse one-mm-slop matches.
+    _STD_MATCH_MIN_CONF = 0.6
+    thread_spec: str | None = None
     hole_sm = hole.get("standard_match")
     if isinstance(hole_sm, dict):
-        thread_spec = hole_sm.get("thread_spec")
+        conf = float(hole_sm.get("confidence") or 0.0)
+        if conf >= _STD_MATCH_MIN_CONF:
+            thread_spec = hole_sm.get("thread_spec")
     if thread_spec is None and isinstance(std_match, dict):
         bm = std_match.get("best_match") or {}
-        thread_spec = bm.get("thread_spec")
+        if bm:
+            conf = float(bm.get("confidence") or 0.0)
+            if conf >= _STD_MATCH_MIN_CONF:
+                thread_spec = bm.get("thread_spec")
 
     sid = f"s_hole_{idx}"
 
@@ -387,6 +396,292 @@ def _loft_pocket_step(idx: int, feat: dict) -> dict:
     })
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Specialized handlers — text / magnet / bearing / o-ring / swept relief
+#
+# Each handler returns either a step dict (when it matches with confidence
+# >= 0.6) or None (caller falls back to the generic emission path). Catalog
+# lookups are best-effort: a missing catalog yields None so plan generation
+# stays robust in CI sandboxes that strip data files.
+
+_SPECIALIZED_MIN_CONF = 0.6
+
+
+def _text_step(
+    idx: int,
+    feat: dict,
+    bbox: tuple[float, float, float, float, float, float] | None = None,
+) -> dict | None:
+    """Emit a text_engrave / text_emboss step from a text-feature entry.
+
+    Expected feature shape (defensive — the detector is not yet implemented,
+    but we accept any future schema that follows the convention)::
+
+        {
+          "kind": "engrave" | "emboss" | "text_engrave" | "text_emboss",
+          "text": str,
+          "font_name": str,            # optional, default "Arial"
+          "font_size_mm": float,        # optional, default 5.0
+          "depth_mm" / "height_mm": float,
+          "center_xy" or "center_x_mm"+"center_y_mm": ...,
+          "rotation_deg": float,
+          "axis_origin": [x,y,z],       # for face_selector inference
+          "axis_dir":    [x,y,z],
+          "confidence": float,
+        }
+    """
+    conf = float(feat.get("confidence") or 1.0)
+    if conf < _SPECIALIZED_MIN_CONF:
+        return None
+    text = feat.get("text")
+    if not text or not isinstance(text, str) or not text.strip():
+        return None
+
+    kind = str(feat.get("kind") or "engrave").lower()
+    is_emboss = "emboss" in kind
+    skill_name = "text_emboss" if is_emboss else "text_engrave"
+
+    origin = feat.get("axis_origin") or [0.0, 0.0, 0.0]
+    axis_dir = feat.get("axis_dir") or [0.0, 0.0, 1.0]
+    face_sel = _pick_face_selector(origin, axis_dir, bbox)
+
+    cxy = feat.get("center_xy")
+    if cxy is not None:
+        cx_mm, cy_mm = float(cxy[0]), float(cxy[1])
+    else:
+        cx_mm = float(feat.get("center_x_mm") or 0.0)
+        cy_mm = float(feat.get("center_y_mm") or 0.0)
+
+    args: dict[str, Any] = {
+        "face_selector": face_sel,
+        "text": text,
+        "font_name": str(feat.get("font_name") or "Arial"),
+        "font_size_mm": float(feat.get("font_size_mm") or 5.0),
+        "center_x_mm": cx_mm,
+        "center_y_mm": cy_mm,
+        "rotation_deg": float(feat.get("rotation_deg") or 0.0),
+        "bold": bool(feat.get("bold") or False),
+        "italic": bool(feat.get("italic") or False),
+    }
+    if is_emboss:
+        args["height_mm"] = float(
+            feat.get("height_mm") or feat.get("depth_mm") or 0.3
+        )
+    else:
+        args["depth_mm"] = float(
+            feat.get("depth_mm") or feat.get("height_mm") or 0.3
+        )
+
+    sid = f"s_text_{idx}"
+    return _new_step(sid, skill_name, args)
+
+
+def _match_magnet_pocket(pocket: dict) -> tuple[str, float] | None:
+    """If ``pocket`` looks like an axial NdFeB disc magnet recess, return
+    ``(magnet_spec, confidence)``; else None.
+
+    Match rule: top_d ≈ magnet_d ± 0.15 mm AND depth ≈ magnet_t ± 0.10 mm.
+    Confidence = 1 / (1 + diameter_dev + 2 * depth_dev).
+    """
+    top_d = float(pocket.get("top_d_mm") or 0.0)
+    depth = float(pocket.get("depth_mm") or 0.0)
+    if top_d <= 0.0 or depth <= 0.0:
+        return None
+    catalog = _load("magnets", "ndfeb")
+    if catalog is None:
+        return None
+    best_spec: str | None = None
+    best_conf = 0.0
+    for spec, entry in (catalog.get("magnets") or {}).items():
+        md = float(entry.get("magnet_d_mm") or 0.0)
+        mt = float(entry.get("magnet_t_mm") or 0.0)
+        if md <= 0.0 or mt <= 0.0:
+            continue
+        dd = abs(top_d - md)
+        dt = abs(depth - mt)
+        if dd > 0.20 or dt > 0.20:
+            continue
+        conf = 1.0 / (1.0 + dd + 2.0 * dt)
+        if conf > best_conf:
+            best_conf = conf
+            best_spec = spec
+    if best_spec is None or best_conf < _SPECIALIZED_MIN_CONF:
+        return None
+    return (best_spec, best_conf)
+
+
+def _magnet_pocket_step(
+    idx: int,
+    pocket: dict,
+    magnet_spec: str,
+    bbox: tuple[float, float, float, float, float, float] | None = None,
+) -> dict:
+    origin = pocket.get("axis_origin") or [0.0, 0.0, 0.0]
+    axis_dir = pocket.get("axis_dir") or [0.0, 0.0, -1.0]
+    face_sel = _pick_face_selector(origin, axis_dir, bbox)
+    sid = f"s_magnet_pocket_{idx}"
+    return _new_step(sid, "magnet_pocket_axial", {
+        "face_selector": face_sel,
+        "position_xy": [float(origin[0]), float(origin[1])],
+        "magnet_spec": magnet_spec,
+        "retention": "glue",
+    })
+
+
+def _match_bearing_bore(pocket: dict) -> tuple[str, float] | None:
+    """If ``pocket`` looks like a deep-groove ball bearing seat, return
+    ``(bearing_spec, confidence)``; else None.
+
+    Match rule: top_d ≈ outer_d ± 0.15 mm AND depth ≈ width ± 0.50 mm
+    (depth tolerance is wider — many designs press a bearing into a
+    through-bore deeper than the bearing width).
+    """
+    top_d = float(pocket.get("top_d_mm") or 0.0)
+    depth = float(pocket.get("depth_mm") or 0.0)
+    if top_d <= 0.0 or depth <= 0.0:
+        return None
+    catalog = _load("standards", "bearings_metric")
+    if catalog is None:
+        return None
+    best_spec: str | None = None
+    best_conf = 0.0
+    for spec, entry in (catalog.get("bearings") or {}).items():
+        od = float(entry.get("outer_d_mm") or 0.0)
+        w = float(entry.get("width_mm") or 0.0)
+        if od <= 0.0 or w <= 0.0:
+            continue
+        dd = abs(top_d - od)
+        dw = abs(depth - w)
+        if dd > 0.20:
+            continue
+        # depth gates: very loose because bores can be deeper than width.
+        if dw > 1.0 and depth < w:
+            continue
+        conf = 1.0 / (1.0 + dd + 0.25 * dw)
+        if conf > best_conf:
+            best_conf = conf
+            best_spec = str(spec)
+    if best_spec is None or best_conf < _SPECIALIZED_MIN_CONF:
+        return None
+    return (best_spec, best_conf)
+
+
+def _bearing_bore_step(
+    idx: int,
+    pocket: dict,
+    bearing_spec: str,
+) -> dict:
+    origin = pocket.get("axis_origin") or [0.0, 0.0, 0.0]
+    axis_dir = pocket.get("axis_dir") or [0.0, 0.0, -1.0]
+    sid = f"s_bearing_bore_{idx}"
+    return _new_step(sid, "bearing_bore", {
+        "axis_origin": [
+            float(origin[0]), float(origin[1]), float(origin[2]),
+        ],
+        "axis_direction": [
+            float(axis_dir[0]), float(axis_dir[1]), float(axis_dir[2]),
+        ],
+        "bearing_spec": bearing_spec,
+        "with_shoulder": False,
+    })
+
+
+def _match_o_ring_groove(revolve_feat: dict) -> tuple[float, float, float] | None:
+    """If a revolve_feature looks like an annular o-ring groove, return
+    ``(outer_d_mm, inner_d_mm, depth_mm)``; else None.
+
+    The detector emits revolve_features with only a bbox + axis. We treat the
+    bbox XY extent as the outer diameter and the Z extent as the groove
+    depth. For a true ring we need a non-degenerate annular cross-section
+    (some bbox XY extent), and a shallow depth (<= 5 mm) consistent with a
+    typical AS568 cs.
+    """
+    bb = revolve_feat.get("bbox")
+    if not bb or len(bb) < 6:
+        return None
+    try:
+        xmin, ymin, zmin, xmax, ymax, zmax = (float(c) for c in bb)
+    except Exception:
+        return None
+    outer = max(xmax - xmin, ymax - ymin)
+    depth = zmax - zmin
+    if outer <= 0.5 or depth <= 0.1 or depth > 5.0:
+        return None
+    # Approximate inner d as outer d minus 2*depth*1.2 (groove width slightly
+    # wider than depth). This is a coarse proxy — the o_ring_groove skill
+    # only uses outer/inner/depth directly.
+    inner = max(outer - 2.0 * depth * 1.5, 0.5)
+    if inner >= outer:
+        return None
+    return (outer, inner, depth)
+
+
+def _o_ring_groove_step(
+    idx: int,
+    revolve_feat: dict,
+    outer_d: float,
+    inner_d: float,
+    depth: float,
+    bbox: tuple[float, float, float, float, float, float] | None = None,
+) -> dict:
+    axis_origin = revolve_feat.get("axis_origin") or [0.0, 0.0, 0.0]
+    axis_dir = revolve_feat.get("axis_direction") or [0.0, 0.0, 1.0]
+    face_sel = _pick_face_selector(axis_origin, axis_dir, bbox)
+    sid = f"s_oring_groove_{idx}"
+    return _new_step(sid, "o_ring_groove", {
+        "face_selector": face_sel,
+        "outer_diameter_mm": float(outer_d),
+        "inner_diameter_mm": float(inner_d),
+        "depth_mm": float(depth),
+        "center_x_mm": float(axis_origin[0]),
+        "center_y_mm": float(axis_origin[1]),
+    })
+
+
+def _try_swept_relief(feat: dict) -> dict | None:
+    """If a swept pocket has a straight XY-plane path, emit a swept_relief
+    step instead of swept_pocket_along_curve. Returns the step dict or None.
+
+    Conditions:
+      - exactly two path points (straight segment)
+      - both endpoints at the same Z (planar XY path) — swept_relief v1 only
+        supports XY-plane paths
+      - profile_diameter_mm available → mapped to width_mm/depth_mm
+    """
+    path_points = feat.get("path_points") or []
+    if len(path_points) != 2:
+        return None
+    p0 = path_points[0]
+    p1 = path_points[1]
+    try:
+        z0, z1 = float(p0[2]), float(p1[2])
+    except Exception:
+        return None
+    if abs(z1 - z0) > 0.01:
+        return None
+    profile_d = float(feat.get("profile_diameter_mm") or 2.0)
+    # confidence proxy from segment length / profile aspect — short stubs are
+    # likely detector noise.
+    import math as _math
+    seg = _math.sqrt(
+        (float(p1[0]) - float(p0[0])) ** 2
+        + (float(p1[1]) - float(p0[1])) ** 2
+    )
+    if seg < max(2.0 * profile_d, 1.0):
+        return None
+    return {
+        "start": [float(p0[0]), float(p0[1]), float(p0[2])],
+        "end": [float(p1[0]), float(p1[1]), float(p1[2])],
+        "width_mm": float(profile_d),
+        "depth_mm": float(profile_d),
+    }
+
+
+def _swept_relief_step(idx: int, payload: dict) -> dict:
+    sid = f"s_swept_relief_{idx}"
+    return _new_step(sid, "swept_relief", payload)
+
+
 def _revolve_pocket_step(idx: int, feat: dict) -> dict:
     """Emit a ``revolve_pocket`` step from a revolve_features entry."""
     sid = f"s_revolve_pocket_{idx}"
@@ -586,6 +881,15 @@ def _build_plan(catalog: dict, body: Any = None) -> dict:
     sweep_features = catalog.get("sweep_features") or []
     loft_features = catalog.get("loft_features") or []
     revolve_features = catalog.get("revolve_features") or []
+    # ``text_features`` is forward-compatible: extract_feature_catalog does
+    # not currently emit it, but if a future detector adds engraved/embossed
+    # text entries we map them here. Accept either ``text_features`` or
+    # ``text_marks`` as the catalog key.
+    text_features = (
+        catalog.get("text_features")
+        or catalog.get("text_marks")
+        or []
+    )
     base_thickness = catalog.get("base_thickness_mm")
     std_matches_by_hole = {
         sm.get("hole_id"): sm
@@ -626,11 +930,30 @@ def _build_plan(catalog: dict, body: Any = None) -> dict:
     #    Skip pockets whose axis is diagonal — those are detector artefacts
     #    (chains of unrelated cylindrical/planar faces grouped by adjacency)
     #    and emit a huge spurious extrude_pocket that inflates volume drift.
+    #
+    #    Before emitting the generic extrude_pocket / hole step we try the
+    #    specialized matchers (magnet disc → magnet_pocket_axial, bearing
+    #    seat → bearing_bore). Both gated by confidence >= 0.6 so noisy
+    #    pockets fall through to the generic path.
     pockets_sorted = sorted(
         [p for p in pockets if _pocket_is_axis_aligned(p)],
         key=lambda p: -float(p.get("top_d_mm") or 0.0),
     )
+    magnet_idx = 0
+    bearing_idx = 0
     for i, p in enumerate(pockets_sorted):
+        bearing_match = _match_bearing_bore(p)
+        if bearing_match is not None:
+            spec, _conf = bearing_match
+            steps.append(_bearing_bore_step(bearing_idx, p, spec))
+            bearing_idx += 1
+            continue
+        magnet_match = _match_magnet_pocket(p)
+        if magnet_match is not None:
+            spec, _conf = magnet_match
+            steps.append(_magnet_pocket_step(magnet_idx, p, spec, bbox=bbox))
+            magnet_idx += 1
+            continue
         steps.append(_pocket_step(i, p, bbox=bbox))
 
     # 2b. Sweep / loft / revolve features — emitted BEFORE the per-boss loop
@@ -638,9 +961,19 @@ def _build_plan(catalog: dict, body: Any = None) -> dict:
     #     lofted bodies leave behind boss-like clusters that we don't want
     #     emitted twice).
     sweep_xy_envelopes: list[tuple] = []  # list of bboxes for overlap test
+    swept_relief_idx = 0
     for i, feat in enumerate(sweep_features):
         if feat.get("kind") == "pocket":
-            steps.append(_sweep_pocket_step(i, feat))
+            # Prefer swept_relief for straight, XY-plane 2-point pocket paths
+            # — that's exactly the rectangular cross-section cutout the
+            # swept_relief skill models. Falls back to the generic
+            # swept_pocket_along_curve when the path is curved or off-plane.
+            relief_payload = _try_swept_relief(feat)
+            if relief_payload is not None:
+                steps.append(_swept_relief_step(swept_relief_idx, relief_payload))
+                swept_relief_idx += 1
+            else:
+                steps.append(_sweep_pocket_step(i, feat))
         else:
             steps.append(_sweep_boss_step(i, feat))
         if feat.get("bbox") is not None:
@@ -660,8 +993,17 @@ def _build_plan(catalog: dict, body: Any = None) -> dict:
             ) * 0.5
             loft_xy_centers.append(((float(cxy[0]), float(cxy[1])), radius + 0.5))
 
+    oring_idx = 0
     for i, feat in enumerate(revolve_features):
-        steps.append(_revolve_pocket_step(i, feat))
+        oring_dims = _match_o_ring_groove(feat)
+        if oring_dims is not None:
+            outer, inner, depth = oring_dims
+            steps.append(
+                _o_ring_groove_step(oring_idx, feat, outer, inner, depth, bbox=bbox)
+            )
+            oring_idx += 1
+        else:
+            steps.append(_revolve_pocket_step(i, feat))
 
     # 3. Bosses, tallest first ─────────────────────────────────────────────
     #    Suppress bosses whose centre footprint falls inside any sweep/loft
@@ -693,6 +1035,17 @@ def _build_plan(catalog: dict, body: Any = None) -> dict:
     # 5. Ribs ──────────────────────────────────────────────────────────────
     for i, rb in enumerate(ribs):
         steps.append(_rib_step(i, rb))
+
+    # 5b. Text features (engrave / emboss) ────────────────────────────────
+    #     Forward-compat: extract_feature_catalog does not yet detect text,
+    #     but if a future detector populates ``text_features`` we emit one
+    #     text_engrave / text_emboss step per entry (confidence-gated).
+    text_idx = 0
+    for feat in text_features:
+        step = _text_step(text_idx, feat, bbox=bbox)
+        if step is not None:
+            steps.append(step)
+            text_idx += 1
 
     # 6. Patterns — emit one circular_pattern or linear_pattern step per
     #    detected array of holes, then SUBTRACT the covered holes from the

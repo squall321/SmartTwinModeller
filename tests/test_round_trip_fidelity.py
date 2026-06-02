@@ -13,6 +13,15 @@ CASES = [
     ("fixtures/simple_watch.step", 80.0),  # relative tolerance %
     ("run_logs/_tmp/demo_advanced.step", 80.0),
     ("run_logs/_tmp/demo_boss_sweep_loft.step", 30.0),
+    # Original round-trip extras that were missing from the test
+    ("fixtures/simple_watch_housing_only.step", 50.0),
+    ("run_logs/_tmp/demo_sweep_revolve.step", 30.0),
+    ("run_logs/_tmp/demo_patterns_2_circular.step", 30.0),
+    ("run_logs/_tmp/auto_repro.step", 50.0),
+    # Round 6 synthetic fixtures (clearance_hole / magnet_pocket_axial / text_engrave)
+    ("run_logs/_tmp/fixture_threaded.step", 30.0),
+    ("run_logs/_tmp/fixture_magnet.step", 30.0),
+    ("run_logs/_tmp/fixture_text.step", 30.0),
 ]
 
 def _measure(step_path):
