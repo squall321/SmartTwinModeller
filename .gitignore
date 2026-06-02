@@ -42,8 +42,15 @@ reference/*.x_b
 reference/*.iges
 reference/*.igs
 
-# iPhone teardown 은 보유 (Phase 9) — Phase 9 시 별도 결정
-# iphone/
+# iPhone teardown — 128MB, too large for git (Phase 9 시 별도 LFS 결정)
+iphone/
+
+# 루트의 ad-hoc 디버그 / smoke / survey 파일
+/_debug_*.py
+/_mesh_*.py
+/_survey.py
+/_pytest_out.txt
+/test_results.txt
 
 # OEM corpus — confidential drops. The _sample/ subdir is whitelisted so the
 # in-repo smoke fixture stays tracked.
