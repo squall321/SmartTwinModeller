@@ -54,13 +54,76 @@ def _load(family, name):
 
 
 _DEFAULT_FACE_SELECTOR: dict[str, Any] = {"kind": "face_named", "name": "top"}
+_BOTTOM_FACE_SELECTOR: dict[str, Any] = {"kind": "face_named", "name": "bottom"}
 
 
 def _new_step(id_: str, skill_name: str, args: dict[str, Any]) -> dict[str, Any]:
     return {"id": id_, "skill": skill_name, "args": args}
 
 
-def _hole_step(idx: int, hole: dict, std_match: dict | None) -> dict:
+def _body_bbox(body: Any) -> tuple[float, float, float, float, float, float] | None:
+    """Compute optimal bbox (xmin,ymin,zmin,xmax,ymax,zmax) for body.
+
+    Returns None if body is unavailable or bbox computation fails.
+    """
+    if body is None:
+        return None
+    try:
+        from OCP.Bnd import Bnd_Box
+        from OCP.BRepBndLib import BRepBndLib
+
+        shape = body.wrapped if hasattr(body, "wrapped") else body
+        bb = Bnd_Box()
+        BRepBndLib.AddOptimal_s(shape, bb)
+        return bb.Get()  # (xmin, ymin, zmin, xmax, ymax, zmax)
+    except Exception:
+        return None
+
+
+def _pick_face_selector(
+    axis_origin: Any,
+    axis_dir: Any,
+    bbox: tuple[float, float, float, float, float, float] | None,
+) -> dict[str, Any]:
+    """Choose top vs bottom face selector based on feature axis & body bbox.
+
+    Top-face features have axis_origin.z near zmax (or axis pointing -Z from
+    above). Bottom-face features have axis_origin.z near zmin (or axis +Z
+    from below). Falls back to top when ambiguous or bbox unavailable.
+    """
+    if bbox is None:
+        return _DEFAULT_FACE_SELECTOR
+    try:
+        # Primary signal: axis_dir points outward through the OPEN face of
+        # the hole/pocket (extract_feature_catalog convention). +Z ⇒ open
+        # face is the body's top; -Z ⇒ bottom.
+        if axis_dir is not None:
+            try:
+                az = float(axis_dir[2])
+                if abs(az) > 0.5:
+                    return (
+                        _DEFAULT_FACE_SELECTOR if az > 0
+                        else _BOTTOM_FACE_SELECTOR
+                    )
+            except Exception:
+                pass
+        # Fallback: distance from axis_origin.z to the nearer Z face.
+        if axis_origin is not None:
+            z = float(axis_origin[2])
+            zmin, zmax = float(bbox[2]), float(bbox[5])
+            if abs(z - zmin) < abs(z - zmax):
+                return _BOTTOM_FACE_SELECTOR
+        return _DEFAULT_FACE_SELECTOR
+    except Exception:
+        return _DEFAULT_FACE_SELECTOR
+
+
+def _hole_step(
+    idx: int,
+    hole: dict,
+    std_match: dict | None,
+    bbox: tuple[float, float, float, float, float, float] | None = None,
+) -> dict:
     """Pick the most specific hole skill for this hole descriptor.
 
     Decision tree:
@@ -76,6 +139,7 @@ def _hole_step(idx: int, hole: dict, std_match: dict | None) -> dict:
     depth = float(hole.get("depth_mm") or 5.0)
     axis_dir = hole.get("axis_dir") or [0.0, 0.0, -1.0]
     axis_origin = hole.get("axis_origin") or [0.0, 0.0, 0.0]
+    face_sel = _pick_face_selector(axis_origin, axis_dir, bbox)
 
     # ── thread spec source: prefer the hole's own standard_match (which
     #    classify_holes attached), fall back to the per-hole standard match
@@ -92,7 +156,7 @@ def _hole_step(idx: int, hole: dict, std_match: dict | None) -> dict:
 
     if htype == "counterbore" and thread_spec:
         return _new_step(sid, "counterbore_hole", {
-            "face_selector": _DEFAULT_FACE_SELECTOR,
+            "face_selector": face_sel,
             "position_xy": [float(axis_origin[0]), float(axis_origin[1])],
             "thread_spec": thread_spec,
             "fit": "medium",
@@ -100,7 +164,7 @@ def _hole_step(idx: int, hole: dict, std_match: dict | None) -> dict:
         })
     if htype == "countersink" and thread_spec:
         return _new_step(sid, "countersink_hole", {
-            "face_selector": _DEFAULT_FACE_SELECTOR,
+            "face_selector": face_sel,
             "position_xy": [float(axis_origin[0]), float(axis_origin[1])],
             "thread_spec": thread_spec,
             "fit": "medium",
@@ -108,14 +172,14 @@ def _hole_step(idx: int, hole: dict, std_match: dict | None) -> dict:
         })
     if htype == "threaded" and thread_spec:
         return _new_step(sid, "tap_drill_hole", {
-            "face_selector": _DEFAULT_FACE_SELECTOR,
+            "face_selector": face_sel,
             "position_xy": [float(axis_origin[0]), float(axis_origin[1])],
             "thread_spec": thread_spec,
             "depth_mm": depth,
         })
     if thread_spec:
         return _new_step(sid, "clearance_hole", {
-            "face_selector": _DEFAULT_FACE_SELECTOR,
+            "face_selector": face_sel,
             "position_xy": [float(axis_origin[0]), float(axis_origin[1])],
             "thread_spec": thread_spec,
             "fit": "medium",
@@ -141,11 +205,17 @@ def _axis_dir_to_str(axis_dir) -> str:
     return f"{'+' if dom[1] >= 0 else '-'}{dom[0]}"
 
 
-def _pocket_step(idx: int, pocket: dict) -> dict:
+def _pocket_step(
+    idx: int,
+    pocket: dict,
+    bbox: tuple[float, float, float, float, float, float] | None = None,
+) -> dict:
     ptype = pocket.get("type", "blind")
     top_d = float(pocket.get("top_d_mm") or 0.0)
     depth = float(pocket.get("depth_mm") or 1.0)
     origin = pocket.get("axis_origin") or [0.0, 0.0, 0.0]
+    axis_dir = pocket.get("axis_dir") or [0.0, 0.0, -1.0]
+    face_sel = _pick_face_selector(origin, axis_dir, bbox)
     sid = f"s_pocket_{idx}"
 
     # Circular pockets whose depth dominates → treat as a raw hole.
@@ -154,13 +224,13 @@ def _pocket_step(idx: int, pocket: dict) -> dict:
             "position": [float(origin[0]), float(origin[1]), float(origin[2])],
             "diameter_mm": top_d,
             "depth_mm": depth,
-            "direction": _axis_dir_to_str(pocket.get("axis_dir") or [0, 0, -1]),
+            "direction": _axis_dir_to_str(axis_dir),
         })
 
     # Default — extrude_pocket with placeholder rectangular sketch sized to
     # the measured top diameter.
     return _new_step(sid, "extrude_pocket", {
-        "face_selector": _DEFAULT_FACE_SELECTOR,
+        "face_selector": face_sel,
         "sketch": {
             "kind": "rect",
             "width_mm": top_d if top_d > 0 else 5.0,
@@ -171,18 +241,25 @@ def _pocket_step(idx: int, pocket: dict) -> dict:
     })
 
 
-def _boss_step(idx: int, boss: dict) -> dict:
+def _boss_step(
+    idx: int,
+    boss: dict,
+    bbox: tuple[float, float, float, float, float, float] | None = None,
+) -> dict:
     btype = boss.get("type", "prismatic")
     center = boss.get("center") or [0.0, 0.0, 0.0]
     height = float(boss.get("height_mm") or 1.0)
     size = float(boss.get("diameter_or_size_mm") or 4.0)
+    # Bosses grow upward from their anchor face; choose the closer body face
+    # based on the boss centre Z.
+    face_sel = _pick_face_selector(center, [0.0, 0.0, 1.0], bbox)
     sid = f"s_boss_{idx}"
 
     if btype == "cylindrical":
         # If a hole is implied (e.g. seat boss) use boss_with_hole, else
         # mounting_pad. We default to mounting_pad without a hole.
         return _new_step(sid, "mounting_pad", {
-            "face_selector": _DEFAULT_FACE_SELECTOR,
+            "face_selector": face_sel,
             "position_xy": [float(center[0]), float(center[1])],
             "diameter_mm": size,
             "height_mm": height,
@@ -190,7 +267,7 @@ def _boss_step(idx: int, boss: dict) -> dict:
 
     # Prismatic / conical fallback — mounting_pad with the measured size.
     return _new_step(sid, "mounting_pad", {
-        "face_selector": _DEFAULT_FACE_SELECTOR,
+        "face_selector": face_sel,
         "position_xy": [float(center[0]), float(center[1])],
         "diameter_mm": size,
         "height_mm": height,
@@ -256,7 +333,7 @@ def _circular_pattern_step(idx: int, ring: dict) -> dict:
 # Plan builder
 
 
-def _build_plan(catalog: dict) -> dict:
+def _build_plan(catalog: dict, body: Any = None) -> dict:
     holes = catalog.get("holes") or []
     pockets = catalog.get("pockets") or []
     bosses = catalog.get("bosses") or []
@@ -269,13 +346,24 @@ def _build_plan(catalog: dict) -> dict:
         if isinstance(sm, dict)
     }
 
+    # Body bbox → real base-box dimensions (L, W, H). Without a body we fall
+    # back to a sensible placeholder so the plan stays self-contained.
+    bbox = _body_bbox(body)
+    if bbox is not None:
+        xmin, ymin, zmin, xmax, ymax, zmax = bbox
+        base_l = max(float(xmax - xmin), 1e-3)
+        base_w = max(float(ymax - ymin), 1e-3)
+        base_h = max(float(zmax - zmin), 1e-3)
+    else:
+        base_l, base_w, base_h = 50.0, 50.0, 10.0
+
     steps: list[dict] = []
 
     # 1. base shape placeholder ────────────────────────────────────────────
     steps.append(_new_step("s_base", "box", {
-        "length_mm": 50.0,
-        "width_mm": 50.0,
-        "height_mm": 10.0,
+        "length_mm": base_l,
+        "width_mm": base_w,
+        "height_mm": base_h,
     }))
 
     # 2. Pockets, largest top_d first ──────────────────────────────────────
@@ -283,14 +371,14 @@ def _build_plan(catalog: dict) -> dict:
         pockets, key=lambda p: -float(p.get("top_d_mm") or 0.0),
     )
     for i, p in enumerate(pockets_sorted):
-        steps.append(_pocket_step(i, p))
+        steps.append(_pocket_step(i, p, bbox=bbox))
 
     # 3. Bosses, tallest first ─────────────────────────────────────────────
     bosses_sorted = sorted(
         bosses, key=lambda b: -float(b.get("height_mm") or 0.0),
     )
     for i, b in enumerate(bosses_sorted):
-        steps.append(_boss_step(i, b))
+        steps.append(_boss_step(i, b, bbox=bbox))
 
     # 4. Lugs ──────────────────────────────────────────────────────────────
     for i, lg in enumerate(lugs):
@@ -327,7 +415,7 @@ def _build_plan(catalog: dict) -> dict:
         if hid in handled_pattern_holes:
             continue
         sm = std_matches_by_hole.get(hid)
-        steps.append(_hole_step(i, h, sm))
+        steps.append(_hole_step(i, h, sm, bbox=bbox))
 
     return {
         "schema_version": 1,
@@ -385,7 +473,7 @@ class PlanFromFeatureCatalog(SkillBase):
                 res = ExtractFeatureCatalog().apply(body, {})
                 catalog = res.extras.get("feature_catalog", {})
 
-        plan = _build_plan(catalog or {})
+        plan = _build_plan(catalog or {}, body=body)
 
         # Cache for chained calls.
         PlanFromFeatureCatalog._LAST_CATALOG = catalog
