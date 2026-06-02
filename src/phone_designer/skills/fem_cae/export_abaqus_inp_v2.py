@@ -151,7 +151,7 @@ def _thermal_bc_to_cards(bc: dict[str, Any],
         lines.append(f"{nset_name}, 11, 11, {float(val):.6f}")
         return lines, 1
     if kind == "heat_flux":
-        lines.append(f"** heat_flux {float(val):.6f} W/m² on {nset_name}")
+        lines.append(f"** heat_flux {float(val):.6f} W/m^2 on {nset_name}")
         lines.append("*CFLUX")
         for nid in node_ids:
             lines.append(f"{nid}, 11, {float(val):.6f}")
@@ -353,7 +353,12 @@ def _write_inp_v2(
             ))
             load_case_steps += 1
 
-    path.write_text("\n".join(lines) + "\n", encoding="ascii")
+    # Abaqus INP decks are conventionally ASCII; fall back to replacing any
+    # stray non-ASCII glyphs (e.g. units like "²") with "?" rather than
+    # crashing the writer.
+    path.write_text(
+        "\n".join(lines) + "\n", encoding="ascii", errors="replace",
+    )
     return {
         "bc_cards":        bc_cards,
         "contact_cards":   contact_cards,
