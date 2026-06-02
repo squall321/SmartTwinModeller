@@ -305,28 +305,271 @@ def _lug_step(idx: int, lug: dict) -> dict:
     })
 
 
-def _circular_pattern_step(idx: int, ring: dict) -> dict:
-    """Wrap a 6+ count circular-array of holes into a ``circular_pattern``."""
-    sid = f"s_pattern_{idx}"
+def _sweep_boss_step(idx: int, feat: dict) -> dict:
+    """Emit a ``swept_boss_along_curve`` step from a sweep_features entry."""
+    sid = f"s_sweep_boss_{idx}"
+    profile_d = float(feat.get("profile_diameter_mm") or 2.0)
+    path_points = feat.get("path_points") or []
+    return _new_step(sid, "swept_boss_along_curve", {
+        "face_selector": _DEFAULT_FACE_SELECTOR,
+        "profile_sketch": {"kind": "circle", "diameter_mm": profile_d},
+        "path_points": [
+            [float(p[0]), float(p[1]), float(p[2])]
+            for p in path_points
+        ],
+        "path_type": "polyline",
+    })
+
+
+def _sweep_pocket_step(idx: int, feat: dict) -> dict:
+    """Emit a ``swept_pocket_along_curve`` step from a sweep_features entry."""
+    sid = f"s_sweep_pocket_{idx}"
+    profile_d = float(feat.get("profile_diameter_mm") or 2.0)
+    path_points = feat.get("path_points") or []
+    return _new_step(sid, "swept_pocket_along_curve", {
+        "face_selector": _DEFAULT_FACE_SELECTOR,
+        "profile_sketch": {"kind": "circle", "diameter_mm": profile_d},
+        "path_points": [
+            [float(p[0]), float(p[1]), float(p[2])]
+            for p in path_points
+        ],
+        "path_type": "polyline",
+    })
+
+
+def _loft_boss_step(idx: int, feat: dict) -> dict:
+    """Emit a ``loft_boss_between_sketches`` step from a loft_features entry."""
+    sid = f"s_loft_boss_{idx}"
+    lower_d = float(feat.get("lower_diameter_mm") or 6.0)
+    upper_d = float(feat.get("upper_diameter_mm") or 4.0)
+    height = float(feat.get("height_mm") or 4.0)
+    cx, cy = feat.get("center_xy") or [0.0, 0.0]
+    return _new_step(sid, "loft_boss_between_sketches", {
+        "face_selector": _DEFAULT_FACE_SELECTOR,
+        "lower_sketch": {
+            "kind": "circle",
+            "diameter_mm": lower_d,
+            "center_x_mm": float(cx),
+            "center_y_mm": float(cy),
+        },
+        "upper_sketch": {
+            "kind": "circle",
+            "diameter_mm": upper_d,
+            "center_x_mm": float(cx),
+            "center_y_mm": float(cy),
+        },
+        "height_mm": height,
+    })
+
+
+def _loft_pocket_step(idx: int, feat: dict) -> dict:
+    """Emit a ``loft_pocket_between_sketches`` step from a loft_features entry."""
+    sid = f"s_loft_pocket_{idx}"
+    upper_d = float(feat.get("upper_diameter_mm") or 6.0)
+    lower_d = float(feat.get("lower_diameter_mm") or 4.0)
+    depth = float(feat.get("height_mm") or 4.0)
+    cx, cy = feat.get("center_xy") or [0.0, 0.0]
+    return _new_step(sid, "loft_pocket_between_sketches", {
+        "face_selector": _DEFAULT_FACE_SELECTOR,
+        "upper_sketch": {
+            "kind": "circle",
+            "diameter_mm": upper_d,
+            "center_x_mm": float(cx),
+            "center_y_mm": float(cy),
+        },
+        "lower_sketch": {
+            "kind": "circle",
+            "diameter_mm": lower_d,
+            "center_x_mm": float(cx),
+            "center_y_mm": float(cy),
+        },
+        "depth_mm": depth,
+    })
+
+
+def _revolve_pocket_step(idx: int, feat: dict) -> dict:
+    """Emit a ``revolve_pocket`` step from a revolve_features entry."""
+    sid = f"s_revolve_pocket_{idx}"
+    axis_origin = feat.get("axis_origin") or [0.0, 0.0, 0.0]
+    axis_dir = feat.get("axis_direction") or [0.0, 0.0, 1.0]
+    angle = float(feat.get("angle_deg") or 360.0)
+    return _new_step(sid, "revolve_pocket", {
+        "profile_sketch": {
+            "kind": "rectangle",
+            "length_mm": 1.0,
+            "width_mm": 1.0,
+            "center_x_mm": 4.0,
+        },
+        "axis_origin": [
+            float(axis_origin[0]), float(axis_origin[1]), float(axis_origin[2]),
+        ],
+        "axis_direction": [
+            float(axis_dir[0]), float(axis_dir[1]), float(axis_dir[2]),
+        ],
+        "angle_deg": angle,
+    })
+
+
+def _bbox_overlap_with_xy(
+    bbox_a, center_xy, radius: float = 1.0,
+) -> bool:
+    """True if the XY projection of `bbox_a` contains the point `center_xy`
+    expanded by `radius`. Used to filter spurious bosses whose footprint sits
+    inside an already-captured sweep/loft feature."""
+    if bbox_a is None or center_xy is None:
+        return False
+    try:
+        xmin, ymin = float(bbox_a[0]), float(bbox_a[1])
+        xmax, ymax = float(bbox_a[3]), float(bbox_a[4])
+        cx, cy = float(center_xy[0]), float(center_xy[1])
+        r = float(radius)
+        return (xmin - r) <= cx <= (xmax + r) and (ymin - r) <= cy <= (ymax + r)
+    except Exception:
+        return False
+
+
+def _pocket_is_axis_aligned(pocket: dict) -> bool:
+    """True iff the pocket axis snaps to ±X / ±Y / ±Z within ~10°.
+
+    Pockets whose axis is diagonal (e.g. (0.667, 0.667, 0.333)) are typically
+    detector artefacts from chains of unrelated cylindrical faces and should
+    be skipped rather than emitted as a (huge) extrude_pocket step.
+    """
+    axis = pocket.get("axis_dir") or [0.0, 0.0, 1.0]
+    try:
+        ax, ay, az = (
+            abs(float(axis[0])), abs(float(axis[1])), abs(float(axis[2])),
+        )
+    except Exception:
+        return False
+    # Require one dominant component ≥ 0.95 (cos 18°).
+    return max(ax, ay, az) >= 0.95
+
+
+def _circular_pattern_step(
+    idx: int,
+    ring: dict,
+    profile_diameter_mm: float,
+    feature_depth_mm: float,
+    bbox: tuple[float, float, float, float, float, float] | None = None,
+) -> dict:
+    """Wrap a circular-array of holes into a ``circular_pattern`` step.
+
+    Args match the registered ``circular_pattern`` skill: face_selector,
+    profile_diameter_mm, operation, feature_depth_mm, count, pitch_radius_mm,
+    center_x_mm, center_y_mm, start_angle_deg, total_sweep_deg.
+    """
+    sid = f"s_pattern_circ_{idx}"
     center = ring.get("center") or [0.0, 0.0, 0.0]
     axis = ring.get("axis") or [0.0, 0.0, 1.0]
     count = int(ring.get("count") or 6)
+    radius = float(ring.get("radius_mm") or 5.0)
+    face_sel = _pick_face_selector(center, axis, bbox)
     return _new_step(sid, "circular_pattern", {
-        "seed_skill": "hole",
-        "seed_args": {
-            "position": [
-                float(center[0]) + float(ring.get("radius_mm") or 5.0),
-                float(center[1]),
-                float(center[2]),
-            ],
-            "diameter_mm": 3.4,
-            "depth_mm": 5.0,
-            "direction": _axis_dir_to_str(axis),
-        },
-        "center": [float(center[0]), float(center[1]), float(center[2])],
-        "axis": [float(axis[0]), float(axis[1]), float(axis[2])],
+        "face_selector": face_sel,
+        "profile_diameter_mm": float(profile_diameter_mm),
+        "operation": "hole",
+        "feature_depth_mm": float(feature_depth_mm),
         "count": count,
+        "pitch_radius_mm": radius,
+        "center_x_mm": float(center[0]),
+        "center_y_mm": float(center[1]),
+        "start_angle_deg": 0.0,
+        "total_sweep_deg": 360.0,
     })
+
+
+def _linear_pattern_step(
+    idx: int,
+    run: dict,
+    profile_diameter_mm: float,
+    feature_depth_mm: float,
+    bbox: tuple[float, float, float, float, float, float] | None = None,
+) -> dict | None:
+    """Wrap a linear-array of holes into a ``linear_pattern`` step.
+
+    The registered ``linear_pattern`` skill supports ``direction in {"X","Y"}``
+    only. If the array direction is not axis-aligned along X or Y, return
+    None so the caller falls back to per-hole emission.
+    """
+    direction_vec = run.get("direction") or [1.0, 0.0, 0.0]
+    positions = run.get("positions") or []
+    count = int(run.get("count") or len(positions))
+    spacing = float(run.get("spacing_mm") or 0.0)
+    if count < 2 or spacing <= 0.0 or not positions:
+        return None
+
+    dx, dy = abs(float(direction_vec[0])), abs(float(direction_vec[1]))
+    dz = abs(float(direction_vec[2]))
+    if dz > 0.5:
+        # Vertical line of holes — linear_pattern only supports X / Y.
+        return None
+    if dx >= dy and dx > 0.5:
+        axis_letter: str = "X"
+    elif dy > dx and dy > 0.5:
+        axis_letter = "Y"
+    else:
+        return None
+
+    # Anchor offset: first position's XY relative to body center (origin).
+    first = positions[0]
+    start_x = float(first[0])
+    start_y = float(first[1])
+    # The seed feature is at axis_origin of the first; the seed's Z is
+    # represented by the face_selector. We borrow the first point's axis-dir
+    # heuristic via Z dominance: holes typically have axis_dir ≈ ±Z, so
+    # default to top face when z is near zmax.
+    first_origin = list(first)
+    face_sel = _pick_face_selector(first_origin, [0.0, 0.0, -1.0], bbox)
+
+    sid = f"s_pattern_lin_{idx}"
+    return _new_step(sid, "linear_pattern", {
+        "face_selector": face_sel,
+        "profile_diameter_mm": float(profile_diameter_mm),
+        "operation": "hole",
+        "feature_depth_mm": float(feature_depth_mm),
+        "count": count,
+        "spacing_mm": spacing,
+        "direction": axis_letter,
+        "start_offset_x_mm": start_x,
+        "start_offset_y_mm": start_y,
+    })
+
+
+def _hole_xy_in_ring(
+    hole: dict, ring: dict, radius_tol: float = 0.5
+) -> bool:
+    """True iff the hole's axis_origin lies on the ring's circle."""
+    origin = hole.get("axis_origin") or [0.0, 0.0, 0.0]
+    center = ring.get("center") or [0.0, 0.0, 0.0]
+    radius = float(ring.get("radius_mm") or 0.0)
+    if radius <= 0.0:
+        return False
+    dx = float(origin[0]) - float(center[0])
+    dy = float(origin[1]) - float(center[1])
+    dz = float(origin[2]) - float(center[2])
+    # Distance projected onto the ring plane — approximate as raw 3D distance
+    # for axis-aligned (Z) rings which is the dominant case.
+    import math as _math
+    d = _math.sqrt(dx * dx + dy * dy + dz * dz)
+    return abs(d - radius) <= radius_tol
+
+
+def _hole_xy_on_line(
+    hole: dict, run: dict, pos_tol: float = 0.5
+) -> bool:
+    """True iff the hole's axis_origin matches any of the run positions."""
+    origin = hole.get("axis_origin") or [0.0, 0.0, 0.0]
+    positions = run.get("positions") or []
+    ox, oy, oz = float(origin[0]), float(origin[1]), float(origin[2])
+    for p in positions:
+        if (
+            abs(float(p[0]) - ox) <= pos_tol
+            and abs(float(p[1]) - oy) <= pos_tol
+            and abs(float(p[2]) - oz) <= pos_tol
+        ):
+            return True
+    return False
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -340,6 +583,10 @@ def _build_plan(catalog: dict, body: Any = None) -> dict:
     ribs = catalog.get("ribs") or []
     lugs = catalog.get("lugs") or []
     patterns = catalog.get("patterns") or []
+    sweep_features = catalog.get("sweep_features") or []
+    loft_features = catalog.get("loft_features") or []
+    revolve_features = catalog.get("revolve_features") or []
+    base_thickness = catalog.get("base_thickness_mm")
     std_matches_by_hole = {
         sm.get("hole_id"): sm
         for sm in (catalog.get("standard_matches") or [])
@@ -353,7 +600,16 @@ def _build_plan(catalog: dict, body: Any = None) -> dict:
         xmin, ymin, zmin, xmax, ymax, zmax = bbox
         base_l = max(float(xmax - xmin), 1e-3)
         base_w = max(float(ymax - ymin), 1e-3)
-        base_h = max(float(zmax - zmin), 1e-3)
+        bbox_h = max(float(zmax - zmin), 1e-3)
+        # Prefer the slab thickness measured from parallel planar faces — it
+        # excludes the boss/sweep/loft height that bbox would otherwise add.
+        if (
+            base_thickness is not None
+            and 0.0 < float(base_thickness) <= bbox_h
+        ):
+            base_h = float(base_thickness)
+        else:
+            base_h = bbox_h
     else:
         base_l, base_w, base_h = 50.0, 50.0, 10.0
 
@@ -367,15 +623,65 @@ def _build_plan(catalog: dict, body: Any = None) -> dict:
     }))
 
     # 2. Pockets, largest top_d first ──────────────────────────────────────
+    #    Skip pockets whose axis is diagonal — those are detector artefacts
+    #    (chains of unrelated cylindrical/planar faces grouped by adjacency)
+    #    and emit a huge spurious extrude_pocket that inflates volume drift.
     pockets_sorted = sorted(
-        pockets, key=lambda p: -float(p.get("top_d_mm") or 0.0),
+        [p for p in pockets if _pocket_is_axis_aligned(p)],
+        key=lambda p: -float(p.get("top_d_mm") or 0.0),
     )
     for i, p in enumerate(pockets_sorted):
         steps.append(_pocket_step(i, p, bbox=bbox))
 
+    # 2b. Sweep / loft / revolve features — emitted BEFORE the per-boss loop
+    #     so we can suppress overlapping detect_bosses entries (the swept and
+    #     lofted bodies leave behind boss-like clusters that we don't want
+    #     emitted twice).
+    sweep_xy_envelopes: list[tuple] = []  # list of bboxes for overlap test
+    for i, feat in enumerate(sweep_features):
+        if feat.get("kind") == "pocket":
+            steps.append(_sweep_pocket_step(i, feat))
+        else:
+            steps.append(_sweep_boss_step(i, feat))
+        if feat.get("bbox") is not None:
+            sweep_xy_envelopes.append(tuple(feat["bbox"]))
+
+    loft_xy_centers: list[tuple[tuple[float, float], float]] = []
+    for i, feat in enumerate(loft_features):
+        if feat.get("kind") == "pocket":
+            steps.append(_loft_pocket_step(i, feat))
+        else:
+            steps.append(_loft_boss_step(i, feat))
+        cxy = feat.get("center_xy")
+        if cxy:
+            radius = max(
+                float(feat.get("lower_diameter_mm") or 0.0),
+                float(feat.get("upper_diameter_mm") or 0.0),
+            ) * 0.5
+            loft_xy_centers.append(((float(cxy[0]), float(cxy[1])), radius + 0.5))
+
+    for i, feat in enumerate(revolve_features):
+        steps.append(_revolve_pocket_step(i, feat))
+
     # 3. Bosses, tallest first ─────────────────────────────────────────────
+    #    Suppress bosses whose centre footprint falls inside any sweep/loft
+    #    feature already emitted above (they describe the same protrusion).
+    def _boss_is_duplicate(b: dict) -> bool:
+        center = b.get("center") or [0.0, 0.0, 0.0]
+        cxy = (float(center[0]), float(center[1]))
+        for env in sweep_xy_envelopes:
+            if _bbox_overlap_with_xy(env, cxy, radius=1.0):
+                return True
+        for (lcx, lcy), lr in loft_xy_centers:
+            dx = lcx - cxy[0]
+            dy = lcy - cxy[1]
+            if (dx * dx + dy * dy) <= (lr * lr):
+                return True
+        return False
+
     bosses_sorted = sorted(
-        bosses, key=lambda b: -float(b.get("height_mm") or 0.0),
+        [b for b in bosses if not _boss_is_duplicate(b)],
+        key=lambda b: -float(b.get("height_mm") or 0.0),
     )
     for i, b in enumerate(bosses_sorted):
         steps.append(_boss_step(i, b, bbox=bbox))
@@ -388,22 +694,71 @@ def _build_plan(catalog: dict, body: Any = None) -> dict:
     for i, rb in enumerate(ribs):
         steps.append(_rib_step(i, rb))
 
-    # 6. Circular patterns of 6+ holes — wrap the whole ring in a single
-    #    circular_pattern step rather than emitting N individual holes.
-    handled_pattern_holes: set[int] = set()
-    pattern_step_idx = 0
+    # 6. Patterns — emit one circular_pattern or linear_pattern step per
+    #    detected array of holes, then SUBTRACT the covered holes from the
+    #    per-hole emission loop below using geometric matching (since
+    #    detect_*_array does not carry hole-id linkage).
+    handled_hole_ids: set = set()
+    handled_holes_geom: list[dict] = []  # list of hole dicts already covered
+    circ_idx = 0
+    lin_idx = 0
     for pat in patterns:
-        if (
-            pat.get("pattern_kind") == "circular"
-            and pat.get("feature_kind") == "hole"
-            and int(pat.get("count") or 0) >= 6
-        ):
-            steps.append(_circular_pattern_step(pattern_step_idx, pat))
-            pattern_step_idx += 1
-            # NOTE: without explicit hole-id linkage in detect_circular_array
-            # we cannot precisely subtract the wrapped holes from `holes`,
-            # so the loop below will still emit them; downstream dedup is
-            # the user's responsibility.
+        if pat.get("feature_kind") != "hole":
+            continue
+        count = int(pat.get("count") or 0)
+        if count < 2:
+            continue
+        # Representative seed-hole geometry from the catalog. Prefer a hole
+        # matched to this pattern (so the diameter/depth come from a real
+        # measurement); fall back to the median hole.
+        seed_hole = None
+        if pat.get("pattern_kind") == "circular":
+            for h in holes:
+                if _hole_xy_in_ring(h, pat):
+                    seed_hole = h
+                    break
+        elif pat.get("pattern_kind") == "linear":
+            for h in holes:
+                if _hole_xy_on_line(h, pat):
+                    seed_hole = h
+                    break
+        if seed_hole is None and holes:
+            seed_hole = holes[0]
+
+        if seed_hole is None:
+            continue
+
+        diams = seed_hole.get("diameters_mm") or [3.4]
+        seed_diam = float(min(diams))
+        seed_depth = float(seed_hole.get("depth_mm") or 5.0)
+
+        if pat.get("pattern_kind") == "circular" and count >= 4:
+            steps.append(
+                _circular_pattern_step(
+                    circ_idx, pat, seed_diam, seed_depth, bbox=bbox,
+                )
+            )
+            circ_idx += 1
+            # Mark covered holes so the per-hole loop skips them.
+            for h in holes:
+                if _hole_xy_in_ring(h, pat):
+                    hid = h.get("id")
+                    if hid is not None:
+                        handled_hole_ids.add(hid)
+                    handled_holes_geom.append(h)
+        elif pat.get("pattern_kind") == "linear" and count >= 3:
+            step = _linear_pattern_step(
+                lin_idx, pat, seed_diam, seed_depth, bbox=bbox,
+            )
+            if step is not None:
+                steps.append(step)
+                lin_idx += 1
+                for h in holes:
+                    if _hole_xy_on_line(h, pat):
+                        hid = h.get("id")
+                        if hid is not None:
+                            handled_hole_ids.add(hid)
+                        handled_holes_geom.append(h)
 
     # 7. Holes, largest diameter first ─────────────────────────────────────
     holes_sorted = sorted(
@@ -412,7 +767,10 @@ def _build_plan(catalog: dict, body: Any = None) -> dict:
     )
     for i, h in enumerate(holes_sorted):
         hid = h.get("id")
-        if hid in handled_pattern_holes:
+        if hid is not None and hid in handled_hole_ids:
+            continue
+        # Geometric dedup fallback for holes that lack a stable id.
+        if any(h is hh for hh in handled_holes_geom):
             continue
         sm = std_matches_by_hole.get(hid)
         steps.append(_hole_step(i, h, sm, bbox=bbox))
