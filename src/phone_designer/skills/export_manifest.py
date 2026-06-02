@@ -341,6 +341,28 @@ import phone_designer.skills.modify_pocket.anechoic_chamber_liner_mount  # noqa:
 import phone_designer.skills.modify_pocket.mems_mic_boot_pocket  # noqa: F401
 import phone_designer.skills.modify_pocket.speaker_baffle_window  # noqa: F401
 
+# Round 7 — PMI/AP242 + CAE depth + UI inspector + optical features
+import phone_designer.skills.pmi.pmi_dimension_callout  # noqa: F401
+import phone_designer.skills.pmi.pmi_surface_texture  # noqa: F401
+import phone_designer.skills.pmi.pmi_weld_symbol  # noqa: F401
+import phone_designer.skills.pmi.export_step_ap242_pmi  # noqa: F401
+import phone_designer.skills.pmi.pmi_inspect_summary  # noqa: F401
+import phone_designer.skills.fem_cae.mesh_refinement_zones  # noqa: F401
+import phone_designer.skills.fem_cae.thermal_bc_tag  # noqa: F401
+import phone_designer.skills.fem_cae.contact_pair  # noqa: F401
+import phone_designer.skills.fem_cae.modal_analysis_setup  # noqa: F401
+import phone_designer.skills.fem_cae.load_case_compose  # noqa: F401
+import phone_designer.skills.fem_cae.export_abaqus_inp_v2  # noqa: F401
+import phone_designer.skills.inspect.launch_ui_panel  # noqa: F401
+import phone_designer.skills.modify_pocket.led_smd_pocket  # noqa: F401
+import phone_designer.skills.modify_pocket.lens_seat_pocket  # noqa: F401
+import phone_designer.skills.modify_pocket.light_pipe_routing_channel  # noqa: F401
+import phone_designer.skills.modify_curvature.optical_window_dome  # noqa: F401
+import phone_designer.skills.inspect.ray_trace_smoke  # noqa: F401
+
+# Stragglers from walk
+import phone_designer.skills.io.mesh_decimate  # noqa: F401
+
 from phone_designer.skills._registry import registry
 from phone_designer.skills._selectors import selector_json_schemas
 

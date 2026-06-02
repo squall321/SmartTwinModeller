@@ -1,0 +1,29 @@
+# Optical lenses — molded plastic / glass lens elements typical in
+# camera modules, proximity sensors, flashlight collimators.
+# outer_d_mm      : lens outer (clear-aperture) diameter
+# thickness_mm    : axial thickness (center thickness)
+# focal_length_mm : effective focal length
+# surface_type    : "plano_convex" | "aspheric" | "cylindrical"
+schema_version: 1
+standard: "Generic molded optics"
+lenses:
+  "Plano-Convex_Ø6_f10":
+    outer_d_mm: 6.0
+    thickness_mm: 2.4
+    focal_length_mm: 10.0
+    surface_type: "plano_convex"
+  "Plano-Convex_Ø12_f15":
+    outer_d_mm: 12.0
+    thickness_mm: 4.2
+    focal_length_mm: 15.0
+    surface_type: "plano_convex"
+  "Aspheric_Ø8_f8":
+    outer_d_mm: 8.0
+    thickness_mm: 3.0
+    focal_length_mm: 8.0
+    surface_type: "aspheric"
+  "Cylindrical_Ø10_f20":
+    outer_d_mm: 10.0
+    thickness_mm: 3.5
+    focal_length_mm: 20.0
+    surface_type: "cylindrical"

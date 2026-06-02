@@ -7,6 +7,14 @@
     python -m phone_designer inspect --plan <plan.yaml>  # plan 즉시 실행 후 표시
     python -m phone_designer inspect --step <out.step>   # STEP 단일 표시
 """
-from phone_designer.ui.inspector_main import InspectorMainWindow, run_inspector
+from phone_designer.ui.inspector_main import (
+    InspectorMainWindow,
+    run_inspector,
+    run_inspector_with_panels,
+)
 
-__all__ = ["InspectorMainWindow", "run_inspector"]
+__all__ = [
+    "InspectorMainWindow",
+    "run_inspector",
+    "run_inspector_with_panels",
+]

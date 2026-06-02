@@ -442,6 +442,77 @@ def inspect(
     raise typer.Exit(run_inspector(plan=plan, step=step, reference=reference))
 
 
+@app.command("inspect-re")
+def inspect_re(
+    catalog: Path = typer.Option(
+        None, "--catalog",
+        help="JSON/YAML 파일에 저장된 feature_catalog (extract_feature_catalog 결과). "
+             "지정 안 하면 --step 의 body 로부터 즉석 추출.",
+    ),
+    plan_a: Path = typer.Option(
+        None, "--plan-a", help="좌측 (reference) plan YAML",
+    ),
+    plan_b: Path = typer.Option(
+        None, "--plan-b", help="우측 (reconstructed) plan YAML",
+    ),
+    step: Path = typer.Option(
+        None, "--step",
+        help="(선택) viewport 에 띄울 STEP 파일. catalog 가 None 이면 여기서 추출.",
+    ),
+):
+    """Inspector + RE 시각화 패널 (feature_catalog 트리 + plan diff)."""
+    import json
+    import yaml as _yaml
+
+    from phone_designer.ui import run_inspector_with_panels
+
+    catalog_dict: dict | None = None
+    if catalog is not None:
+        if not catalog.exists():
+            typer.echo(f"[error] catalog file not found: {catalog}", err=True)
+            raise typer.Exit(code=2)
+        text = catalog.read_text(encoding="utf-8")
+        try:
+            if catalog.suffix.lower() == ".json":
+                catalog_dict = json.loads(text)
+            else:
+                catalog_dict = _yaml.safe_load(text)
+        except Exception as exc:
+            typer.echo(f"[error] failed to parse catalog: {exc}", err=True)
+            raise typer.Exit(code=2)
+        # Tolerate "wrapped" catalogs from skill extras
+        if isinstance(catalog_dict, dict) and "feature_catalog" in catalog_dict:
+            catalog_dict = catalog_dict["feature_catalog"]
+    elif step is not None:
+        # Try to extract on-the-fly from the STEP
+        try:
+            from phone_designer.scenarios.runner import _load_step_shape
+            from phone_designer.skills.reverse_engineer.extract_feature_catalog import (
+                ExtractFeatureCatalog,
+            )
+            shape = _load_step_shape(step)
+            try:
+                from build123d import Part
+                body = Part(shape)
+            except Exception:
+                body = shape
+            cat_res = ExtractFeatureCatalog().apply(body, {})
+            catalog_dict = cat_res.extras.get("feature_catalog")
+            typer.echo(f">>> catalog: extracted from {step.name}")
+        except Exception as exc:
+            typer.echo(f"[warn] could not extract catalog: {exc}")
+
+    typer.echo(">>> launching inspect-re UI...")
+    code = run_inspector_with_panels(
+        panel="both",
+        catalog=catalog_dict,
+        plan_a=plan_a,
+        plan_b=plan_b,
+        step=step,
+    )
+    raise typer.Exit(code or 0)
+
+
 @app.command("corpus-test")
 def corpus_test(
     dir: Path = typer.Option(

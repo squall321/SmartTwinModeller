@@ -36,6 +36,7 @@ from PySide6.QtGui import QAction, QColor, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
+    QDockWidget,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -387,6 +388,87 @@ class InspectorMainWindow(QMainWindow):
         msg = f"{type(exc).__name__}: {exc}\n\n{traceback.format_exc()}"
         QMessageBox.critical(self, title, msg)
         self.statusBar().showMessage(f"[error] {title}", 5000)
+
+    # ── RE-visualisation dock panels ────────────────────────────────────
+
+    def attach_re_panels(
+        self,
+        *,
+        panel: str = "both",
+        catalog: dict | None = None,
+        plan_a: Path | None = None,
+        plan_b: Path | None = None,
+    ) -> None:
+        """Attach the feature catalog tree and/or the plan diff side-panel.
+
+        Used by both the ``launch_ui_panel`` skill and the
+        ``phone-designer inspect-re`` CLI. Safe to call more than once —
+        previously-attached dock widgets are removed first.
+        """
+        # Lazy imports — these modules drag in PySide6 widgets we don't need
+        # for the default Inspector path.
+        from phone_designer.ui.panels.feature_catalog_panel import (
+            FeatureCatalogPanel,
+        )
+        from phone_designer.ui.panels.plan_diff_panel import PlanDiffPanel
+        from phone_designer.ui.widgets.highlight_overlay import HighlightOverlay
+
+        # Tear down any previous panels we own.
+        for attr in ("_catalog_dock", "_plan_diff_dock"):
+            old = getattr(self, attr, None)
+            if old is not None:
+                try:
+                    self.removeDockWidget(old)
+                    old.deleteLater()
+                except Exception:
+                    pass
+                setattr(self, attr, None)
+
+        if panel in ("catalog", "both"):
+            self._catalog_panel = FeatureCatalogPanel(self)
+            self._catalog_panel.set_catalog(catalog)
+            self._highlight_overlay = HighlightOverlay(self.plotter)
+            self._catalog_panel.feature_selected.connect(
+                self._highlight_overlay.show_feature
+            )
+            self._catalog_panel.cleared.connect(self._highlight_overlay.clear)
+            self._catalog_dock = QDockWidget("RE Feature Catalog", self)
+            self._catalog_dock.setWidget(self._catalog_panel)
+            self.addDockWidget(Qt.LeftDockWidgetArea, self._catalog_dock)
+
+        if panel in ("plan_diff", "both"):
+            self._plan_diff_panel = PlanDiffPanel(self)
+            self._plan_diff_panel.set_plans(plan_a, plan_b)
+            self._plan_diff_dock = QDockWidget("Plan Diff", self)
+            self._plan_diff_dock.setWidget(self._plan_diff_panel)
+            self.addDockWidget(Qt.RightDockWidgetArea, self._plan_diff_dock)
+
+
+def run_inspector_with_panels(
+    *,
+    panel: str = "both",
+    catalog: dict | None = None,
+    plan_a: Path | None = None,
+    plan_b: Path | None = None,
+    step: Path | None = None,
+) -> int:
+    """Launch the inspector pre-loaded with RE dock panels.
+
+    Mirrors :func:`run_inspector` but also attaches the feature-catalog
+    tree and/or plan-diff panel before entering the Qt event loop.
+    """
+    app = QApplication.instance() or QApplication(sys.argv)
+    window = InspectorMainWindow()
+    if step is not None:
+        try:
+            window.load_step(step)
+        except Exception:
+            pass
+    window.attach_re_panels(
+        panel=panel, catalog=catalog, plan_a=plan_a, plan_b=plan_b,
+    )
+    window.show()
+    return app.exec()
 
 
 # ──────────────────────────────────────────────────────────────────────────────

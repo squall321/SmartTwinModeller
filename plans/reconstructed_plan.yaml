@@ -4,115 +4,26 @@ steps:
 - id: s_base
   skill: box
   args:
-    length_mm: 63.935154716538015
-    width_mm: 63.935154716538015
-    height_mm: 3.0
-- id: s_pocket_0
-  skill: extrude_pocket
+    length_mm: 40.00000020000001
+    width_mm: 20.00000020000001
+    height_mm: 10.0
+- id: s_sweep_boss_0
+  skill: swept_boss_along_curve
   args:
-    face_selector: &id001
+    face_selector:
       kind: face_named
       name: top
-    sketch:
-      kind: rect
-      width_mm: 33.0
-      height_mm: 33.0
-      position_xy:
-      - 0.0
-      - 0.0
-    depth_mm: 2.0
-- id: s_pocket_1
-  skill: extrude_pocket
-  args:
-    face_selector: *id001
-    sketch:
-      kind: rect
-      width_mm: 30.0
-      height_mm: 30.0
-      position_xy:
-      - 0.0
-      - 0.0
-    depth_mm: 4.0
-- id: s_pocket_2
-  skill: extrude_pocket
-  args:
-    face_selector: &id002
-      kind: face_named
-      name: bottom
-    sketch:
-      kind: rect
-      width_mm: 12.0
-      height_mm: 12.0
-      position_xy:
-      - 0.0
-      - 24.0
-    depth_mm: 3.0
-- id: s_pocket_3
-  skill: extrude_pocket
-  args:
-    face_selector: *id002
-    sketch:
-      kind: rect
-      width_mm: 12.0
-      height_mm: 12.0
-      position_xy:
-      - 0.0
-      - -27.0
-    depth_mm: 3.0
-- id: s_pocket_4
-  skill: extrude_pocket
-  args:
-    face_selector: *id001
-    sketch:
-      kind: rect
-      width_mm: 4.0
-      height_mm: 4.0
-      position_xy:
-      - 23.25
-      - 0.0
-    depth_mm: 4.5
-- id: s_loft_boss_0
-  skill: loft_boss_between_sketches
-  args:
-    face_selector: *id001
-    lower_sketch:
+    profile_sketch:
       kind: circle
-      diameter_mm: 44.1712
-      center_x_mm: 0.0
-      center_y_mm: 0.0
-    upper_sketch:
-      kind: circle
-      diameter_mm: 44.0
-      center_x_mm: 0.0
-      center_y_mm: 0.0
-    height_mm: 0.5
-- id: s_hole_0
-  skill: hole
-  args:
-    position:
-    - 0.0
-    - 0.0
-    - 0.0
-    diameter_mm: 30.0
-    depth_mm: 11.6374
-    direction: +Z
-- id: s_hole_1
-  skill: counterbore_hole
-  args:
-    face_selector: *id001
-    position_xy:
-    - 11.0
-    - 0.0
-    thread_spec: M2
-    fit: medium
-    depth_mm: 7.2881
-- id: s_hole_2
-  skill: clearance_hole
-  args:
-    face_selector: *id002
-    position_xy:
-    - 0.0
-    - 23.0
-    thread_spec: M2
-    fit: medium
-    depth_mm: 47.5
+      diameter_mm: 2.1594
+    path_points:
+    - - 0.8571
+      - -2.1566
+      - 10.0
+    - - 0.8571
+      - 0.0028
+      - 10.0367
+    - - 0.8571
+      - 2.1621
+      - 10.0367
+    path_type: polyline

@@ -1,0 +1,44 @@
+# Surface-mount LED packages — typical chip-LED footprints.
+# length_mm / width_mm : LED body footprint
+# height_mm            : package height above PCB (top of plastic dome)
+# pad_size_mm          : tuple-style [length_mm, width_mm] of a single SMT pad
+# pad_spacing_mm       : center-to-center distance between the two pads
+schema_version: 1
+standard: "Industry standard SMD LED chip packages"
+leds:
+  "0402":
+    length_mm: 1.0
+    width_mm: 0.5
+    height_mm: 0.45
+    pad_size_mm: [0.6, 0.6]
+    pad_spacing_mm: 0.9
+  "0603":
+    length_mm: 1.6
+    width_mm: 0.8
+    height_mm: 0.6
+    pad_size_mm: [0.8, 0.8]
+    pad_spacing_mm: 1.4
+  "0805":
+    length_mm: 2.0
+    width_mm: 1.25
+    height_mm: 0.8
+    pad_size_mm: [1.0, 1.2]
+    pad_spacing_mm: 1.8
+  "1206":
+    length_mm: 3.2
+    width_mm: 1.6
+    height_mm: 1.1
+    pad_size_mm: [1.2, 1.6]
+    pad_spacing_mm: 2.8
+  "5050":
+    length_mm: 5.0
+    width_mm: 5.0
+    height_mm: 1.6
+    pad_size_mm: [1.6, 1.6]
+    pad_spacing_mm: 3.2
+  "3535":
+    length_mm: 3.5
+    width_mm: 3.5
+    height_mm: 1.95
+    pad_size_mm: [1.2, 1.2]
+    pad_spacing_mm: 2.4

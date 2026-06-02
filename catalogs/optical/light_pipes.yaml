@@ -1,0 +1,25 @@
+# Light pipes — molded polycarbonate / acrylic guides that carry LED
+# light from an internal source to an external indicator window.
+# cross_section_d_mm  : (round pipes) circular diameter
+# length / width      : (slot pipes) rectangular cross-section dimensions
+# bend_radius_min_mm  : minimum centerline bend radius without TIR loss
+schema_version: 1
+standard: "Generic PC / PMMA molded light pipes"
+pipes:
+  "Round_Ø1.2":
+    cross_section: "round"
+    cross_section_d_mm: 1.2
+    bend_radius_min_mm: 3.0
+  "Round_Ø1.5":
+    cross_section: "round"
+    cross_section_d_mm: 1.5
+    bend_radius_min_mm: 4.0
+  "Round_Ø2.0":
+    cross_section: "round"
+    cross_section_d_mm: 2.0
+    bend_radius_min_mm: 5.0
+  "Slot_2x6":
+    cross_section: "slot"
+    length_mm: 6.0
+    width_mm: 2.0
+    bend_radius_min_mm: 8.0
