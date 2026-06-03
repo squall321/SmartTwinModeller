@@ -1,0 +1,34 @@
+{
+  "status": "AUDIT_INCOMPLETE",
+  "date": "2026-06-03",
+  "driver": "run_logs/_tmp/skill_audit_v2.py",
+  "method": "in-process single Python session, real fixtures (face_named, Circle sketch, catalog specs)",
+  "background_task_id": "bj71xxyyv",
+  "buckets": {
+    "total_skills": 0,
+    "param_responsive": 0,
+    "static_geom": 0,
+    "real_broken": 0,
+    "tag_only": 0,
+    "inspect_responsive": 0,
+    "inspect_broken": 0,
+    "io_ok": 0,
+    "macro": 0,
+    "not_invoked": 0
+  },
+  "sample_real_broken": [
+    "AUDIT_INCOMPLETE: skill_audit_v2.py launched in background (task bj71xxyyv) but summary file run_logs/_tmp/skill_audit_v2_summary.json was not written before stop hook fired. Output file was 0 bytes after ~30s — likely still loading 338 skill modules / OCP imports. Re-run the harness in foreground (synchronous PowerShell call without run_in_background) and allow the full 5-8 min completion before requesting StructuredOutput."
+  ],
+  "v1_confession": {
+    "v1_raw_all_broken": 194,
+    "harness_noise_breakdown": {
+      "harness_subprocess_spawn_fail": 67,
+      "driver_init_fail_box_singleton": 65,
+      "bad_fixture_args_empty_selectors": 52,
+      "driver_instantiation_bug": 4
+    },
+    "estimated_harness_noise_share": "159 of 194 = 82%",
+    "note": "v1 'all_broken' headline conflated harness failures with skill failures; v2 re-runs in-process with real fixtures to give an honest per-skill verdict."
+  },
+  "next_step": "Re-run skill_audit_v2.py synchronously in the foreground PowerShell (no run_in_background) and allow 5-8 minutes for the 338 skill modules + OCP imports to load and the per-skill loop to complete; then re-populate this summary."
+}

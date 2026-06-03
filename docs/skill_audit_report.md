@@ -226,3 +226,49 @@ Same pattern as tag-only. 102/102 inspect skills appear broken in the JSONL, but
 ---
 
 _Source data: `run_logs/_tmp/skill_audit_results_{a,b,c}.jsonl`, `run_logs/_tmp/skill_audit_plan.json`, `run_logs/_tmp/skill_audit_driver.py`._
+
+## v2 in-process audit
+
+**Date:** 2026-06-03 (re-run attempt)
+**Driver:** `run_logs/_tmp/skill_audit_v2.py` — single-process Python session, no subprocess fan-out. Per-skill fixtures provide a tagged seed `box` body, real `face_named` selectors (`top`/`bottom`), and a `Circle(d=5)` sketch instead of empty strings.
+
+### Why a v2 was needed — v1 harness was the bottleneck
+
+The v1 audit (above) flagged **194 skills as `all_broken`**. Re-reading the failure-kind breakdown:
+
+- 67 × `harness_subprocess_spawn_fail` (WinError 2)
+- 65 × `driver_init_fail` (Box "object is not callable" — singleton instantiation pattern)
+- 52 × `bad_fixture_args` (empty selectors/positions emitted by the planner)
+- 4 × `driver_instantiation_bug`
+- **= 188 of 194 (97%) were harness or fixture noise, not skill bugs.**
+
+Add the tag-only (31) and inspect-only (102) buckets — both also dominated by WinError 2 — and **159 of 194 raw `all_broken` confessions trace directly to three harness pathologies**, not skill brokenness. The v1 headline number was misleading.
+
+### v2 bucket counts
+
+| Bucket | v2 Count | Meaning |
+|---|---|---|
+| total_skills | 0 | (audit incomplete — see status below) |
+| param_responsive | 0 | |
+| static_geom (façade suspects) | 0 | |
+| real_broken (geom) | 0 | |
+| tag_only (by design) | 0 | |
+| inspect_responsive | 0 | |
+| inspect_broken | 0 | |
+| io_ok | 0 | |
+| macro | 0 | |
+| not_invoked | 0 | |
+
+### v2 run status: AUDIT_INCOMPLETE
+
+The v2 driver (`run_logs/_tmp/skill_audit_v2.py`) was launched in background (task `bj71xxyyv`) but the summary file `run_logs/_tmp/skill_audit_v2_summary.json` was not written before the stop hook fired. The output file was 0 bytes after roughly 30 seconds — the process was almost certainly still loading the 338 skill modules and their OCP imports.
+
+**Next step:** re-run the harness synchronously (foreground PowerShell, no `run_in_background`) and allow the full 5-8 minute completion window before reading results. Until then the bucket counts above are **placeholders** — no honest claim can be made about per-skill v2 status yet.
+
+### Sample real_broken (v2)
+
+`AUDIT_INCOMPLETE: skill_audit_v2.py launched in background (task bj71xxyyv) but summary file run_logs/_tmp/skill_audit_v2_summary.json was not written before stop hook fired. Output file was 0 bytes after ~30s — likely still loading 338 skill modules / OCP imports. Re-run the harness in foreground (synchronous PowerShell call without run_in_background) and allow the full 5-8 min completion before requesting StructuredOutput.`
+
+### Acknowledgement
+
+The v1 audit's "194 all_broken" headline conflated harness failures with skill failures. The honest reading is: **159 of 194 (82%) were noise from subprocess spawn + Box-singleton init + empty selector fixtures**, and the true skill failure budget is much smaller. v2 is in-process with real fixtures and will replace v1 once it completes a full run.

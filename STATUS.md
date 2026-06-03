@@ -4,23 +4,30 @@
 
 ## 한 줄 요약
 
-LLM-driven **양방향** parametric CAD skill library — build123d / OCCT 7.8 기반. **338 등록 skill / 22 카테고리 / 23 도메인 카탈로그 / 116 테스트 파일 / 1324 PASS**. Watch v0 합성 + 7 round 의 도메인 확장 + reverse-engineering 풀파이프라인 (round-trip 3/3 + cube-collapse 봉쇄 + CI gate).
+LLM-driven **양방향** parametric CAD skill library — build123d / OCCT 7.8 기반. **338 등록 skill / 22 카테고리 / 23 도메인 카탈로그 / 116 테스트 파일 / 1324 PASS**. Watch v0 합성 + 7 round 의 도메인 확장 + reverse-engineering 풀파이프라인. **Skill audit v2 (in-process, real fixtures): 미완료 — harness 재실행 필요.**
 
-## Skill audit reality (2026-06-03)
+## Skill audit reality (v2 — 2026-06-03)
 
-전 338 skill을 fixture 기반으로 실측한 첫 정직 audit. 자세한 보고서: [`docs/skill_audit_report.md`](docs/skill_audit_report.md).
+v1 audit의 "194 all_broken" 헤드라인은 **harness 노이즈였음을 confess** — 159/194 (82%) 는 subprocess WinError 2 + Box singleton init pattern + 빈 selector fixture 때문이지 실제 skill 버그가 아니었음. v2는 in-process 단일 Python 세션 + 실제 face_named/sketch/catalog-spec fixture 로 재측정. 보고서: [`docs/skill_audit_report.md`](docs/skill_audit_report.md) — `## v2 in-process audit` 섹션.
 
-| Bucket | Count | 의미 |
+| Bucket | v2 Count | 의미 |
 |---|---|---|
-| param_responsive | **7** | 인자에 따라 ΔV가 실제로 변하는 것이 확인된 skill (box, cylinder, wedge, surface_offset, deburring, final_fillet_all_sharp_edges, sanding_pass) |
-| static_geom | 0 | 모두 ok지만 ΔV가 동일한 가짜 façade — 현 fixture로는 검출되지 않음 |
-| partial | 2 | 일부 케이스만 통과 |
-| all_broken (raw) | 194 | audit harness에서 모든 케이스가 실패 — **대부분이 harness 측 문제(subprocess spawn, 빈 selector 인자)이며 실제 skill 버그가 아님**. 실 문제로 추정되는 skill은 ~71 |
-| tag_only_broken | 31 | tag-only skill (대부분 WinError 2, harness 문제) |
-| inspect_broken | 102 | inspect-only skill (대부분 WinError 2, harness 문제 — 개별 in-process 호출은 정상) |
-| macro | 2 | reverse_engineer macro |
+| total_skills | 0 | (AUDIT_INCOMPLETE) |
+| param_responsive | 0 | 인자에 따라 ΔV가 실제로 변하는 skill |
+| static_geom (façade 의심) | 0 | ok 지만 ΔV 가 상수 |
+| real_broken (geom) | 0 | 실제 runtime/OCCT 실패 |
+| tag_only (by design) | 0 | tag-only — geom 변화 없는 것이 정상 |
+| inspect_responsive | 0 | inspect-only, 출력 응답 확인 |
+| inspect_broken | 0 | inspect-only, 실제 실패 |
+| io_ok | 0 | I/O round-trip 성공 |
+| macro | 0 | reverse_engineer 매크로 |
+| not_invoked | 0 | 호출되지 않은 skill |
 
-**해석:** 등록은 338개지만 fixture-검증으로 parametric 동작이 확인된 것은 7개뿐. 나머지는 "고장"이 아니라 **"미검증"** 상태 — selector/sketch 인자를 정직하게 만든 fixture가 없어서 모두 ValidationError로 떨어진 결과. 다음 단계는 (1) harness in-process화, (2) selector/sketch fixture 정비, (3) skill 추가 정지하고 기존 catalogue lock.
+**v2 상태: AUDIT_INCOMPLETE.** `skill_audit_v2.py` 가 background task `bj71xxyyv` 로 launch 됐지만 summary JSON 파일이 stop hook 발화 전에 기록되지 않음. 출력 0 bytes (~30s) — 338 skill 모듈 + OCP import 로딩 중이었을 가능성 높음. **다음:** synchronous foreground PowerShell 로 재실행하여 5-8 분 완주 보장 후 bucket count 채울 것.
+
+**Sample real_broken (v2):** `AUDIT_INCOMPLETE: skill_audit_v2.py launched in background (task bj71xxyyv) but summary file run_logs/_tmp/skill_audit_v2_summary.json was not written before stop hook fired. Output file was 0 bytes after ~30s — likely still loading 338 skill modules / OCP imports. Re-run the harness in foreground.`
+
+**v1 → v2 차이 (harness 자백):** v1 의 raw 194 all_broken 중 67 × subprocess spawn fail + 65 × Box-singleton init fail + 27 × bad fixture args = **159 노이즈**. 실제 skill bug 추정은 30~70 수준이며 v2 완주 후에야 정확히 분류 가능.
 
 ## 1. 핵심 인프라
 
