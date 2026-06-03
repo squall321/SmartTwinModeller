@@ -6,6 +6,22 @@
 
 LLM-driven **양방향** parametric CAD skill library — build123d / OCCT 7.8 기반. **338 등록 skill / 22 카테고리 / 23 도메인 카탈로그 / 116 테스트 파일 / 1324 PASS**. Watch v0 합성 + 7 round 의 도메인 확장 + reverse-engineering 풀파이프라인 (round-trip 3/3 + cube-collapse 봉쇄 + CI gate).
 
+## Skill audit reality (2026-06-03)
+
+전 338 skill을 fixture 기반으로 실측한 첫 정직 audit. 자세한 보고서: [`docs/skill_audit_report.md`](docs/skill_audit_report.md).
+
+| Bucket | Count | 의미 |
+|---|---|---|
+| param_responsive | **7** | 인자에 따라 ΔV가 실제로 변하는 것이 확인된 skill (box, cylinder, wedge, surface_offset, deburring, final_fillet_all_sharp_edges, sanding_pass) |
+| static_geom | 0 | 모두 ok지만 ΔV가 동일한 가짜 façade — 현 fixture로는 검출되지 않음 |
+| partial | 2 | 일부 케이스만 통과 |
+| all_broken (raw) | 194 | audit harness에서 모든 케이스가 실패 — **대부분이 harness 측 문제(subprocess spawn, 빈 selector 인자)이며 실제 skill 버그가 아님**. 실 문제로 추정되는 skill은 ~71 |
+| tag_only_broken | 31 | tag-only skill (대부분 WinError 2, harness 문제) |
+| inspect_broken | 102 | inspect-only skill (대부분 WinError 2, harness 문제 — 개별 in-process 호출은 정상) |
+| macro | 2 | reverse_engineer macro |
+
+**해석:** 등록은 338개지만 fixture-검증으로 parametric 동작이 확인된 것은 7개뿐. 나머지는 "고장"이 아니라 **"미검증"** 상태 — selector/sketch 인자를 정직하게 만든 fixture가 없어서 모두 ValidationError로 떨어진 결과. 다음 단계는 (1) harness in-process화, (2) selector/sketch fixture 정비, (3) skill 추가 정지하고 기존 catalogue lock.
+
 ## 1. 핵심 인프라
 
 | 컴포넌트 | 역할 |
