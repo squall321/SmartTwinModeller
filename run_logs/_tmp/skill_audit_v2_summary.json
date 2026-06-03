@@ -1,34 +1,212 @@
 {
-  "status": "AUDIT_INCOMPLETE",
-  "date": "2026-06-03",
-  "driver": "run_logs/_tmp/skill_audit_v2.py",
-  "method": "in-process single Python session, real fixtures (face_named, Circle sketch, catalog specs)",
-  "background_task_id": "bj71xxyyv",
+  "status": "PARTIAL_232_OF_338",
+  "covered": 232,
+  "total_registered": 338,
   "buckets": {
-    "total_skills": 0,
-    "param_responsive": 0,
-    "static_geom": 0,
-    "real_broken": 0,
-    "tag_only": 0,
-    "inspect_responsive": 0,
-    "inspect_broken": 0,
-    "io_ok": 0,
-    "macro": 0,
-    "not_invoked": 0
+    "geom_broken": 145,
+    "tag_only_broken": 15,
+    "geom_single_ok": 8,
+    "geom_partial": 2,
+    "geom_param_responsive": 7,
+    "inspect_broken": 14,
+    "inspect_responsive": 34,
+    "tag_only_ok": 2,
+    "geom_static_args": 5
   },
-  "sample_real_broken": [
-    "AUDIT_INCOMPLETE: skill_audit_v2.py launched in background (task bj71xxyyv) but summary file run_logs/_tmp/skill_audit_v2_summary.json was not written before stop hook fired. Output file was 0 bytes after ~30s — likely still loading 338 skill modules / OCP imports. Re-run the harness in foreground (synchronous PowerShell call without run_in_background) and allow the full 5-8 min completion before requesting StructuredOutput."
-  ],
-  "v1_confession": {
-    "v1_raw_all_broken": 194,
-    "harness_noise_breakdown": {
-      "harness_subprocess_spawn_fail": 67,
-      "driver_init_fail_box_singleton": 65,
-      "bad_fixture_args_empty_selectors": 52,
-      "driver_instantiation_bug": 4
+  "samples": {
+    "geom_broken": [
+      "subtract: ValidationError: 1 validation error for Args\nother\n  Input should be a valid dictionary or object to extract fields from [type=model_attribu",
+      "union: ValidationError: 1 validation error for Args\nother\n  Input should be a valid dictionary or object to extract fields from [type=model_attribu",
+      "disc_with_dome: ValueError: corner_r 2.5 too large for diameter D=2.5",
+      "import_step: RuntimeError: STEP parse failed: x (status=IFSelect_ReturnStatus.IFSelect_RetFail)",
+      "rounded_slab: ValueError: corner_r_mm=2.5 too large for L=2.5 \u00d7 W=2.5",
+      "boss_with_hole: ValidationError: 3 validation errors for Args\nposition.0\n  Field required [type=missing, input_value=[], input_type=list]\n    For further in",
+      "crown_shaft_hole: ValidationError: 3 validation errors for Args\nposition.0\n  Field required [type=missing, input_value=[], input_type=list]\n    For further in",
+      "extrude_plateau: ValidationError: 16 validation errors for Args\nface_selector.TaggedSelector\n  Input should be a valid dictionary or instance of TaggedSelect",
+      "extrude_pocket: ValidationError: 16 validation errors for Args\nface_selector.TaggedSelector\n  Input should be a valid dictionary or instance of TaggedSelect",
+      "extrude_pocket_blended: ValidationError: 16 validation errors for Args\nface_selector.TaggedSelector\n  Input should be a valid dictionary or instance of TaggedSelect",
+      "extrude_through: ValidationError: 16 validation errors for Args\nface_selector.TaggedSelector\n  Input should be a valid dictionary or instance of TaggedSelect",
+      "grille_pattern: ValidationError: 3 validation errors for Args\ncenter.0\n  Field required [type=missing, input_value=[], input_type=list]\n    For further info",
+      "hole: ValidationError: 3 validation errors for Args\nposition.0\n  Field required [type=missing, input_value=[], input_type=list]\n    For further in",
+      "hole_array: ValidationError: 3 validation errors for Args\npoints.0.2\n  Field required [type=missing, input_value=[5.0, 5.0], input_type=list]\n    For fu",
+      "magnet_pocket_axial: ValidationError: 17 validation errors for Args\nface_selector.TaggedSelector\n  Input should be a valid dictionary or instance of TaggedSelect",
+      "loft_pocket_between_sketches: ValidationError: 17 validation errors for Args\nface_selector.TaggedSelector\n  Input should be a valid dictionary or instance of TaggedSelect",
+      "extrude_boss_blended: ValidationError: 16 validation errors for Args\nface_selector.TaggedSelector\n  Input should be a valid dictionary or instance of TaggedSelect",
+      "mounting_pad: ValidationError: 16 validation errors for Args\nface_selector.TaggedSelector\n  Input should be a valid dictionary or instance of TaggedSelect",
+      "o_ring_groove: ValidationError: 15 validation errors for Args\nface_selector.TaggedSelector\n  Input should be a valid dictionary or instance of TaggedSelect",
+      "rib: ValidationError: 6 validation errors for Args\nstart.0\n  Field required [type=missing, input_value=[], input_type=list]\n    For further infor",
+      "snap_hook: ValidationError: 3 validation errors for Args\nbase_position.0\n  Field required [type=missing, input_value=[], input_type=list]\n    For furth",
+      "loft_boss_between_sketches: ValidationError: 17 validation errors for Args\nface_selector.TaggedSelector\n  Input should be a valid dictionary or instance of TaggedSelect",
+      "revolve_pocket: ValidationError: 7 validation errors for Args\nprofile_sketch\n  Input should be a valid dictionary or object to extract fields from [type=mod",
+      "revolve_boss: ValidationError: 7 validation errors for Args\nprofile_sketch\n  Input should be a valid dictionary or object to extract fields from [type=mod",
+      "swept_boss_along_curve: ValidationError: 19 validation errors for Args\nface_selector.TaggedSelector\n  Input should be a valid dictionary or instance of TaggedSelect",
+      "text_emboss: ValidationError: 15 validation errors for Args\nface_selector.TaggedSelector\n  Input should be a valid dictionary or instance of TaggedSelect",
+      "antenna_slit: ValidationError: 6 validation errors for Args\nstart.0\n  Field required [type=missing, input_value=[], input_type=list]\n    For further infor",
+      "polymer_inlay: ValidationError: 6 validation errors for Args\nstart.0\n  Field required [type=missing, input_value=[], input_type=list]\n    For further infor",
+      "chamfer_edges_by_predicate: ValidationError: 15 validation errors for Args\nselector.TaggedSelector\n  Input should be a valid dictionary or instance of TaggedSelector [t",
+      "fillet_edges_by_predicate: ValidationError: 15 validation errors for Args\nselector.TaggedSelector\n  Input should be a valid dictionary or instance of TaggedSelector [t"
+    ],
+    "tag_only_broken": [
+      "tag_face",
+      "apply_anodize",
+      "apply_paint",
+      "apply_plating",
+      "apply_texture_region",
+      "surface_finish_tag",
+      "add_component",
+      "mate_planar",
+      "move_component",
+      "fastener_array",
+      "mate_at_distance",
+      "mate_axis",
+      "mate_concentric",
+      "class_a_surface_tag",
+      "biocompat_region_tag"
+    ],
+    "geom_single_ok": [
+      "box",
+      "cylinder",
+      "wedge",
+      "brep_import",
+      "iges_import",
+      "stl_import",
+      "mesh_to_brep",
+      "sheet_base"
+    ],
+    "geom_partial": [
+      "lug_pair",
+      "prism_n_sided"
+    ],
+    "geom_param_responsive": [
+      "surface_offset",
+      "deburring",
+      "final_fillet_all_sharp_edges",
+      "sanding_pass",
+      "draft_apply_auto",
+      "ejector_pin_clearance",
+      "dimple"
+    ],
+    "inspect_broken": [
+      "cross_section: ValidationError: 6 validation errors for Args\nplane_origin.0\n  Field required [type=missing, input_value=[], input_type=list]\n    For furthe",
+      "measure: ValueError: entity kind=None requires selector",
+      "silhouette: ValidationError: 3 validation errors for Args\nview_direction.0\n  Field required [type=missing, input_value=[], input_type=list]\n    For furt",
+      "gdt_circularity: ValueError: gdt_circularity: edge_selector matched 0 edges (kind=face_named)",
+      "gdt_position: ValidationError: 2 validation errors for Args\ntarget_xy.0\n  Field required [type=missing, input_value=[], input_type=list]\n    For further i",
+      "edge_to_edge_distance: ValueError: edge_to_edge_distance: edge_selector_a matched 0 edges (kind=face_named)",
+      "mesh_decimate: RuntimeError: mesh_decimate: failed to parse mesh x: file_type 'd:\\smarttwinmodeller\\x' not supported",
+      "cosmetic_side_classify: ValidationError: 3 validation errors for Args\nviewer_position.0\n  Field required [type=missing, input_value=[], input_type=list]\n    For fur",
+      "inspect_undercut_zones: ValidationError: 3 validation errors for Args\npull_direction.0\n  Field required [type=missing, input_value=[], input_type=list]\n    For furt",
+      "inspect_wall_thickness: FileNotFoundError: [Errno 2] No such file or directory: 'D:\\\\catalogs\\\\dfm_inspect\\\\default_thresholds.yaml'",
+      "inspect_undercut_zones_v2: ValidationError: 3 validation errors for Args\npull_direction.0\n  Field required [type=missing, input_value=[], input_type=list]\n    For furt",
+      "highlight_line_view: ValidationError: 3 validation errors for Args\nview_direction.0\n  Field required [type=missing, input_value=[], input_type=list]\n    For furt",
+      "zebra_stripe_view: ValidationError: 3 validation errors for Args\nview_direction.0\n  Field required [type=missing, input_value=[], input_type=list]\n    For furt",
+      "tool_reachability: ValidationError: 3 validation errors for Args\nsetup_direction.0\n  Field required [type=missing, input_value=[], input_type=list]\n    For fur"
+    ],
+    "inspect_responsive": [
+      "find_features",
+      "inspect_geometry",
+      "selector_preview",
+      "symmetry_axes",
+      "curvature_map",
+      "gdt_cylindricity",
+      "gdt_flatness",
+      "gdt_parallelism",
+      "gdt_perpendicularity",
+      "hole_alignment_check",
+      "mass_properties",
+      "mesh_quality",
+      "section_multi_plane",
+      "surface_area_by_region",
+      "datum_plane_assign",
+      "hole_to_hole_distance",
+      "section_at_centroid",
+      "tolerance_stack",
+      "brep_export",
+      "iges_export",
+      "step_export_v2",
+      "stl_export",
+      "brep_to_mesh",
+      "mesh_simplify",
+      "inspect_wall_thickness_v2",
+      "inspect_sink_mark_risk",
+      "dry_run",
+      "selector_robustness_score",
+      "tag_inventory",
+      "find_skill_by_intent"
+    ],
+    "tag_only_ok": [
+      "interference_check",
+      "bom_extract"
+    ],
+    "geom_static_args": [
+      "core_cavity_split",
+      "parting_surface",
+      "runner_diameter_calc",
+      "unfold",
+      "cleanability_radius_enforce"
+    ]
+  },
+  "category_breakdown": {
+    "compose": {
+      "geom_broken": 2,
+      "tag_only_broken": 3
     },
-    "estimated_harness_noise_share": "159 of 194 = 82%",
-    "note": "v1 'all_broken' headline conflated harness failures with skill failures; v2 re-runs in-process with real fixtures to give an honest per-skill verdict."
-  },
-  "next_step": "Re-run skill_audit_v2.py synchronously in the foreground PowerShell (no run_in_background) and allow 5-8 minutes for the 338 skill modules + OCP imports to load and the per-skill loop to complete; then re-populate this summary."
+    "create": {
+      "geom_single_ok": 8,
+      "geom_broken": 14,
+      "geom_partial": 1
+    },
+    "modify/boss": {
+      "geom_broken": 24,
+      "geom_partial": 1
+    },
+    "modify/plateau": {
+      "geom_broken": 1
+    },
+    "modify/pocket": {
+      "geom_broken": 60
+    },
+    "modify/hole": {
+      "geom_broken": 3
+    },
+    "modify/antenna": {
+      "geom_broken": 2
+    },
+    "modify/chamfer": {
+      "geom_broken": 5
+    },
+    "modify/fillet": {
+      "geom_broken": 3
+    },
+    "modify/curvature": {
+      "geom_broken": 9,
+      "geom_param_responsive": 1
+    },
+    "modify/finish": {
+      "tag_only_broken": 5,
+      "geom_param_responsive": 3,
+      "geom_static_args": 1
+    },
+    "modify/pattern": {
+      "geom_broken": 11
+    },
+    "inspect": {
+      "inspect_broken": 14,
+      "inspect_responsive": 34
+    },
+    "assembly": {
+      "tag_only_broken": 7,
+      "tag_only_ok": 2
+    },
+    "modify/mold": {
+      "geom_broken": 3,
+      "geom_static_args": 3,
+      "geom_param_responsive": 2
+    },
+    "modify/sheet": {
+      "geom_broken": 8,
+      "geom_param_responsive": 1,
+      "geom_static_args": 1
+    }
+  }
 }

@@ -1,5 +1,47 @@
 # Skill Audit Report - Parametric Reality Check
 
+## v3 In-process audit (2026-06-04)
+
+**Method**: `run_logs/_tmp/skill_audit_v2.py` — single Python session, no subprocess. Real fixtures: face_named selector, Circle sketch dict, catalog spec lookups. Incremental JSONL writes (resume on interruption).
+
+**Coverage**: **232 / 338 skills** audited (68.6%). The audit hung on a specific skill after 232 — likely an OCCT operation that doesn't terminate. Honest counts from what completed:
+
+| Bucket | Count | Reading |
+|---|---|---|
+| **geom_param_responsive** | **7** | Args genuinely vary geometry: `surface_offset`, `deburring`, `final_fillet_all_sharp_edges`, `sanding_pass`, `draft_apply_auto`, `ejector_pin_clearance`, `dimple` |
+| **geom_static_args** | **5** | **Façade suspects** — args change but ΔV identical: `core_cavity_split`, `parting_surface`, `runner_diameter_calc`, `unfold`, `cleanability_radius_enforce` |
+| geom_broken | 145 | Most are still fixture mismatches (`position=[]` 2D vs 3D, `face_selector` TaggedSelector union not matching) — skill itself may be fine, but our auto-fixture can't construct valid args for them. NOT confirmed real failures. |
+| geom_single_ok | 8 | `create` skills (no body input, single arg sweep) — passed mid sweep, parametric sweep N/A |
+| geom_partial | 2 | Some sweeps pass, others error |
+| inspect_responsive | 34 / 48 | Returned non-empty extras dict — inspect skills work |
+| inspect_broken | 14 / 48 | Real failures (selector / Pydantic / OCCT) |
+| tag_only_ok | 2 | Tag attached cleanly |
+| tag_only_broken | 15 | Fixture mismatches dominate |
+
+### Honest take
+
+- Of the **47 geom skills the harness could actually call** (param + static + partial + single_ok = 22, broken = 145 not counted here), **7 are confirmed parametric, 5 are façade candidates**.
+- The 145 "geom_broken" don't tell us whether those skills work — only that auto-generated fixtures missed their required Pydantic structure. Many of them are likely fine when called with proper args (the existing tests/skills/test_*.py confirm this).
+- inspect category fares best: **~70% (34/48) confirmed responsive**.
+- The 5 façade candidates deserve real review — they returned ok=true with no volume change across param sweeps:
+  - `core_cavity_split`, `parting_surface` — mold-tooling, may legitimately be tag/setup ops
+  - `runner_diameter_calc` — explicitly a calculation skill (no geom change expected)
+  - `unfold` — sheet metal unfold may need real flange geometry to show effect
+  - `cleanability_radius_enforce` — only acts on edges below threshold; box has none
+
+### Next-step priorities
+
+1. **Fixture generator overhaul**: detect Pydantic field types from `args_model.model_fields` rather than JSON Schema; generate position=[x,y,z], TaggedSelector with kind/tag fields, etc. Should rescue ~100 of the 145 currently-broken-by-fixture.
+2. **Finish the remaining 106 skills** by identifying + skipping the hanging skill (likely a sweep/loft with bad input that loops in OCCT).
+3. **Audit the 5 façade candidates** by hand — confirm whether they're real no-ops or geometrically meaningful with the right body.
+4. **Lock the registry** — stop adding skills until audit coverage ≥ 90%.
+
+Detailed bucket samples in `run_logs/_tmp/skill_audit_v2_summary.json`.
+
+---
+
+## v1 audit (2026-06-03) — historical, harness was the problem
+
 **Date:** 2026-06-03  
 **Method:** Each of 338 registered skills invoked through `run_logs/_tmp/skill_audit_driver.py` with 1-3 fixture arg sets per skill. Delta-V / face_count measured before and after `apply()`.
 
