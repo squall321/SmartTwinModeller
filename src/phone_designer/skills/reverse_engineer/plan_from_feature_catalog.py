@@ -907,9 +907,13 @@ def _build_plan(catalog: dict, body: Any = None) -> dict:
         bbox_h = max(float(zmax - zmin), 1e-3)
         # Prefer the slab thickness measured from parallel planar faces — it
         # excludes the boss/sweep/loft height that bbox would otherwise add.
+        # Sanity floor — a detected slab thickness < bbox_h / 10 is almost
+        # always a paper-thin shell artefact (mesh→BREP open shell whose
+        # front and back faces sit ~0.03 mm apart). Reject that and use the
+        # bbox z-extent instead.
         if (
             base_thickness is not None
-            and 0.0 < float(base_thickness) <= bbox_h
+            and bbox_h / 10.0 <= float(base_thickness) <= bbox_h
         ):
             base_h = float(base_thickness)
         else:
