@@ -163,17 +163,18 @@ def _build_report(
         },
     }
 
-    if bbox_only:
-        report["face_count"] = 0
-        report["edge_count"] = 0
-        report["faces"] = []
-        report["edges"] = []
-        return report
-
+    # Shell-aware: TopExp_Explorer with TopAbs_FACE/EDGE enumerates faces from
+    # any TopoDS_Shape (compound, solid, shell). Counting is cheap; do it even
+    # in bbox_only so callers always get face_count / edge_count.
     faces = _all_faces(shape)
     edges = _all_edges(shape)
     report["face_count"] = len(faces)
     report["edge_count"] = len(edges)
+
+    if bbox_only:
+        report["faces"] = []
+        report["edges"] = []
+        return report
 
     face_entries: list[dict[str, Any]] = []
     if include_faces:

@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from phone_designer.skills._history import EntityHistoryMap
 from phone_designer.skills._post_conditions import PostCondition
@@ -361,9 +361,17 @@ def _estimate_base_thickness(body) -> float | None:
 )
 class ExtractFeatureCatalog(SkillBase):
     class Args(BaseModel):
-        pass
+        max_face_count: int | None = Field(
+            default=5000,
+            description="If the body has more than this many faces, skip the "
+                        "feature catalog (returns extras['feature_catalog']="
+                        "{'skipped': True, 'face_count': N, 'reason': 'too_big'})"
+                        ". Set to None to disable the guard. Default 5000 keeps "
+                        "the analysis under ~30s on raw-mesh inputs.",
+        )
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
+        from phone_designer.skills._resolvers import _all_faces
         from phone_designer.skills.inspect.classify_holes import ClassifyHoles
         from phone_designer.skills.inspect.classify_pockets import ClassifyPockets
         from phone_designer.skills.inspect.detect_bosses import DetectBosses
@@ -381,6 +389,31 @@ class ExtractFeatureCatalog(SkillBase):
         from phone_designer.skills.inspect.match_standard_hole import (
             MatchStandardHole,
         )
+
+        # ── face-count guard — bail on raw mesh-to-brep shells ─────────────
+        # The detectors below are O(faces²)-ish for adjacency / proximity
+        # checks. A 90k-face shell takes >10 min and is rarely useful for RE.
+        # Caller should decimate first if they want feature extraction.
+        if args.max_face_count is not None:
+            try:
+                shape = _occt_shape(body)
+                face_count = len(_all_faces(shape))
+            except Exception:
+                face_count = -1
+            if face_count > args.max_face_count:
+                return SkillResult(
+                    body=body,
+                    history=EntityHistoryMap(),
+                    extras={"feature_catalog": {
+                        "skipped": True,
+                        "face_count": face_count,
+                        "reason": "too_big",
+                        "limit": args.max_face_count,
+                        "advice": "decimate the input mesh (mesh_decimate skill) "
+                                  "or simplify_to_canonical the BREP before "
+                                  "calling extract_feature_catalog.",
+                    }},
+                )
 
         # ── classify_holes (already does its own standard match per hole) ──
         holes_res = _safe(ClassifyHoles().apply, body, {"match_standards": True})

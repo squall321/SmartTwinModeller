@@ -46,10 +46,14 @@ from phone_designer.skills._spec import SkillBase, SkillResult
 
 
 def _load(family: str, name: str):
+    """Resolve project root by walking up until a 'catalogs' dir exists."""
     import pathlib
     import yaml
-    root = pathlib.Path(__file__).resolve().parents[5]
-    return yaml.safe_load((root / "catalogs" / family / f"{name}.yaml").read_text())
+    here = pathlib.Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / "catalogs").is_dir():
+            return yaml.safe_load((parent / "catalogs" / family / f"{name}.yaml").read_text())
+    raise FileNotFoundError(f"could not locate catalogs/ from {here}")
 
 
 def _occt_shape(body: Any):

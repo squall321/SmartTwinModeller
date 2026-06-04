@@ -236,6 +236,7 @@ from phone_designer.skills.create.gear_helical_involute import GearHelicalInvolu
 from phone_designer.skills.create.worm_thread import WormThread
 
 # Reverse-engineering boost — repair / inspect / reverse_engineer / io
+import phone_designer.skills.repair.fill_small_holes  # noqa: F401
 import phone_designer.skills.repair.shape_heal  # noqa: F401
 import phone_designer.skills.repair.sew_faces_to_shell  # noqa: F401
 import phone_designer.skills.repair.close_shell_to_solid  # noqa: F401

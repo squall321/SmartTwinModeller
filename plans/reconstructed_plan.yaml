@@ -4,26 +4,6 @@ steps:
 - id: s_base
   skill: box
   args:
-    length_mm: 40.00000020000001
-    width_mm: 20.00000020000001
+    length_mm: 50.0
+    width_mm: 50.0
     height_mm: 10.0
-- id: s_sweep_boss_0
-  skill: swept_boss_along_curve
-  args:
-    face_selector:
-      kind: face_named
-      name: top
-    profile_sketch:
-      kind: circle
-      diameter_mm: 2.1594
-    path_points:
-    - - 0.8571
-      - -2.1566
-      - 10.0
-    - - 0.8571
-      - 0.0028
-      - 10.0367
-    - - 0.8571
-      - 2.1621
-      - 10.0367
-    path_type: polyline
