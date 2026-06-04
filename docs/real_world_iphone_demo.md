@@ -52,10 +52,30 @@
 - ❌ `inspect_wall_thickness` — catalog path 버그 (`catalogs/dfm_inspect/default_thresholds.yaml` 못 찾음)
 - ❌ `inspect_geometry` 의 face_count = 0 (shell 의 face 안 셈 — inspect 가 solid-only 가정)
 
-## 다음 보강 path
+## Run 3 — 풀 외곽 housing 풀파이프라인 (decimate + fill 후, e831979 fix 적용 후)
 
-1. **Mesh decimation 의무화** — 5k face 이하로 자동 줄여서 extract_feature_catalog 부담 ↓
-2. **inspect_wall_thickness catalog 경로 fix** — `pathlib.Path(__file__).parents[N]` 으로 resolve
-3. **shell-aware inspect_geometry** — shell 의 face 도 enumerate (현재 solid 가정)
-4. **open-shell heal v2** — fill_holes 같이 의도된 cutout 만 채우고 나머지는 두기
-5. **Round-trip on back_cover** — symmetry-aware re-generate 가능한가?
+| Stage | Result |
+|---|---|
+| Decimation 90,687 → 4,123 (cluster fallback) | mesh_decimate skill 의 body_present post-cond 버그로 fallback 동작 |
+| `mesh_to_brep` | 4,123 tri → shell, open_edges=12,095 |
+| `fill_small_holes` (max_perimeter=80mm) | found=3,974 boundaries, **filled=194**, skipped_big=0 |
+| `inspect_geometry` | face_count=**4,306**, edge_count=12,240, bbox **8.2×71.1×146.7mm** |
+| `detect_mirror_symmetry` | X=0.376 / Z=0.296 / Y=0.280 (내부 components 가 대칭 깨뜨림) |
+| **`extract_feature_catalog` 정상 동작 ✓** | **bosses=315, ribs=365, patterns=20, symmetries=6**, holes=0, pockets=0 |
+| STEP export | 20.7 MB clean |
+| volume_mm3 | **-71** (shell orientation issue, not a solid) |
+
+이번이 **풀파이프라인 첫 완주** — `e831979` 의 4개 fix 가 실제로 작동한 결과:
+- Fix 1 (face_count guard ≤5000) 덕분에 extract_feature_catalog 가 hang 없이 완주
+- Fix 3 (shell-aware face count) 덕분에 4,306 face 가 제대로 카운트됨
+- Fix 4 (fill_small_holes) 가 194개의 작은 boundary 를 채움
+- Fix 2 (catalog path) 는 wall_thickness 호출에만 영향, 이번엔 미사용
+
+## 다음 보강 path (Run 3 에서 노출됨)
+
+1. **`mesh_decimate` body_present 버그** — io 카테고리 skill 이 body input=None 일 때 post_cond 실패. `allow_no_change` 옵션 또는 io skill 들의 post_cond 재검토 필요
+2. **`fast_simplification` 설치** — cluster decimation 이 3,780개의 boundary fragment 를 만듦; quadric 이면 훨씬 깨끗
+3. **shell-tolerant hole/pocket detector** — open shell 에서도 boundary loops 로 hole 추론. 현재는 closed solid 가정
+4. **face orientation 통일** — shell 의 face orientation 반전 섞이면 volume 이 음수가 됨. ShapeFix_Shell 적용 후 retry
+5. **interior-component 제거 옵션** — 외곽만 분석하려면 inside_body / motherboard mesh 제외. 또는 `back_cover` 처럼 단일 외곽 sub-mesh 선택
+6. **shell-aware inspect_wall_thickness** — 현재는 ray-march 가 solid 가정. shell 에서도 거리 측정 가능하게
