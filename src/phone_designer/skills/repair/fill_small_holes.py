@@ -91,6 +91,13 @@ class FillSmallHoles(SkillBase):
                         "glass) > 100 mm.",
         )
         max_holes_to_fill: int = Field(default=200, ge=1, le=10000)
+        sewing_tolerance_mm: float = Field(
+            default=0.5, gt=0,
+            description="Sewing tolerance. Must be ≥ the tolerance used when "
+                        "the input shell was built (mesh_to_brep default ~0.5). "
+                        "Tighter tolerances will drop faces from the input "
+                        "during re-sewing — DO NOT use 1e-3 on a 100mm part.",
+        )
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
         from OCP.BRepBuilderAPI import (
@@ -123,11 +130,26 @@ class FillSmallHoles(SkillBase):
         skipped_too_big = 0
         filled_perimeters: list[float] = []
 
-        # 2. Try to build a planar face on each small-perimeter loop.
-        sewing = BRepBuilderAPI_Sewing(1e-3)  # 1um tolerance
-        # Add original shape first
-        sewing.Add(shape)
+        # Short-circuit: nothing to do. Re-sewing a closed solid with no new
+        # patches CAN corrupt its topology — even at matched tolerance the
+        # sewer rebuilds connectivity from scratch and may drop small faces.
+        # Return the body untouched and report 0 changes.
+        if total_found == 0:
+            return SkillResult(
+                body=body,
+                history=EntityHistoryMap(),
+                extras={"fill_small_holes": {
+                    "open_boundaries_found": 0,
+                    "filled": 0,
+                    "skipped_too_big": 0,
+                    "filled_perimeters_mm": [],
+                    "note": "shell already closed — no resewing performed.",
+                }},
+            )
 
+        # 2. Build patch faces for small-perimeter loops first; only re-sew if
+        # at least one patch was actually built.
+        patch_faces = []
         for w in wires[: args.max_holes_to_fill]:
             try:
                 peri = _wire_perimeter_mm(w)
@@ -141,13 +163,32 @@ class FillSmallHoles(SkillBase):
             try:
                 mf = BRepBuilderAPI_MakeFace(w, True)  # OnlyPlane=True
                 if mf.IsDone():
-                    sewing.Add(mf.Face())
+                    patch_faces.append(mf.Face())
                     filled_count += 1
                     filled_perimeters.append(round(peri, 3))
             except Exception:
                 # Wire not planar — leave it alone
                 continue
 
+        if not patch_faces:
+            # All boundaries were too large — don't touch the body.
+            return SkillResult(
+                body=body,
+                history=EntityHistoryMap(),
+                extras={"fill_small_holes": {
+                    "open_boundaries_found": total_found,
+                    "filled": 0,
+                    "skipped_too_big": skipped_too_big,
+                    "filled_perimeters_mm": [],
+                }},
+            )
+
+        # 3. Re-sew with tolerance matching the original (default 0.5 mm).
+        # Tighter tolerances will drop faces from the input during re-sewing.
+        sewing = BRepBuilderAPI_Sewing(float(args.sewing_tolerance_mm))
+        sewing.Add(shape)
+        for f in patch_faces:
+            sewing.Add(f)
         sewing.Perform()
         new_shape = sewing.SewedShape()
 

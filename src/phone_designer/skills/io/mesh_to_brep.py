@@ -294,28 +294,51 @@ class MeshToBrep(SkillBase):
         is_solid = False
         is_shell = False
         is_closed = False
+        shell_count = 0
+        closed_shell_count = 0
 
         # --- Closure check + solid lift ------------------------------------
+        # If the sewer produced multiple disjoint shells (e.g. a multi-
+        # component teardown mesh), iterate all of them. Keep result_shape
+        # as the full sewn Compound; only collapse to a single Solid when
+        # there's exactly ONE closed shell — otherwise the extra shells get
+        # silently dropped, which was the iPhone-pipeline bug.
         if args.try_make_solid:
             try:
+                shells: list = []
                 exp = TopExp_Explorer(sewn, TopAbs_SHELL)
-                if exp.More():
-                    shell = TopoDS.Shell_s(exp.Current())
-                    is_shell = True
-                    # Ask BRepCheck whether this shell is watertight.
+                while exp.More():
+                    shells.append(TopoDS.Shell_s(exp.Current()))
+                    exp.Next()
+                shell_count = len(shells)
+                is_shell = shell_count > 0
+
+                closed_shells: list = []
+                for shl in shells:
                     try:
-                        checker = BRepCheck_Shell(shell)
+                        checker = BRepCheck_Shell(shl)
                         status = checker.Closed()
-                        is_closed = (status == BRepCheck_Status.BRepCheck_NoError)
+                        if status == BRepCheck_Status.BRepCheck_NoError:
+                            closed_shells.append(shl)
                     except Exception:
-                        is_closed = False
-                    if is_closed:
-                        solid_maker = BRepBuilderAPI_MakeSolid(shell)
-                        if solid_maker.IsDone():
-                            candidate = solid_maker.Solid()
-                            if candidate is not None and not candidate.IsNull():
-                                result_shape = candidate
-                                is_solid = True
+                        continue
+                closed_shell_count = len(closed_shells)
+                is_closed = closed_shell_count > 0 and (
+                    closed_shell_count == shell_count
+                )
+
+                if shell_count == 1 and closed_shell_count == 1:
+                    # Pure single-solid case — collapse for downstream skills
+                    # that expect a TopoDS_Solid.
+                    solid_maker = BRepBuilderAPI_MakeSolid(closed_shells[0])
+                    if solid_maker.IsDone():
+                        candidate = solid_maker.Solid()
+                        if candidate is not None and not candidate.IsNull():
+                            result_shape = candidate
+                            is_solid = True
+                # Multiple shells (closed or not) → keep sewn Compound as
+                # result_shape so callers can iterate ALL shells. Reporting
+                # shell_count / closed_shell_count in extras lets them tell.
             except Exception:
                 # fall back to whatever sewer produced
                 pass
@@ -345,6 +368,8 @@ class MeshToBrep(SkillBase):
                 "mesh_to_brep": {
                     "closed": bool(is_closed),
                     "open_edges": int(open_edges),
+                    "shell_count": int(shell_count),
+                    "closed_shell_count": int(closed_shell_count),
                     "scale_applied": float(scale_applied),
                     "input_diag_mm": float(diag),
                     "chunk_size": int(chunk),
