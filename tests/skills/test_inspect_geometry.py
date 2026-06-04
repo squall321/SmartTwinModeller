@@ -59,15 +59,20 @@ def test_inspect_disc_has_cylinder_surface_type():
 
 
 def test_inspect_bbox_only_skips_face_list():
+    """bbox_only=True now counts faces/edges (cheap) but skips per-face
+    attributes (expensive). This was the shell-aware fix — earlier code
+    returned 0/0 even on a closed solid, which masked real bugs on
+    mesh→BREP shells."""
     box = Box().apply(None, {"length_mm": 10, "width_mm": 10, "height_mm": 10}).body
     r = InspectGeometry().apply(box, {"bbox_only": True})
     rep = r.extras["inspection_report"]
 
-    assert rep["face_count"] == 0
-    assert rep["edge_count"] == 0
-    assert rep["faces"] == []
+    assert rep["face_count"] == 6
+    assert rep["edge_count"] == 12
+    assert rep["faces"] == []  # per-face attribute list still skipped
     assert "bbox" in rep
     assert "volume_mm3" in rep
+    assert rep["body_kind"] == "solid"
 
 
 def test_inspect_max_entities_caps_face_list():

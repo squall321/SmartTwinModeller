@@ -87,14 +87,16 @@ def _measure(body: Any) -> dict[str, float] | None:
     if shape is None:
         return None
 
-    # Volume via BRepGProp.VolumeProperties
+    # Volume via BRepGProp.VolumeProperties. Use abs() because shells with
+    # mixed face orientation can produce a negative integral — the magnitude
+    # is what post-condition deltas care about.
     volume = 0.0
     try:
         from OCP.BRepGProp import BRepGProp
         from OCP.GProp import GProp_GProps
         props = GProp_GProps()
         BRepGProp.VolumeProperties_s(shape, props)
-        volume = float(props.Mass())
+        volume = abs(float(props.Mass()))
     except Exception:
         volume = 0.0
 
@@ -142,6 +144,11 @@ def _check_one(
     """Evaluate a single PostCondition. Raises PostConditionError on failure."""
 
     if cond.kind == "body_present":
+        # Pass-through io skills (mesh_decimate, stl_export, ...) accept a None
+        # body and return None: that's a valid path-in / path-out call, not a
+        # bug. Only flag when the caller HAD a body and the skill dropped it.
+        if post is None and pre is None:
+            return
         if post is None:
             raise PostConditionError(
                 f"{skill_name}: post_condition 'body_present' failed — "

@@ -140,14 +140,29 @@ def _build_report(
 
     shape = body.wrapped if hasattr(body, "wrapped") else body
 
-    # Volume
+    # Volume — open shells with mixed face orientation produce a negative
+    # integral. For solids the sign tells you nothing the user cares about,
+    # so report the magnitude. Flag the body kind so callers know whether the
+    # volume is "true" (closed solid) or "shell magnitude" (open shell).
+    from OCP.TopAbs import TopAbs_SOLID, TopAbs_SHELL
+    from OCP.TopExp import TopExp_Explorer
+
+    body_kind = "other"
+    if TopExp_Explorer(shape, TopAbs_SOLID).More():
+        body_kind = "solid"
+    elif TopExp_Explorer(shape, TopAbs_SHELL).More():
+        body_kind = "shell"
+
     volume = 0.0
+    raw_volume = 0.0
     try:
         props = GProp_GProps()
         BRepGProp.VolumeProperties_s(shape, props)
-        volume = float(props.Mass())
+        raw_volume = float(props.Mass())
+        volume = abs(raw_volume)
     except Exception:
         volume = 0.0
+        raw_volume = 0.0
 
     # Bbox
     (mn, mx) = _bbox(shape)
@@ -156,6 +171,8 @@ def _build_report(
 
     report: dict[str, Any] = {
         "volume_mm3": round(volume, 4),
+        "raw_volume_mm3": round(raw_volume, 4),  # signed; negative ⇒ shell flip
+        "body_kind": body_kind,
         "bbox": {
             "min": [round(c, 4) for c in mn],
             "max": [round(c, 4) for c in mx],
