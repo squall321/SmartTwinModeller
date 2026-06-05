@@ -93,27 +93,92 @@ class MeshDecimate(SkillBase):
         method_used = args.method
         decimated = None
         warn: str | None = None
+        # accumulators populated by the various passes for the extras report
+        quadric_passes: int = 0
+        cluster_iters: int = 0
+        cluster_pitch_used: float | None = None
 
-        if args.method == "quadric":
-            simplifier = getattr(mesh, "simplify_quadric_decimation", None)
-            if simplifier is None:
-                # method name differs across trimesh versions — try the
-                # older spelling once.
-                simplifier = getattr(mesh, "simplify_quadratic_decimation", None)
-            if simplifier is not None:
+        # ───── helpers ──────────────────────────────────────────────────────
+        def _run_quadric(src_mesh, face_target):
+            """Single quadric pass on ``src_mesh``; returns (out_mesh|None, warn|None)."""
+            simp = getattr(src_mesh, "simplify_quadric_decimation", None)
+            if simp is None:
+                simp = getattr(src_mesh, "simplify_quadratic_decimation", None)
+            if simp is None:
+                return None, ("simplify_quadric_decimation unavailable "
+                              "(install `fast-simplification`)")
+            try:
+                return simp(face_count=face_target), None
+            except TypeError:
                 try:
-                    decimated = simplifier(face_count=target)
-                except TypeError:
-                    # very old API expected a positional arg
-                    try:
-                        decimated = simplifier(target)
-                    except Exception as e:
-                        warn = f"quadric simplify raised: {e}"
-                        decimated = None
+                    return simp(face_target), None
                 except Exception as e:
-                    warn = f"quadric simplify raised: {e}"
+                    return None, f"quadric simplify raised: {e}"
+            except Exception as e:
+                return None, f"quadric simplify raised: {e}"
+
+        def _cluster_pass(src_mesh, pitch):
+            """Snap+remap vertex-cluster decimation at the given pitch."""
+            verts = np.asarray(src_mesh.vertices, dtype=float)
+            faces_arr = np.asarray(src_mesh.faces, dtype=np.int64)
+            keys = np.floor(verts / pitch).astype(np.int64)
+            _, inverse, counts = np.unique(
+                keys, axis=0, return_inverse=True, return_counts=True,
+            )
+            n_clusters = int(counts.shape[0])
+            centroids = np.zeros((n_clusters, 3), dtype=float)
+            np.add.at(centroids, inverse, verts)
+            centroids /= counts[:, None]
+            new_faces = inverse[faces_arr]
+            ok = (
+                (new_faces[:, 0] != new_faces[:, 1])
+                & (new_faces[:, 1] != new_faces[:, 2])
+                & (new_faces[:, 0] != new_faces[:, 2])
+            )
+            new_faces = new_faces[ok]
+            sorted_faces = np.sort(new_faces, axis=1)
+            _, unique_idx = np.unique(
+                sorted_faces, axis=0, return_index=True,
+            )
+            new_faces = new_faces[np.sort(unique_idx)]
+            return trimesh.Trimesh(
+                vertices=centroids, faces=new_faces, process=False,
+            )
+
+        # ───── method = quadric (with quadric_chain on overshoot) ──────────
+        if args.method == "quadric":
+            current = mesh
+            prev_count = n_in
+            for _ in range(3):  # at most 3 quadric passes in the chain
+                out, w = _run_quadric(current, target)
+                if out is None:
+                    warn = w
+                    break
+                quadric_passes += 1
+                decimated = out
+                n_cur = int(len(out.faces))
+                # If we are within 1.5× of target we're done.
+                if n_cur <= int(target * 1.5):
+                    break
+                # Plateau guard: if the pass didn't reduce the face count by
+                # at least 10%, the backend has hit its per-shell floor —
+                # additional passes won't help. Fall back to cluster.
+                if n_cur >= int(prev_count * 0.9):
+                    warn = (
+                        f"quadric plateaued at {n_cur} faces (target "
+                        f"{target}, prev {prev_count}); falling back to "
+                        f"cluster pitch-search to reach target"
+                    )
+                    method_used = "cluster"
+                    # Use the plateaued quadric output as the cluster input —
+                    # we already paid for the smoothing it produced.
+                    mesh = out
+                    n_in = n_cur
                     decimated = None
-            if decimated is None:
+                    break
+                prev_count = n_cur
+                current = out
+            if decimated is None and method_used == "quadric":
                 # Quadric unavailable → fall back to cluster, record reason.
                 method_used = "cluster"
                 if warn is None:
@@ -121,11 +186,8 @@ class MeshDecimate(SkillBase):
                             "(install `fast-simplification`); fell back to "
                             "vertex clustering")
 
+        # ───── method = cluster — binary search on pitch ───────────────────
         if method_used == "cluster" and decimated is None:
-            # Vertex clustering, implemented locally — trimesh ≥4 dropped the
-            # helper. Strategy: snap each vertex to a regular grid, remap
-            # triangles to the unique cluster id, drop degenerate / duplicate
-            # faces, and rebuild a Trimesh from the cluster centroids.
             try:
                 extents = np.asarray(mesh.extents, dtype=float)
                 diag = float(np.linalg.norm(extents))
@@ -134,39 +196,70 @@ class MeshDecimate(SkillBase):
             n_verts = max(1, int(len(mesh.vertices)))
             baseline = diag / max(1.0, n_verts ** (1.0 / 3.0))
             ratio = max(target / max(1, n_in), 1e-6)
-            pitch = max(baseline * (1.0 / ratio) ** 0.5, 1e-9)
+            pitch_seed = max(baseline * (1.0 / ratio) ** 0.5, 1e-9)
 
+            # Bracket: pitch_lo under-decimates (faces too many),
+            # pitch_hi over-decimates (faces too few). Start from the seed
+            # and expand exponentially until we straddle the target.
             try:
-                verts = np.asarray(mesh.vertices, dtype=float)
-                faces = np.asarray(mesh.faces, dtype=np.int64)
-                keys = np.floor(verts / pitch).astype(np.int64)
-                # unique returns sorted unique rows + inverse-index map.
-                _, inverse, counts = np.unique(
-                    keys, axis=0, return_inverse=True, return_counts=True,
-                )
-                # cluster centroid = mean of original vertices in that bucket
-                n_clusters = int(counts.shape[0])
-                centroids = np.zeros((n_clusters, 3), dtype=float)
-                np.add.at(centroids, inverse, verts)
-                centroids /= counts[:, None]
+                pitch_lo: float | None = None
+                pitch_hi: float | None = None
+                best_mesh = None
+                best_err = float("inf")
 
-                new_faces = inverse[faces]
-                # drop triangles whose corners collapsed to <3 distinct ids
-                ok = (
-                    (new_faces[:, 0] != new_faces[:, 1])
-                    & (new_faces[:, 1] != new_faces[:, 2])
-                    & (new_faces[:, 0] != new_faces[:, 2])
-                )
-                new_faces = new_faces[ok]
-                # dedup by sorted-triple
-                sorted_faces = np.sort(new_faces, axis=1)
-                _, unique_idx = np.unique(
-                    sorted_faces, axis=0, return_index=True,
-                )
-                new_faces = new_faces[np.sort(unique_idx)]
-                decimated = trimesh.Trimesh(
-                    vertices=centroids, faces=new_faces, process=False,
-                )
+                pitch = pitch_seed
+                # Step 1: expand outward (≤8 expansions) to bracket the
+                # target. We must end with BOTH pitch_lo and pitch_hi set
+                # before step 2 can bisect — otherwise step 2 is skipped
+                # and we ship the seed result (often wildly off-target).
+                for _ in range(8):
+                    cluster_iters += 1
+                    cand = _cluster_pass(mesh, pitch)
+                    n_cand = int(len(cand.faces))
+                    err = abs(n_cand - target) / max(1, target)
+                    if err < best_err:
+                        best_err, best_mesh = err, cand
+                        cluster_pitch_used = pitch
+                    if err <= 0.15:
+                        # Already within tolerance — no need to bisect further.
+                        pitch_lo = pitch_hi = pitch
+                        break
+                    if n_cand >= target:
+                        pitch_lo = pitch
+                        if pitch_hi is not None:
+                            break
+                        pitch *= 2.0  # coarser bucket → fewer faces
+                    else:
+                        pitch_hi = pitch
+                        if pitch_lo is not None:
+                            break
+                        pitch *= 0.5  # finer bucket → more faces
+
+                # Step 2: bisect inside [pitch_lo, pitch_hi] until within ±15%.
+                if (
+                    pitch_lo is not None
+                    and pitch_hi is not None
+                    and pitch_lo != pitch_hi
+                ):
+                    for _ in range(8):
+                        cluster_iters += 1
+                        mid = 0.5 * (pitch_lo + pitch_hi)
+                        cand = _cluster_pass(mesh, mid)
+                        n_cand = int(len(cand.faces))
+                        err = abs(n_cand - target) / max(1, target)
+                        if err < best_err:
+                            best_err, best_mesh = err, cand
+                            cluster_pitch_used = mid
+                        if err <= 0.15:
+                            break
+                        if n_cand >= target:
+                            pitch_lo = mid
+                        else:
+                            pitch_hi = mid
+
+                decimated = best_mesh if best_mesh is not None else _cluster_pass(mesh, pitch_seed)
+                if cluster_pitch_used is None:
+                    cluster_pitch_used = pitch_seed
             except Exception as e:
                 raise RuntimeError(
                     f"mesh_decimate: cluster fallback failed: {e}",
@@ -213,6 +306,9 @@ class MeshDecimate(SkillBase):
                     "vertices_in": int(len(mesh.vertices)),
                     "vertices_out": int(len(decimated.vertices)),
                     "warning": warn,
+                    "quadric_passes": int(quadric_passes),
+                    "cluster_iterations": int(cluster_iters),
+                    "cluster_pitch_used": cluster_pitch_used,
                 },
             },
         )

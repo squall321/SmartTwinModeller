@@ -116,3 +116,47 @@ respects the target tightly. The macro cap is plenty of headroom; the bottleneck
 is the decimator's target-overshoot, not `extract_feature_catalog`.
 
 Script: `run_logs/_tmp/iphone_8k_demo.py`.
+
+## 8k recovery v2 (2026-06-06)
+
+Fixed `mesh_decimate` to actually respect `target_face_count`. Two changes:
+
+1. **Cluster pitch bisection** — replaced the single-pass `pitch = baseline * (1/ratio)**0.5` heuristic with a two-stage search:
+   - Step 1: expand outward from the seed pitch (×2 / ×0.5) up to 8 iterations until both an under-decimated (`pitch_lo`) and over-decimated (`pitch_hi`) candidate are bracketed (or one falls within ±15% of target on its own).
+   - Step 2: bisect inside `[pitch_lo, pitch_hi]` for up to 8 more iterations, stopping early when face count is within ±15% of `target_face_count`.
+   - Always returns the best-error candidate observed across steps 1 and 2, so a partial bracket never ships the (wildly off-target) seed.
+2. **Quadric chain + plateau guard** — when `method='quadric'` and the first pass overshoots target by >1.5×, the output is fed back into `simplify_quadric_decimation` for up to 3 total passes. If a pass fails to reduce by ≥10% (`fast-simplification` hits its per-shell floor), the partially-decimated mesh is handed to the cluster bisection path so we still reach target.
+
+`extras["mesh_decimate"]` now carries `quadric_passes`, `cluster_iterations`, and `cluster_pitch_used` for diagnostics.
+
+### Decimation results on the 90,687-face iPhone housing
+
+| method (target 8000 ± 1200) | input | output | passes / iters | within tolerance |
+|---|---:|---:|---|:---:|
+| `quadric` (with chain + cluster fallback) | 90,687 | **7,002** | quadric=3 → plateau at 14,224 → cluster_iters=7 | yes |
+| `cluster` (pure binary-search) | 90,687 | **7,513** | iters=6 (pitch=1.42) | yes |
+
+vs v1 baseline which produced 349 faces (cluster heuristic ignored the explicit target).
+
+### Feature catalog delta on the 7,002-face output
+
+`extract_feature_catalog` (max_face_count=8000) ran in 46.6 s wall-clock against the 7,043-face BREP:
+
+| feature | 132-face (v0) | 350-face (v1) | **7,043-face (v2)** | Δ vs v0 |
+|---|---:|---:|---:|---:|
+| pockets | 2 | 3 | **15** | +13 |
+| holes | 0 | 0 | 0 | 0 |
+| bosses | 0 | 2 | **1** | +1 |
+| ribs | 0 | 0 | **1** | +1 |
+| lugs | 0 | 0 | 0 | 0 |
+| patterns | 0 | 0 | 0 | 0 |
+| symmetries | 6 | 6 | 6 | 0 |
+| sweep/loft/revolve | 0/0/0 | 0/0/0 | 0/0/0 | 0 |
+
+Meets the rule `holes>0 OR bosses>2 OR ribs>0` via ribs>0 (and the pocket count tripled vs the 350-face baseline). `mesh_to_brep` produced 52 shells (18 closed); `fill_small_holes` patched 49 of 98 open boundaries. `base_thickness_mm=0.06` still gets floored to `bbox_h/10` downstream.
+
+### Tests
+
+`tests/skills/test_mesh_ops.py`: **12 passed** in 4.36 s — the new branches preserve the existing mesh_simplify / mesh_to_brep / mesh_quality contracts.
+
+Script: `run_logs/_tmp/iphone_8k_v2.py`. Summary JSON: `run_logs/_tmp/iphone_8k_v2_summary.json`.
