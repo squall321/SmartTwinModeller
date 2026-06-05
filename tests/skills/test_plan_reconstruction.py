@@ -156,6 +156,91 @@ def test_plan_from_feature_catalog_step_roundtrip():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# base_step_kind variants
+
+
+def test_plan_base_step_kind_box_default():
+    """Default base_step_kind="box" emits a parametric box s_base step
+    sized from the body bbox."""
+    body = _box_with_holes()
+    cat = ExtractFeatureCatalog().apply(body, {}).extras["feature_catalog"]
+    plan = PlanFromFeatureCatalog().apply(
+        body, {"catalog": cat, "base_step_kind": "box"},
+    ).extras["generated_plan"]
+
+    steps = plan["steps"]
+    assert steps[0]["id"] == "s_base"
+    assert steps[0]["skill"] == "box"
+    # bbox-sized: roughly 50×50×10 for our test body
+    args = steps[0]["args"]
+    assert {"length_mm", "width_mm", "height_mm"} <= set(args.keys())
+    assert args["length_mm"] > 0.0
+    assert args["width_mm"] > 0.0
+    assert args["height_mm"] > 0.0
+
+
+def test_plan_base_step_kind_import_step_writes_step_and_emits_import():
+    """base_step_kind="import_step" writes the body to a STEP file under
+    run_logs/_tmp/ and emits an import_step s_base step pointing at it."""
+    body = _box_with_holes()
+    cat = ExtractFeatureCatalog().apply(body, {}).extras["feature_catalog"]
+    plan = PlanFromFeatureCatalog().apply(
+        body, {"catalog": cat, "base_step_kind": "import_step"},
+    ).extras["generated_plan"]
+
+    steps = plan["steps"]
+    assert steps[0]["id"] == "s_base"
+    # Either the import_step emission succeeded (preferred), or the writer
+    # silently fell back to a box (degradation path). Both are acceptable
+    # but the success path is the one we want to verify.
+    assert steps[0]["skill"] == "import_step"
+    args = steps[0]["args"]
+    assert "path" in args
+    step_path = pathlib.Path(args["path"])
+    assert step_path.exists(), f"STEP not written: {step_path}"
+    # File should live under run_logs/_tmp/ and be named after the plan.
+    assert "_tmp" in step_path.parts
+    assert step_path.name == "reconstructed_plan_base.step"
+    assert step_path.stat().st_size > 0
+
+
+def test_plan_base_step_kind_preserve_brep_skips_s_base():
+    """base_step_kind="preserve_brep" emits NO s_base step and records a
+    plan-level description noting the executor must supply initial_body."""
+    body = _box_with_holes()
+    cat = ExtractFeatureCatalog().apply(body, {}).extras["feature_catalog"]
+    plan = PlanFromFeatureCatalog().apply(
+        body, {"catalog": cat, "base_step_kind": "preserve_brep"},
+    ).extras["generated_plan"]
+
+    steps = plan["steps"]
+    # No step has id "s_base" or skill "box" / "import_step" as the first.
+    assert all(s["id"] != "s_base" for s in steps), (
+        f"preserve_brep should skip s_base, got: {[s['id'] for s in steps]}"
+    )
+    # Plan-level description warns about the initial_body requirement.
+    desc = plan.get("description") or ""
+    assert "preserve_brep" in desc
+    assert "initial_body" in desc
+
+
+def test_plan_executor_accepts_initial_body_kwarg():
+    """PlanExecutor.run(initial_body=...) seeds the execution with the
+    supplied body so preserve_brep plans can use the original BREP as
+    their starting point."""
+    from phone_designer.plan.executor import ExecutionMode, PlanExecutor
+    from phone_designer.plan.model import Plan
+
+    body = _box_with_holes()
+    # An empty plan — the executor's job is just to thread initial_body
+    # through to final_body when no steps run.
+    plan = Plan(plan_name="empty", steps=[])
+    res = PlanExecutor(plan, mode=ExecutionMode.STRICT).run(initial_body=body)
+    assert res.final_body is body
+    assert res.error_count == 0
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Spec sanity
 
 

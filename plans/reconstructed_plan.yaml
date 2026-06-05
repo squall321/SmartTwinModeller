@@ -1,33 +1,64 @@
 schema_version: 1
 plan_name: reconstructed_plan
 steps:
-- id: s_base
-  skill: box
-  args:
-    length_mm: 7.136221608844023
-    width_mm: 70.10924214103423
-    height_mm: 143.3231857034828
 - id: s_pocket_0
-  skill: extrude_pocket
+  skill: hole
+  args:
+    position:
+    - -15.0
+    - -15.0
+    - 4.0
+    diameter_mm: 4.0
+    depth_mm: 6.0
+    direction: +Z
+- id: s_pocket_1
+  skill: hole
+  args:
+    position:
+    - 15.0
+    - -15.0
+    - 4.0
+    diameter_mm: 4.0
+    depth_mm: 6.0
+    direction: +Z
+- id: s_pocket_2
+  skill: hole
+  args:
+    position:
+    - 0.0
+    - 15.0
+    - 4.0
+    diameter_mm: 4.0
+    depth_mm: 6.0
+    direction: +Z
+- id: s_mirror_feature_0
+  skill: mirror_feature
   args:
     face_selector: &id001
       kind: face_named
-      name: bottom
-    sketch:
-      kind: rectangle
-      length_mm: 60.8501
-      width_mm: 60.8501
-      center_x_mm: -3.3631
-      center_y_mm: -5.3695
-    depth_mm: 6.3555
-- id: s_pocket_1
-  skill: extrude_pocket
+      name: top
+    profile_diameter_mm: 4.0
+    operation: hole
+    feature_depth_mm: 6.0
+    count: 2
+    mirror_plane: YZ
+    mirror_origin:
+    - 0.0
+    - 0.0
+    - 5.003805
+    original_x_mm: -15.0
+    original_y_mm: -15.0
+- id: s_hole_2
+  skill: clearance_hole
   args:
     face_selector: *id001
-    sketch:
-      kind: rectangle
-      length_mm: 36.81
-      width_mm: 36.81
-      center_x_mm: 0.7621
-      center_y_mm: 9.5965
-    depth_mm: 0.7108
+    position_xy:
+    - 0.0
+    - 15.0
+    thread_spec: M4
+    fit: medium
+    depth_mm: 6.0
+description: 'base_step_kind=preserve_brep — this plan omits s_base. The executor
+  must be invoked with PlanExecutor.run(initial_body=...) so the original outer BREP
+  surface is preserved. | symmetry-deduplicated: 1 feature pairs collapsed into mirror_feature
+  steps'

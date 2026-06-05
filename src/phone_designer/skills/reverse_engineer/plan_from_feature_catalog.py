@@ -24,7 +24,7 @@ into ``extras["generated_plan"]``.
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -834,6 +834,250 @@ def _linear_pattern_step(
     })
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Symmetry-aware mirror_feature emission
+#
+# The mirror_feature skill (modify_pattern/mirror_feature.py) takes a circular
+# feature template (profile_diameter_mm + operation in {pocket,hole,boss}) and
+# reflects it across an axis-aligned world plane (XZ | YZ | XY). To collapse
+# a pair of catalog holes into one mirror_feature step we need:
+#
+#   1. A mirror plane from catalog['symmetries'] with symmetry_score >= 0.7 AND
+#      a plane_normal close to a cardinal world axis (so it maps to one of the
+#      Literal["XZ","YZ","XY"] options the skill accepts).
+#   2. Two holes whose axis_origin XY positions reflect across that plane
+#      (within tol), with matching diameter and depth.
+#
+# Holes that lie ON the mirror plane (self-symmetric) are left alone -- a
+# mirror_feature with coincident original + reflection produces two stacked
+# features at the same point.
+
+_SYMMETRY_MIN_SCORE = 0.7
+_AXIS_ALIGN_COS = 0.95   # |dot(normal, axis)| above this snaps the plane
+_PAIR_XY_TOL = 0.5       # mm: reflection match tolerance in XY
+_PAIR_Z_TOL = 0.5        # mm: same Z plane (both holes on the same face)
+_PAIR_DIAM_TOL = 0.2     # mm
+_PAIR_DEPTH_TOL = 0.5    # mm
+
+
+def _snap_plane_to_axis_label(plane_normal) -> str | None:
+    """Return 'YZ' / 'XZ' / 'XY' if ``plane_normal`` is close to ±X / ±Y / ±Z.
+
+    The mirror_feature skill names planes by the axis NEGATED by the mirror --
+    so a plane whose normal is the X axis is the YZ plane. None when the
+    normal is diagonal (no cardinal axis is dominant).
+    """
+    try:
+        nx, ny, nz = (
+            float(plane_normal[0]),
+            float(plane_normal[1]),
+            float(plane_normal[2]),
+        )
+    except Exception:
+        return None
+    import math as _math
+    nm = _math.sqrt(nx * nx + ny * ny + nz * nz)
+    if nm < 1e-9:
+        return None
+    nx, ny, nz = nx / nm, ny / nm, nz / nm
+    ax, ay, az = abs(nx), abs(ny), abs(nz)
+    if ax >= _AXIS_ALIGN_COS:
+        return "YZ"
+    if ay >= _AXIS_ALIGN_COS:
+        return "XZ"
+    if az >= _AXIS_ALIGN_COS:
+        return "XY"
+    return None
+
+
+def _select_mirror_plane(symmetries: list) -> dict | None:
+    """Pick the highest-scoring axis-aligned mirror plane meeting the score
+    floor. Returns ``{label, origin, normal, score}`` or None.
+
+    Skips XY (horizontal) planes — for holes on a slab's top/bottom face the
+    reflection lands at the same XY position, producing a degenerate two-
+    feature step that adds no value over a single hole.
+
+    NOTE: When several qualifying planes exist, ``_qualifying_mirror_planes``
+    enumerates ALL of them so the caller can score each by how many feature
+    pairs it actually produces. This helper is kept for callers that just
+    want the best score (used in unit tests).
+    """
+    best: dict | None = None
+    for plane in _qualifying_mirror_planes(symmetries):
+        if best is None or plane["score"] > best["score"]:
+            best = plane
+    return best
+
+
+def _qualifying_mirror_planes(symmetries: list) -> list[dict]:
+    """All axis-aligned mirror planes with score >= floor, descending score.
+
+    Skips XY planes (no effect on XY position of holes on a horizontal face).
+    """
+    out: list[dict] = []
+    for sym in symmetries or []:
+        if not isinstance(sym, dict):
+            continue
+        score = float(sym.get("symmetry_score") or 0.0)
+        if score < _SYMMETRY_MIN_SCORE:
+            continue
+        label = _snap_plane_to_axis_label(sym.get("plane_normal"))
+        if label is None or label == "XY":
+            continue
+        origin = sym.get("plane_origin") or (0.0, 0.0, 0.0)
+        normal = sym.get("plane_normal") or (1.0, 0.0, 0.0)
+        out.append({
+            "label": label,
+            "origin": tuple(float(c) for c in origin),
+            "normal": tuple(float(c) for c in normal),
+            "score": score,
+        })
+    out.sort(key=lambda p: -p["score"])
+    return out
+
+
+def _reflect_xy_across_plane(
+    x: float, y: float, plane_label: str, plane_origin: tuple,
+) -> tuple[float, float]:
+    """Reflect the (x, y) point across an axis-aligned mirror plane."""
+    mox, moy = float(plane_origin[0]), float(plane_origin[1])
+    if plane_label == "YZ":
+        return (2.0 * mox - x, y)
+    if plane_label == "XZ":
+        return (x, 2.0 * moy - y)
+    # XY plane reflects Z -- XY positions unchanged.
+    return (x, y)
+
+
+def _hole_signature_key(hole: dict) -> tuple[float, float]:
+    """Diameter + depth pair used to match mirrored holes."""
+    diams = hole.get("diameters_mm") or [0.0]
+    d = float(min(diams)) if diams else 0.0
+    depth = float(hole.get("depth_mm") or 0.0)
+    return (d, depth)
+
+
+def _find_mirrored_hole_pairs(
+    holes: list, plane: dict,
+) -> list[tuple[int, int]]:
+    """Return list of (i, j) index pairs of holes that mirror each other
+    across ``plane``. Each hole is matched at most once. Holes lying on the
+    plane (self-symmetric) are skipped.
+    """
+    if not plane or not holes:
+        return []
+    label = plane["label"]
+    origin = plane["origin"]
+    pairs: list[tuple[int, int]] = []
+    used: set[int] = set()
+
+    centers: list[tuple[float, float, float] | None] = []
+    sigs: list[tuple[float, float]] = []
+    for h in holes:
+        ao = h.get("axis_origin")
+        if ao is None:
+            centers.append(None)
+        else:
+            try:
+                centers.append((float(ao[0]), float(ao[1]), float(ao[2])))
+            except Exception:
+                centers.append(None)
+        sigs.append(_hole_signature_key(h))
+
+    for i in range(len(holes)):
+        if i in used:
+            continue
+        ci = centers[i]
+        if ci is None:
+            continue
+        rx, ry = _reflect_xy_across_plane(ci[0], ci[1], label, origin)
+        # Self-symmetric hole (on the mirror plane) -- skip.
+        if abs(rx - ci[0]) < _PAIR_XY_TOL and abs(ry - ci[1]) < _PAIR_XY_TOL:
+            continue
+        for j in range(i + 1, len(holes)):
+            if j in used:
+                continue
+            cj = centers[j]
+            if cj is None:
+                continue
+            if abs(cj[0] - rx) > _PAIR_XY_TOL:
+                continue
+            if abs(cj[1] - ry) > _PAIR_XY_TOL:
+                continue
+            if abs(cj[2] - ci[2]) > _PAIR_Z_TOL:
+                continue
+            di, depi = sigs[i]
+            dj, depj = sigs[j]
+            if abs(di - dj) > _PAIR_DIAM_TOL:
+                continue
+            if abs(depi - depj) > _PAIR_DEPTH_TOL:
+                continue
+            pairs.append((i, j))
+            used.add(i)
+            used.add(j)
+            break
+    return pairs
+
+
+def _mirror_feature_step(
+    idx: int,
+    hole: dict,
+    plane: dict,
+    bbox: tuple[float, float, float, float, float, float] | None,
+) -> dict | None:
+    """Emit a ``mirror_feature`` step for ``hole`` mirrored across ``plane``.
+
+    Returns None when the registered skill's args cannot be satisfied (e.g.
+    missing diameter/depth, or values out of the pydantic gt/le bounds).
+    """
+    diams = hole.get("diameters_mm") or []
+    if not diams:
+        return None
+    profile_d = float(min(diams))
+    if profile_d <= 0.0 or profile_d > 100.0:
+        return None
+    depth = float(hole.get("depth_mm") or 0.0)
+    if depth <= 0.0 or depth > 200.0:
+        return None
+
+    origin = hole.get("axis_origin") or [0.0, 0.0, 0.0]
+    axis_dir = hole.get("axis_dir") or [0.0, 0.0, -1.0]
+    face_sel = _pick_face_selector(origin, axis_dir, bbox)
+
+    # mirror_feature uses face-local XY: at runtime the skill resolves the
+    # target face, computes its centroid (fcx, fcy, fcz), and converts our
+    # original_x_mm / original_y_mm by ADDING the face centroid. We invert
+    # that here by subtracting the bbox-XY centre (a good approximation of
+    # the top/bottom face centroid for a slab) so the world XY of the
+    # original feature matches the catalog hole's axis_origin.
+    if bbox is not None:
+        face_cx = (float(bbox[0]) + float(bbox[3])) * 0.5
+        face_cy = (float(bbox[1]) + float(bbox[4])) * 0.5
+    else:
+        face_cx = 0.0
+        face_cy = 0.0
+    original_x = float(origin[0]) - face_cx
+    original_y = float(origin[1]) - face_cy
+
+    sid = f"s_mirror_feature_{idx}"
+    return _new_step(sid, "mirror_feature", {
+        "face_selector": face_sel,
+        "profile_diameter_mm": profile_d,
+        "operation": "hole",
+        "feature_depth_mm": depth,
+        "count": 2,
+        "mirror_plane": plane["label"],
+        "mirror_origin": [
+            float(plane["origin"][0]),
+            float(plane["origin"][1]),
+            float(plane["origin"][2]),
+        ],
+        "original_x_mm": original_x,
+        "original_y_mm": original_y,
+    })
+
+
 def _hole_xy_in_ring(
     hole: dict, ring: dict, radius_tol: float = 0.5
 ) -> bool:
@@ -874,13 +1118,51 @@ def _hole_xy_on_line(
 # Plan builder
 
 
-def _build_plan(catalog: dict, body: Any = None) -> dict:
+BaseStepKind = Literal["box", "import_step", "preserve_brep"]
+
+
+def _write_body_as_step(body: Any, plan_name: str) -> str | None:
+    """Write the input body to a STEP file under run_logs/_tmp/.
+
+    Returns the absolute path string on success, or None if the write
+    failed (e.g. body is None, OCCT export error, read-only filesystem).
+    """
+    if body is None:
+        return None
+    try:
+        import pathlib
+
+        from OCP.IFSelect import IFSelect_RetDone
+        from OCP.STEPControl import STEPControl_AsIs, STEPControl_Writer
+
+        root = pathlib.Path(__file__).resolve().parents[4]
+        tmp_dir = root / "run_logs" / "_tmp"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        step_path = tmp_dir / f"{plan_name}_base.step"
+        shape = body.wrapped if hasattr(body, "wrapped") else body
+        writer = STEPControl_Writer()
+        writer.Transfer(shape, STEPControl_AsIs)
+        status = writer.Write(str(step_path))
+        if status != IFSelect_RetDone:
+            return None
+        return str(step_path)
+    except Exception:
+        return None
+
+
+def _build_plan(
+    catalog: dict,
+    body: Any = None,
+    base_step_kind: BaseStepKind = "box",
+    plan_name: str = "reconstructed_plan",
+) -> dict:
     holes = catalog.get("holes") or []
     pockets = catalog.get("pockets") or []
     bosses = catalog.get("bosses") or []
     ribs = catalog.get("ribs") or []
     lugs = catalog.get("lugs") or []
     patterns = catalog.get("patterns") or []
+    symmetries = catalog.get("symmetries") or []
     sweep_features = catalog.get("sweep_features") or []
     loft_features = catalog.get("loft_features") or []
     revolve_features = catalog.get("revolve_features") or []
@@ -925,13 +1207,52 @@ def _build_plan(catalog: dict, body: Any = None) -> dict:
         base_l, base_w, base_h = 50.0, 50.0, 10.0
 
     steps: list[dict] = []
+    plan_description: str | None = None
 
-    # 1. base shape placeholder ────────────────────────────────────────────
-    steps.append(_new_step("s_base", "box", {
-        "length_mm": base_l,
-        "width_mm": base_w,
-        "height_mm": base_h,
-    }))
+    # 1. base shape ────────────────────────────────────────────────────────
+    #    Three modes:
+    #      - "box"            : axis-aligned bbox-sized box (default; loses
+    #                           rounded corners and outer contour but stays
+    #                           fully parametric and self-contained).
+    #      - "import_step"    : write the original body to a STEP file under
+    #                           run_logs/_tmp/<plan_name>_base.step and emit
+    #                           an import_step step pointing to it. Preserves
+    #                           true outer geometry at the cost of being
+    #                           non-parametric.
+    #      - "preserve_brep"  : skip s_base entirely. The executor must
+    #                           receive the original body via the
+    #                           ``initial_body`` kwarg.
+    if base_step_kind == "import_step":
+        step_path = _write_body_as_step(body, plan_name)
+        if step_path is not None:
+            steps.append(_new_step("s_base", "import_step", {
+                "path": step_path,
+                "scale": 1.0,
+            }))
+        else:
+            # Fallback: write failed (no body, or OCCT export error) →
+            # degrade gracefully to the bbox box so the plan still runs.
+            steps.append(_new_step("s_base", "box", {
+                "length_mm": base_l,
+                "width_mm": base_w,
+                "height_mm": base_h,
+            }))
+    elif base_step_kind == "preserve_brep":
+        # No s_base step. Caller must supply ``initial_body`` to
+        # PlanExecutor.run() so the first non-base step receives the
+        # original BREP surface intact.
+        plan_description = (
+            "base_step_kind=preserve_brep — this plan omits s_base. The "
+            "executor must be invoked with PlanExecutor.run(initial_body=...) "
+            "so the original outer BREP surface is preserved."
+        )
+    else:
+        # Default backward-compatible behaviour.
+        steps.append(_new_step("s_base", "box", {
+            "length_mm": base_l,
+            "width_mm": base_w,
+            "height_mm": base_h,
+        }))
 
     # 2. Pockets, largest top_d first ──────────────────────────────────────
     #    Skip pockets whose axis is diagonal — those are detector artefacts
@@ -1120,6 +1441,62 @@ def _build_plan(catalog: dict, body: Any = None) -> dict:
                             handled_hole_ids.add(hid)
                         handled_holes_geom.append(h)
 
+    # 6b. Symmetry-aware mirror_feature collapse ──────────────────────────
+    #     For each high-confidence axis-aligned mirror plane in the catalog,
+    #     find pairs of leftover (not-yet-handled) holes that reflect across
+    #     the plane and emit one mirror_feature step per pair instead of two
+    #     hole steps. mirror_feature only supports circular features with a
+    #     YZ/XZ/XY plane name, so diagonal planes and non-hole features are
+    #     skipped (per the task spec: "skip emission rather than emit broken
+    #     steps").
+    #
+    #     A body can have multiple high-score mirror planes (e.g. a centred
+    #     box is symmetric about BOTH YZ and XZ). The right plane for a
+    #     specific feature pair is the one that actually maps one hole onto
+    #     the other -- which the score alone cannot tell us. So we enumerate
+    #     all qualifying planes and pick the one that produces the most
+    #     pairs. Ties break on score (highest first).
+    mirror_pair_count = 0
+    unhandled_holes: list[dict] = []
+    for h in holes:
+        hid = h.get("id")
+        if hid is not None and hid in handled_hole_ids:
+            continue
+        if any(h is hh for hh in handled_holes_geom):
+            continue
+        unhandled_holes.append(h)
+
+    best_plane: dict | None = None
+    best_pairs: list[tuple[int, int]] = []
+    for plane in _qualifying_mirror_planes(symmetries):
+        pairs_here = _find_mirrored_hole_pairs(unhandled_holes, plane)
+        if len(pairs_here) > len(best_pairs):
+            best_plane = plane
+            best_pairs = pairs_here
+
+    if best_plane is not None and best_pairs:
+        mirror_idx = 0
+        for local_i, local_j in best_pairs:
+            hole_i = unhandled_holes[local_i]
+            hole_j = unhandled_holes[local_j]
+            step = _mirror_feature_step(
+                mirror_idx, hole_i, best_plane, bbox=bbox,
+            )
+            if step is None:
+                # mirror_feature args couldn't be satisfied -- leave the pair
+                # alone so the per-hole loop emits two separate hole steps.
+                continue
+            steps.append(step)
+            mirror_idx += 1
+            mirror_pair_count += 1
+            # Mark BOTH holes of the pair as handled so the per-hole loop
+            # skips them.
+            for h in (hole_i, hole_j):
+                hid = h.get("id")
+                if hid is not None:
+                    handled_hole_ids.add(hid)
+                handled_holes_geom.append(h)
+
     # 7. Holes, largest diameter first ─────────────────────────────────────
     holes_sorted = sorted(
         holes,
@@ -1135,11 +1512,25 @@ def _build_plan(catalog: dict, body: Any = None) -> dict:
         sm = std_matches_by_hole.get(hid)
         steps.append(_hole_step(i, h, sm, bbox=bbox))
 
-    return {
+    plan: dict[str, Any] = {
         "schema_version": 1,
-        "plan_name": "reconstructed_plan",
+        "plan_name": plan_name,
         "steps": steps,
     }
+
+    # Compose the plan description from any base-step notes plus the
+    # symmetry-collapse summary (when at least one pair was emitted).
+    description_parts: list[str] = []
+    if plan_description is not None:
+        description_parts.append(plan_description)
+    if mirror_pair_count > 0:
+        description_parts.append(
+            f"symmetry-deduplicated: {mirror_pair_count} feature pairs "
+            f"collapsed into mirror_feature steps"
+        )
+    if description_parts:
+        plan["description"] = " | ".join(description_parts)
+    return plan
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1171,6 +1562,7 @@ class PlanFromFeatureCatalog(SkillBase):
 
     class Args(BaseModel):
         catalog: dict | None = None
+        base_step_kind: Literal["box", "import_step", "preserve_brep"] = "box"
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
         import pathlib
@@ -1191,7 +1583,11 @@ class PlanFromFeatureCatalog(SkillBase):
                 res = ExtractFeatureCatalog().apply(body, {})
                 catalog = res.extras.get("feature_catalog", {})
 
-        plan = _build_plan(catalog or {}, body=body)
+        plan = _build_plan(
+            catalog or {},
+            body=body,
+            base_step_kind=args.base_step_kind,
+        )
 
         # Cache for chained calls.
         PlanFromFeatureCatalog._LAST_CATALOG = catalog

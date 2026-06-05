@@ -58,6 +58,16 @@ from phone_designer.skills._spec import SkillBase, SkillResult
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Tunables
+#
+# MAX_FACES_BOSSES — face-count guard for detect_bosses (and indirectly
+# detect_ribs / detect_lugs which wrap it). The boss detector performs
+# per-base-plane candidate scans + spatial-hash overlap clustering and gets
+# expensive on dense meshes (~16k+ faces from imported CAD).
+MAX_FACES_BOSSES = 8000
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # OCCT helpers
 
 
@@ -494,6 +504,18 @@ class DetectBosses(SkillBase):
                 extras={"bosses": [], "boss_count": 0},
             )
 
+        # Face-count guard — skip on extremely dense meshes where the
+        # O(N) per-base-plane candidate scan + spatial cluster query become
+        # too slow to run interactively (e.g. 16k-face imported geometry).
+        if len(faces) > MAX_FACES_BOSSES:
+            return SkillResult(
+                body=body, history=EntityHistoryMap(),
+                extras={
+                    "bosses": [], "boss_count": 0,
+                    "skipped_reason": f"face_count {len(faces)} > {MAX_FACES_BOSSES}",
+                },
+            )
+
         # We try every reasonably-large axis-aligned planar face as a base
         # plane candidate. A boss is something that protrudes *outward*
         # from the body interior across that plane.
@@ -503,6 +525,15 @@ class DetectBosses(SkillBase):
                 body=body, history=EntityHistoryMap(),
                 extras={"bosses": [], "boss_count": 0},
             )
+
+        # Cache per-face bbox + projection once — _face_bbox calls into
+        # OCCT (BRepBndLib) which is expensive. We need to project a face
+        # bbox onto each of up to 6 base-plane axes, but the underlying
+        # 3D bbox only needs computing once.
+        face_bboxes: list[tuple[tuple[float, float, float],
+                                tuple[float, float, float]]] = [
+            _face_bbox(f) for f in faces
+        ]
 
         # face_set signature → boss dict (dedupes clusters detected on
         # multiple base planes).
@@ -519,11 +550,10 @@ class DetectBosses(SkillBase):
             margin = 0.05  # mm
             candidate_indices: list[int] = []
             candidate_proj: dict[int, tuple[float, float, float, float, float, float]] = {}
-            for i, f in enumerate(faces):
+            for i in range(len(faces)):
                 if i == base_idx:
                     continue
-                fb = _face_bbox(f)
-                proj = _project_bbox(fb, base_axis)
+                proj = _project_bbox(face_bboxes[i], base_axis)
                 # face is "above" base plane along +axis if its max-along-
                 # axis coordinate exceeds the base level by at least margin
                 if proj[5] > base_level + margin:
@@ -546,13 +576,75 @@ class DetectBosses(SkillBase):
                 if ra != rb:
                     parent[rb] = ra
 
+            # Spatial hash on the 2D footprint: O(N) bucketization, then
+            # for each face only test overlap against neighbours in the
+            # same / adjacent buckets. This replaces an O(N²) all-pairs
+            # scan that dominated runtime on dense meshes. For small N the
+            # all-pairs path stays since hash overhead exceeds its cost.
             n = len(candidate_indices)
-            for a_i in range(n):
-                for b_i in range(a_i + 1, n):
+            if n < 200:
+                # Small candidate set — fall back to original O(N²) loop.
+                for a_i in range(n):
                     ia = candidate_indices[a_i]
-                    ib = candidate_indices[b_i]
-                    if _2d_overlaps(candidate_proj[ia], candidate_proj[ib]):
-                        union(ia, ib)
+                    for b_i in range(a_i + 1, n):
+                        ib = candidate_indices[b_i]
+                        if _2d_overlaps(candidate_proj[ia], candidate_proj[ib]):
+                            union(ia, ib)
+            else:
+                # Bucket size = mean face extent. Then resize so the
+                # *largest* face still fits in a bounded number of buckets
+                # (prevents single-bucket fallback that breaks correctness
+                # — two huge overlapping faces snapped to different
+                # centre-buckets would otherwise miss each other).
+                MAX_BUCKETS_PER_FACE = 256
+                mean_extent = 0.0
+                max_extent = 0.0
+                for i in candidate_indices:
+                    p = candidate_proj[i]
+                    ext = max(p[2] - p[0], p[3] - p[1])
+                    mean_extent += ext
+                    if ext > max_extent:
+                        max_extent = ext
+                mean_extent /= n
+                cell = max(0.5, mean_extent)
+                # Ensure no face spans more than sqrt(MAX_BUCKETS_PER_FACE)
+                # buckets in either axis — keeps insert work bounded.
+                max_side = int(math.sqrt(MAX_BUCKETS_PER_FACE))
+                if max_extent / cell > max_side:
+                    cell = max_extent / max_side
+
+                buckets: dict[tuple[int, int], list[int]] = {}
+                for i in candidate_indices:
+                    p = candidate_proj[i]
+                    u0 = int(p[0] // cell)
+                    v0 = int(p[1] // cell)
+                    u1 = int(p[2] // cell)
+                    v1 = int(p[3] // cell)
+                    for bu in range(u0, u1 + 1):
+                        for bv in range(v0, v1 + 1):
+                            buckets.setdefault((bu, bv), []).append(i)
+
+                # For each face, query its buckets; union with overlapping
+                # candidates only (no all-pairs). Symmetric (ib > ia)
+                # dedup keeps each pair tested at most once.
+                for ia in candidate_indices:
+                    pa = candidate_proj[ia]
+                    u0 = int(pa[0] // cell)
+                    v0 = int(pa[1] // cell)
+                    u1 = int(pa[2] // cell)
+                    v1 = int(pa[3] // cell)
+                    seen_neighbors: set[int] = set()
+                    for bu in range(u0, u1 + 1):
+                        for bv in range(v0, v1 + 1):
+                            bucket = buckets.get((bu, bv))
+                            if bucket is None:
+                                continue
+                            for ib in bucket:
+                                if ib <= ia or ib in seen_neighbors:
+                                    continue
+                                seen_neighbors.add(ib)
+                                if _2d_overlaps(pa, candidate_proj[ib]):
+                                    union(ia, ib)
 
             clusters: dict[int, list[int]] = {}
             for i in candidate_indices:

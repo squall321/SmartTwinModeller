@@ -44,6 +44,11 @@ from phone_designer.skills._registry import skill
 from phone_designer.skills._spec import SkillBase, SkillResult
 
 
+# Face-count guard. detect_lugs runs detect_bosses + detect_standoffs,
+# both of which are expensive on dense meshes.
+MAX_FACES_LUGS = 8000
+
+
 def _vmag(v) -> float:
     return math.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2)
 
@@ -69,8 +74,21 @@ class DetectLugs(SkillBase):
         pass
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
+        from phone_designer.skills._resolvers import _all_faces
         from phone_designer.skills.inspect.detect_bosses import DetectBosses
         from phone_designer.skills.inspect.detect_standoffs import DetectStandoffs
+
+        shape = body.wrapped if hasattr(body, "wrapped") else body
+        faces = _all_faces(shape)
+        if len(faces) > MAX_FACES_LUGS:
+            return SkillResult(
+                body=body,
+                history=EntityHistoryMap(),
+                extras={
+                    "lugs": [], "lug_count": 0,
+                    "skipped_reason": f"face_count {len(faces)} > {MAX_FACES_LUGS}",
+                },
+            )
 
         boss_res = DetectBosses().apply(body, {})
         bosses = boss_res.extras.get("bosses", [])

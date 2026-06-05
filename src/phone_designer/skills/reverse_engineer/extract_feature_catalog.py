@@ -16,6 +16,9 @@ their outputs into a single ``extras["feature_catalog"]`` dict::
       "loft_features":     [...],   # cone / lofted-bspline boss/pocket pairs
       "revolve_features":  [...],   # revolved bspline pockets / annular grooves
       "base_thickness_mm": float,   # dominant slab thickness for base-box step
+      "_timings_sec":      {...},   # per-detector wall-clock in seconds
+      "_skipped_detectors":[...],   # detectors that hit their 'too_big' guard
+                                    # (only present when at least one was skipped)
     }
 
 Body is unchanged (post body_present). Catches individual detector failures
@@ -23,6 +26,7 @@ so a single broken detector cannot poison the whole catalog.
 """
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -362,15 +366,41 @@ def _estimate_base_thickness(body) -> float | None:
 class ExtractFeatureCatalog(SkillBase):
     class Args(BaseModel):
         max_face_count: int | None = Field(
-            default=5000,
+            default=8000,
             description="If the body has more than this many faces, skip the "
                         "feature catalog (returns extras['feature_catalog']="
                         "{'skipped': True, 'face_count': N, 'reason': 'too_big'})"
-                        ". Set to None to disable the guard. Default 5000 keeps "
-                        "the analysis under ~30s on raw-mesh inputs.",
+                        ". Set to None to disable the guard. Default 8000 matches "
+                        "the per-detector internal caps (Pack 1A/1B) and keeps "
+                        "the analysis bounded on raw-mesh inputs. Do not raise "
+                        "further — 8000 is the macro-level limit.",
+        )
+        per_component: bool = Field(
+            default=False,
+            description="If True, run split_into_components first and execute "
+                        "every detector against each component (closed shell) "
+                        "individually. Per-component results land in "
+                        "extras['per_component_catalogs'] as "
+                        "[{'component_idx': i, 'catalog': {...}}, ...]. The "
+                        "top-level extras['feature_catalog'] still holds the "
+                        "global (whole-body) catalog. Useful for multi-shell "
+                        "teardown bodies where features on different shells "
+                        "would otherwise be co-mingled (or skipped by the "
+                        "macro face-count guard).",
         )
 
-    def _apply(self, body: Any, args: Args) -> SkillResult:
+    def _build_catalog_for(
+        self,
+        body: Any,
+        max_face_count: int | None,
+    ) -> dict:
+        """Run every detector on ``body`` and assemble the catalog dict.
+
+        Extracted from ``_apply`` so it can also be invoked per-component
+        when ``args.per_component`` is True. Returns the same shape that
+        ``extras["feature_catalog"]`` carries (including the ``skipped``
+        too_big sentinel on oversize inputs).
+        """
         from phone_designer.skills._resolvers import _all_faces
         from phone_designer.skills.inspect.classify_holes import ClassifyHoles
         from phone_designer.skills.inspect.classify_pockets import ClassifyPockets
@@ -391,61 +421,88 @@ class ExtractFeatureCatalog(SkillBase):
         )
 
         # ── face-count guard — bail on raw mesh-to-brep shells ─────────────
-        # The detectors below are O(faces²)-ish for adjacency / proximity
-        # checks. A 90k-face shell takes >10 min and is rarely useful for RE.
-        # Caller should decimate first if they want feature extraction.
-        if args.max_face_count is not None:
+        if max_face_count is not None:
             try:
                 shape = _occt_shape(body)
                 face_count = len(_all_faces(shape))
             except Exception:
                 face_count = -1
-            if face_count > args.max_face_count:
-                return SkillResult(
-                    body=body,
-                    history=EntityHistoryMap(),
-                    extras={"feature_catalog": {
-                        "skipped": True,
-                        "face_count": face_count,
-                        "reason": "too_big",
-                        "limit": args.max_face_count,
-                        "advice": "decimate the input mesh (mesh_decimate skill) "
-                                  "or simplify_to_canonical the BREP before "
-                                  "calling extract_feature_catalog.",
-                    }},
-                )
+            if face_count > max_face_count:
+                return {
+                    "skipped": True,
+                    "face_count": face_count,
+                    "reason": "too_big",
+                    "limit": max_face_count,
+                    "advice": "decimate the input mesh (mesh_decimate skill) "
+                              "or simplify_to_canonical the BREP before "
+                              "calling extract_feature_catalog.",
+                }
+
+        # ── per-detector timings + skipped-due-to-too-big tracking ─────────
+        timings_sec: dict[str, float] = {}
+        skipped_detectors: list[str] = []
+
+        def _is_too_big(exc: BaseException) -> bool:
+            msg = str(exc).lower()
+            return "too_big" in msg or "too big" in msg
+
+        def _timed(name: str, fn, *fa, **fk):
+            t0 = time.perf_counter()
+            try:
+                return fn(*fa, **fk)
+            except Exception as exc:
+                if _is_too_big(exc):
+                    skipped_detectors.append(name)
+                return None
+            finally:
+                timings_sec[name] = round(time.perf_counter() - t0, 4)
 
         # ── classify_holes (already does its own standard match per hole) ──
-        holes_res = _safe(ClassifyHoles().apply, body, {"match_standards": True})
+        holes_res = _timed(
+            "classify_holes",
+            ClassifyHoles().apply, body, {"match_standards": True},
+        )
         holes = holes_res.extras.get("holes", []) if holes_res else []
 
         # ── classify_pockets ───────────────────────────────────────────────
-        pockets_res = _safe(ClassifyPockets().apply, body, {})
+        pockets_res = _timed("classify_pockets", ClassifyPockets().apply, body, {})
         pockets = pockets_res.extras.get("pockets", []) if pockets_res else []
 
         # ── detect_bosses ──────────────────────────────────────────────────
-        bosses_res = _safe(DetectBosses().apply, body, {})
+        bosses_res = _timed("detect_bosses", DetectBosses().apply, body, {})
         bosses = bosses_res.extras.get("bosses", []) if bosses_res else []
 
         # ── detect_ribs ────────────────────────────────────────────────────
-        ribs_res = _safe(DetectRibs().apply, body, {})
+        ribs_res = _timed("detect_ribs", DetectRibs().apply, body, {})
         ribs = ribs_res.extras.get("ribs", []) if ribs_res else []
 
         # ── detect_lugs ────────────────────────────────────────────────────
-        lugs_res = _safe(DetectLugs().apply, body, {})
+        lugs_res = _timed("detect_lugs", DetectLugs().apply, body, {})
         lugs = lugs_res.extras.get("lugs", []) if lugs_res else []
 
         # ── detect_mirror_symmetry ─────────────────────────────────────────
-        sym_res = _safe(DetectMirrorSymmetry().apply, body, {})
+        sym_res = _timed(
+            "detect_mirror_symmetry", DetectMirrorSymmetry().apply, body, {},
+        )
         symmetries = sym_res.extras.get("mirror_planes", []) if sym_res else []
 
         # ── detect_*_array (linear + circular) ─────────────────────────────
         patterns: list[dict] = []
+        lin_total = 0.0
+        circ_total = 0.0
+        lin_skipped = False
+        circ_skipped = False
         for kind in ("hole", "pocket", "boss"):
-            lin_res = _safe(
-                DetectLinearArray().apply, body,
-                {"feature_kind": kind, "min_count": 3},
-            )
+            t0 = time.perf_counter()
+            try:
+                lin_res = DetectLinearArray().apply(
+                    body, {"feature_kind": kind, "min_count": 3},
+                )
+            except Exception as exc:
+                lin_res = None
+                if _is_too_big(exc):
+                    lin_skipped = True
+            lin_total += time.perf_counter() - t0
             if lin_res:
                 for run in lin_res.extras.get("linear_arrays", []) or []:
                     p = dict(run)
@@ -453,29 +510,49 @@ class ExtractFeatureCatalog(SkillBase):
                     p["feature_kind"] = kind
                     patterns.append(p)
 
-            circ_res = _safe(
-                DetectCircularArray().apply, body,
-                {"feature_kind": kind, "min_count": 4},
-            )
+            t0 = time.perf_counter()
+            try:
+                circ_res = DetectCircularArray().apply(
+                    body, {"feature_kind": kind, "min_count": 4},
+                )
+            except Exception as exc:
+                circ_res = None
+                if _is_too_big(exc):
+                    circ_skipped = True
+            circ_total += time.perf_counter() - t0
             if circ_res:
                 for ring in circ_res.extras.get("circular_arrays", []) or []:
                     p = dict(ring)
                     p["pattern_kind"] = "circular"
                     p["feature_kind"] = kind
                     patterns.append(p)
+        timings_sec["detect_linear_array"] = round(lin_total, 4)
+        timings_sec["detect_circular_array"] = round(circ_total, 4)
+        if lin_skipped:
+            skipped_detectors.append("detect_linear_array")
+        if circ_skipped:
+            skipped_detectors.append("detect_circular_array")
 
         # ── match_standard_hole — one call per hole's primary diameter ─────
         standard_matches: list[dict] = []
+        msh_total = 0.0
+        msh_skipped = False
         for h in holes:
             diams = h.get("diameters_mm") or []
             if not diams:
                 continue
             primary_d = min(diams)  # shaft (clearance) diameter
-            mres = _safe(
-                MatchStandardHole().apply,
-                body,
-                {"hole_diameter_mm": float(primary_d), "fit_kind": "auto"},
-            )
+            t0 = time.perf_counter()
+            try:
+                mres = MatchStandardHole().apply(
+                    body,
+                    {"hole_diameter_mm": float(primary_d), "fit_kind": "auto"},
+                )
+            except Exception as exc:
+                mres = None
+                if _is_too_big(exc):
+                    msh_skipped = True
+            msh_total += time.perf_counter() - t0
             top = None
             if mres:
                 matches = mres.extras.get("matches", []) or []
@@ -485,11 +562,14 @@ class ExtractFeatureCatalog(SkillBase):
                 "diameter_mm": float(primary_d),
                 "best_match": top,
             })
+        timings_sec["match_standard_hole"] = round(msh_total, 4)
+        if msh_skipped:
+            skipped_detectors.append("match_standard_hole")
 
         # ── sweep / revolve / loft surface-type detection ──────────────────
-        # Compute slab thickness first; used both for base box sizing and as
-        # the anchor_z of sweep/loft features sitting on top of the slab.
+        t0 = time.perf_counter()
         base_thickness = _safe(_estimate_base_thickness, body)
+        timings_sec["estimate_base_thickness"] = round(time.perf_counter() - t0, 4)
         base_z_max: float | None = None
         try:
             from OCP.Bnd import Bnd_Box
@@ -504,7 +584,10 @@ class ExtractFeatureCatalog(SkillBase):
         except Exception:
             base_z_max = None
 
-        swr = _safe(_detect_swept_loft_revolve, body, bosses, base_z_max)
+        swr = _timed(
+            "detect_swept_loft_revolve",
+            _detect_swept_loft_revolve, body, bosses, base_z_max,
+        )
         if swr is not None:
             sweep_features, loft_features, revolve_features = swr
         else:
@@ -525,7 +608,54 @@ class ExtractFeatureCatalog(SkillBase):
             "base_thickness_mm": (
                 float(base_thickness) if base_thickness is not None else None
             ),
+            "_timings_sec": timings_sec,
         }
+        if skipped_detectors:
+            feature_catalog["_skipped_detectors"] = skipped_detectors
+        return feature_catalog
+
+    def _apply(self, body: Any, args: Args) -> SkillResult:
+        # ── Whole-body catalog (always computed) ───────────────────────────
+        feature_catalog = self._build_catalog_for(body, args.max_face_count)
+
+        extras: dict = {"feature_catalog": feature_catalog}
+
+        # ── Per-component catalogs (optional) ──────────────────────────────
+        # When the caller has a multi-shell body (e.g. a teardown mesh that
+        # produced 65 disjoint shells), running every detector against the
+        # whole compound co-mingles features from physically separate parts.
+        # Splitting first and re-running the detector pipeline on each shell
+        # gives a clean per-part catalog. We still keep the whole-body
+        # catalog above for backwards-compat.
+        if args.per_component:
+            from phone_designer.skills.repair.split_into_components import (
+                SplitIntoComponents,
+            )
+            try:
+                split_res = SplitIntoComponents().apply(body, {})
+                components = split_res.extras.get("components", []) or []
+            except Exception:
+                components = []
+
+            per_component_catalogs: list[dict] = []
+            for comp in components:
+                comp_body = comp.get("body_ref")
+                if comp_body is None:
+                    continue
+                try:
+                    cat = self._build_catalog_for(comp_body, args.max_face_count)
+                except Exception as exc:
+                    cat = {
+                        "skipped": True,
+                        "reason": "exception",
+                        "error": str(exc)[:200],
+                    }
+                per_component_catalogs.append({
+                    "component_idx": comp.get("index"),
+                    "catalog": cat,
+                })
+            extras["per_component_catalogs"] = per_component_catalogs
+            extras["component_count"] = len(per_component_catalogs)
 
         # Share the catalog with plan_from_feature_catalog (which accepts
         # ``catalog=None`` meaning "use last extracted"). Import is local so
@@ -541,5 +671,5 @@ class ExtractFeatureCatalog(SkillBase):
         return SkillResult(
             body=body,
             history=EntityHistoryMap(),
-            extras={"feature_catalog": feature_catalog},
+            extras=extras,
         )

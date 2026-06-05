@@ -68,9 +68,17 @@ class PlanExecutor:
         self.plan = plan
         self.mode = mode
 
-    def run(self) -> ExecutionResult:
+    def run(self, *, initial_body: Any = None) -> ExecutionResult:
+        """Execute the plan sequentially.
+
+        Args:
+            initial_body: optional starting body. Used when the plan was
+                produced with ``base_step_kind="preserve_brep"`` and the
+                first step expects the original BREP surface as its input
+                (rather than constructing it from a placeholder box).
+        """
         result = ExecutionResult(plan=self.plan)
-        body: Any = None
+        body: Any = initial_body
         previous_pass = True
 
         for step in self.plan.steps:

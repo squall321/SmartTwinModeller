@@ -45,6 +45,12 @@ from phone_designer.skills._registry import skill
 from phone_designer.skills._spec import SkillBase, SkillResult
 
 
+# Face-count guard. detect_ribs walks detect_bosses output and re-scans
+# every face in every cluster — same scaling concern as the underlying
+# boss detector.
+MAX_FACES_RIBS = 8000
+
+
 def _occt_shape(body: Any):
     return body.wrapped if hasattr(body, "wrapped") else body
 
@@ -87,6 +93,16 @@ class DetectRibs(SkillBase):
 
         shape = _occt_shape(body)
         faces = _all_faces(shape)
+
+        if len(faces) > MAX_FACES_RIBS:
+            return SkillResult(
+                body=body,
+                history=EntityHistoryMap(),
+                extras={
+                    "ribs": [], "rib_count": 0,
+                    "skipped_reason": f"face_count {len(faces)} > {MAX_FACES_RIBS}",
+                },
+            )
 
         boss_res = DetectBosses().apply(body, {"min_height_mm": 0.1})
         bosses = boss_res.extras.get("bosses", [])

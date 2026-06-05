@@ -51,6 +51,13 @@ from phone_designer.skills._post_conditions import PostCondition
 from phone_designer.skills._registry import skill
 from phone_designer.skills._spec import SkillBase, SkillResult
 
+# Above this raw face count the O(F·E) adjacency walk becomes the dominant
+# cost (>30s on 16 k-face shells even with the OCCT indexed-map fast path is
+# fine; it's the per-face surface-type / centre / area probing that explodes).
+# Mirror the extract_feature_catalog guard: bail with skipped=True so callers
+# decimate the mesh first.
+_DEFAULT_MAX_FACE_COUNT = 8000
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Geometry helpers
@@ -165,36 +172,56 @@ def _is_interior_planar(face, body_bbox, margin=0.5) -> bool:
 # Face adjacency
 
 
-def _build_edge_owners(faces, edges):
-    from OCP.TopAbs import TopAbs_EDGE
-    from OCP.TopExp import TopExp_Explorer
-    from OCP.TopoDS import TopoDS
+def _shared_face_pairs(shape, faces) -> set[tuple[int, int]]:
+    """Return all (a, b) face-index pairs that share at least one edge.
 
-    edge_owners: dict[int, list[int]] = {}
-    for fi, face in enumerate(faces):
-        fit = TopExp_Explorer(face, TopAbs_EDGE)
-        while fit.More():
-            fe = TopoDS.Edge_s(fit.Current())
-            for ei, e in enumerate(edges):
-                if e.IsSame(fe):
-                    owners = edge_owners.setdefault(ei, [])
-                    if fi not in owners:
-                        owners.append(fi)
-                    break
-            fit.Next()
-    return edge_owners
+    Uses OCCT's ``TopExp::MapShapesAndUniqueAncestors`` to build the
+    edge → incident-faces map in a single O(N) pass, then looks each
+    incident face's index up in an ``TopTools_IndexedMapOfShape`` of the
+    face list. This replaces the previous O(F · E · E_per_face) hand-rolled
+    ``IsSame`` loop, which was the dominant cost on 16 k-face shells.
+    """
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
+    from OCP.TopExp import TopExp
+    from OCP.TopTools import (
+        TopTools_IndexedDataMapOfShapeListOfShape,
+        TopTools_IndexedMapOfShape,
+    )
 
+    # face → index lookup (1-based in OCCT, we convert to 0-based)
+    face_idx_map = TopTools_IndexedMapOfShape()
+    for f in faces:
+        face_idx_map.Add(f)
 
-def _shared_face_pairs(edge_owners) -> set[tuple[int, int]]:
+    # edge → list-of-incident-faces
+    edge_faces = TopTools_IndexedDataMapOfShapeListOfShape()
+    TopExp.MapShapesAndUniqueAncestors_s(
+        shape, TopAbs_EDGE, TopAbs_FACE, edge_faces,
+    )
+
     pairs: set[tuple[int, int]] = set()
-    for owners in edge_owners.values():
-        if len(owners) < 2:
+    n = edge_faces.Extent()
+    for i in range(1, n + 1):
+        owners = edge_faces.FindFromIndex(i)
+        if owners.Extent() < 2:
             continue
-        ia, ib = owners[0], owners[1]
-        if ia == ib:
-            continue
-        a, b = (ia, ib) if ia < ib else (ib, ia)
-        pairs.add((a, b))
+        # collect 0-based face indices; OCCT IndexedMap is 1-based.
+        owner_indices: list[int] = []
+        for sh in owners:
+            fi1 = face_idx_map.FindIndex(sh)
+            if fi1 <= 0:
+                continue
+            owner_indices.append(fi1 - 1)
+        # emit every unordered pair within this edge's owner set
+        m = len(owner_indices)
+        for ii in range(m):
+            ia = owner_indices[ii]
+            for jj in range(ii + 1, m):
+                ib = owner_indices[jj]
+                if ia == ib:
+                    continue
+                a, b = (ia, ib) if ia < ib else (ib, ia)
+                pairs.add((a, b))
     return pairs
 
 
@@ -433,12 +460,42 @@ class ClassifyPockets(SkillBase):
             description="Pockets whose measured depth is below this threshold "
                         "are filtered out (noise / chamfer-like creases).",
         )
+        max_face_count: int | None = Field(
+            default=_DEFAULT_MAX_FACE_COUNT,
+            description="If the body has more than this many faces, skip "
+                        "pocket classification and return extras['pockets']="
+                        "{'skipped': True, 'face_count': N, 'reason': "
+                        "'too_big'}. Set to None to disable the guard. Default "
+                        f"{_DEFAULT_MAX_FACE_COUNT} keeps the analysis under "
+                        "~30 s on raw mesh-to-brep shells.",
+        )
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
         from phone_designer.skills._resolvers import _all_edges, _all_faces
 
         shape = _occt_shape(body)
         faces = _all_faces(shape)
+
+        # ── face-count guard — bail on raw mesh-to-brep shells ─────────────
+        # The per-face surface-type / centre / area / bbox probes below are
+        # not the O(N²) hotspot any more (edge→face adjacency now uses
+        # OCCT's indexed map), but a 16 k-face shell still spends ~30 s in
+        # OCP just walking faces. Caller should decimate first.
+        if args.max_face_count is not None and len(faces) > args.max_face_count:
+            return SkillResult(
+                body=body,
+                history=EntityHistoryMap(),
+                extras={"pockets": {
+                    "skipped": True,
+                    "face_count": len(faces),
+                    "reason": "too_big",
+                    "limit": args.max_face_count,
+                    "advice": "decimate the input mesh (mesh_decimate skill) "
+                              "or simplify_to_canonical the BREP before "
+                              "calling classify_pockets.",
+                }},
+            )
+
         edges = _all_edges(shape)
         body_bbox = _body_bbox(shape)
 
@@ -449,8 +506,7 @@ class ClassifyPockets(SkillBase):
                 extras={"pockets": []},
             )
 
-        edge_owners = _build_edge_owners(faces, edges)
-        pairs = _shared_face_pairs(edge_owners)
+        pairs = _shared_face_pairs(shape, faces)
         seeds = _seed_pocket_faces(faces, body_bbox)
         comps = _components(seeds, pairs)
 

@@ -242,6 +242,7 @@ import phone_designer.skills.repair.sew_faces_to_shell  # noqa: F401
 import phone_designer.skills.repair.close_shell_to_solid  # noqa: F401
 import phone_designer.skills.repair.simplify_to_canonical  # noqa: F401
 import phone_designer.skills.repair.remove_micro_features  # noqa: F401
+import phone_designer.skills.repair.split_into_components  # noqa: F401
 from phone_designer.skills.inspect.face_adjacency_graph import FaceAdjacencyGraph
 from phone_designer.skills.inspect.edge_concavity_classify import EdgeConcavityClassify
 from phone_designer.skills.inspect.vertex_connectivity import VertexConnectivity
