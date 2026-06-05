@@ -14,22 +14,20 @@ steps:
       kind: face_named
       name: bottom
     sketch:
-      kind: rect
+      kind: rectangle
+      length_mm: 60.8501
       width_mm: 60.8501
-      height_mm: 60.8501
-      position_xy:
-      - -3.3631
-      - -5.3695
+      center_x_mm: -3.3631
+      center_y_mm: -5.3695
     depth_mm: 6.3555
 - id: s_pocket_1
   skill: extrude_pocket
   args:
     face_selector: *id001
     sketch:
-      kind: rect
+      kind: rectangle
+      length_mm: 36.81
       width_mm: 36.81
-      height_mm: 36.81
-      position_xy:
-      - 0.7621
-      - 9.5965
+      center_x_mm: 0.7621
+      center_y_mm: 9.5965
     depth_mm: 0.7108

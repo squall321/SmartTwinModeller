@@ -237,14 +237,17 @@ def _pocket_step(
         })
 
     # Default — extrude_pocket with placeholder rectangular sketch sized to
-    # the measured top diameter.
+    # the measured top diameter. RectangleSketch fields: kind="rectangle"
+    # + length_mm + width_mm + center_x_mm + center_y_mm.
+    size = top_d if top_d > 0 else 5.0
     return _new_step(sid, "extrude_pocket", {
         "face_selector": face_sel,
         "sketch": {
-            "kind": "rect",
-            "width_mm": top_d if top_d > 0 else 5.0,
-            "height_mm": top_d if top_d > 0 else 5.0,
-            "position_xy": [float(origin[0]), float(origin[1])],
+            "kind": "rectangle",
+            "length_mm": size,
+            "width_mm": size,
+            "center_x_mm": float(origin[0]),
+            "center_y_mm": float(origin[1]),
         },
         "depth_mm": depth,
     })
