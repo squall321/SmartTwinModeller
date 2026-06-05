@@ -1,64 +1,93 @@
 schema_version: 1
 plan_name: reconstructed_plan
 steps:
-- id: s_pocket_0
-  skill: hole
+- id: s_base
+  skill: box
   args:
-    position:
-    - -15.0
-    - -15.0
-    - 4.0
-    diameter_mm: 4.0
-    depth_mm: 6.0
-    direction: +Z
-- id: s_pocket_1
-  skill: hole
-  args:
-    position:
-    - 15.0
-    - -15.0
-    - 4.0
-    diameter_mm: 4.0
-    depth_mm: 6.0
-    direction: +Z
-- id: s_pocket_2
-  skill: hole
-  args:
-    position:
-    - 0.0
-    - 15.0
-    - 4.0
-    diameter_mm: 4.0
-    depth_mm: 6.0
-    direction: +Z
-- id: s_mirror_feature_0
-  skill: mirror_feature
+    length_mm: 50.00554543444804
+    width_mm: 50.00554543444804
+    height_mm: 10.0
+- id: s_sweep_boss_0
+  skill: swept_boss_along_curve
   args:
     face_selector: &id001
       kind: face_named
       name: top
-    profile_diameter_mm: 4.0
-    operation: hole
-    feature_depth_mm: 6.0
-    count: 2
-    mirror_plane: YZ
-    mirror_origin:
-    - 0.0
-    - 0.0
-    - 5.003805
-    original_x_mm: -15.0
-    original_y_mm: -15.0
-- id: s_hole_2
-  skill: clearance_hole
+    profile_sketch:
+      kind: circle
+      diameter_mm: 2.9658
+    path_points:
+    - - -14.881
+      - -13.1173
+      - 10.0
+    - - -14.881
+      - -10.1514
+      - 15.1173
+    - - -14.881
+      - -7.1856
+      - 15.1173
+    path_type: polyline
+- id: s_loft_boss_0
+  skill: loft_boss_between_sketches
+  args:
+    face_selector: *id001
+    lower_sketch:
+      kind: circle
+      diameter_mm: 9.9509
+      center_x_mm: 10.0758
+      center_y_mm: 10.0505
+    upper_sketch:
+      kind: circle
+      diameter_mm: 9.9509
+      center_x_mm: 10.0758
+      center_y_mm: 10.0505
+    height_mm: 5.092
+- id: s_hole_0
+  skill: tap_drill_hole
   args:
     face_selector: *id001
     position_xy:
-    - 0.0
-    - 15.0
+    - -15.0
+    - -10.0
     thread_spec: M4
-    fit: medium
-    depth_mm: 6.0
-description: 'base_step_kind=preserve_brep — this plan omits s_base. The executor
-  must be invoked with PlanExecutor.run(initial_body=...) so the original outer BREP
-  surface is preserved. | symmetry-deduplicated: 1 feature pairs collapsed into mirror_feature
-  steps'
+    depth_mm: 3.3
+- id: s_hole_1
+  skill: hole
+  args:
+    position:
+    - -24.6
+    - -25.0
+    - 9.6
+    diameter_mm: 0.8
+    depth_mm: 50.0
+    direction: +Y
+- id: s_hole_2
+  skill: hole
+  args:
+    position:
+    - -25.0
+    - -24.6
+    - 9.6
+    diameter_mm: 0.8
+    depth_mm: 50.0
+    direction: +X
+- id: s_hole_3
+  skill: hole
+  args:
+    position:
+    - -25.0
+    - 24.6
+    - 9.6
+    diameter_mm: 0.8
+    depth_mm: 50.0
+    direction: +X
+- id: s_hole_4
+  skill: hole
+  args:
+    position:
+    - 24.6
+    - -25.0
+    - 9.6
+    diameter_mm: 0.8
+    depth_mm: 50.0
+    direction: +Y

@@ -1,10 +1,48 @@
 # SmartTwinModeller — Project Status
 
-**마지막 갱신**: 2026-06-03 · **현 commit**: `4670c5e` · **GitHub**: https://github.com/squall321/SmartTwinModeller
+**마지막 갱신**: 2026-06-05 · **현 commit**: `b1ea268` · **GitHub**: https://github.com/squall321/SmartTwinModeller
 
 ## 한 줄 요약
 
-LLM-driven **양방향** parametric CAD skill library — build123d / OCCT 7.8 기반. **338 등록 skill / 22 카테고리 / 23 도메인 카탈로그 / 116 테스트 파일 / 1324 PASS**. Watch v0 합성 + 7 round 의 도메인 확장 + reverse-engineering 풀파이프라인. **Skill audit v2 (in-process, real fixtures): 미완료 — harness 재실행 필요.**
+LLM-driven **양방향** parametric CAD skill library — build123d / OCCT 7.8 기반. **340 등록 skill / 21 카테고리 / 23 도메인 카탈로그 / 116 테스트 파일 / 1324 PASS**. Watch v0 합성 + 7 round 도메인 확장 + reverse-engineering 풀파이프라인 + **iPhone 12 teardown glb → BREP 첫 PASS round-trip**.
+
+## Real-world round-trip — iPhone teardown (2026-06-05)
+
+iPhone 12 teardown `.glb` (실제 3D-scan 자산) 으로 end-to-end 파이프라인 첫 PASS 달성. 합성 fixture 가 아니라 OEM 스캔 메쉬에서의 **실증**.
+
+| 단계 | 결과 |
+|---|---|
+| glb 로드 (trimesh) | 364k tri / 90k face 외피 housing 추출 |
+| `mesh_to_brep` (multi-shell + fill_small_holes) | open-shell 도 solid 화, 16k face shell 정상 빌드 |
+| `extract_feature_catalog` (detector 가속 후) | 16k face shell @ **0.94s** (이전 660s → 700x 가속) |
+| `plan_from_feature_catalog` (RectangleSketch 필드 수정 + base_thickness floor) | Plan YAML 생성 성공, RE-STEP 재합성 PASS |
+| symmetry-aware plan + outer-surface base | Run 3 90k face housing 완주 |
+
+문서: [`iPhone real-world round-trip — first PASS milestone`](docs/iphone_first_pass.md) 및 commit `39d94e1`.
+
+## Verified bug fixes (2026-06-04 ~ 2026-06-05) — 11건
+
+iPhone 실증 파이프라인을 돌리며 surfaced 된 정상화. 모두 테스트로 lock-down.
+
+| commit | 영역 | 내용 |
+|---|---|---|
+| `b1ea268` | detector + plan + base | symmetry-aware plan / outer-surface base / multi-shell components / detector speedup |
+| `39d94e1` | docs | iPhone first PASS milestone doc |
+| `de02b77` | plan_from_feature_catalog | `RectangleSketch` field names 정정 |
+| `413f451` | plan_from_feature_catalog | `base_thickness` sanity floor 추가 |
+| `08fb374` | mesh_to_brep | multi-shell + `fill_small_holes` early-return |
+| `1369244` | 정규화 | `post_condition` / `volume` / `body_kind` 버그 정리 |
+| `afc8280` | 데모 | iPhone full-pipeline Run 3 — 90k face housing end-to-end |
+| `e831979` | 한계 수정 | iPhone 실증으로 surfaced 된 4개 limit |
+| `381cf2b` | 첫 실증 | iPhone glb → BREP outer-surface validation |
+| `70725ce` | audit | 338/338 skill 커버리지 honest final 판정 |
+| `f3eba10` | audit v3 | 232/338 in-process + 7-param + 5-façade verdict |
+
+## Performance
+
+- **feature catalog extractor**: 16k face shell 기준 **660s → 0.94s** (~700x). detector 측 spatial-hash + 평면 클러스터링 가속 적용. iPhone 90k face housing 도 sub-30s 로 처리.
+- mesh→BREP: open-shell 자동 fill + multi-shell split → 합성 cap 없이 OEM 364k tri 스캔 통과.
+- Plan executor: symmetry-aware plan + outer-surface base → cube-collapse 회귀 0건.
 
 ## Skill audit reality (v2 — 2026-06-03)
 
@@ -43,7 +81,7 @@ v1 audit의 "194 all_broken" 헤드라인은 **harness 노이즈였음을 confes
 | **DFM analyzers** | wall_thickness raymarch (FP floor + confidence) / draft / undercut |
 | **Watch v0 합성** | `phone-designer synthesize` — arrangement → Plan → STEP |
 
-## 2. 카테고리별 skill 분포 (22 categories, 338 skills)
+## 2. 카테고리별 skill 분포 (21 categories, 340 skills)
 
 | 카테고리 | 수 | 핵심 skill |
 |---|---|---|
@@ -63,7 +101,13 @@ v1 audit의 "194 all_broken" 헤드라인은 **harness 노이즈였음을 confes
 | **repair** | 5 | shape_heal / sew_faces_to_shell / close_shell_to_solid / simplify_to_canonical / remove_micro_features |
 | **pmi** | 5 | pmi_dimension_callout / pmi_surface_texture / pmi_weld_symbol / export_step_ap242_pmi / pmi_inspect_summary |
 | **modify_3dprint** | 4 | raft_add / support_tree_path / infill_region_tag / add_support_brim |
-| **modify_hole / fillet / antenna / plateau / reverse_engineer** | 11 합 | hole/array/grille + variants + antenna_slit/polymer_inlay + extrude_plateau + extract_feature_catalog / plan_from_feature_catalog |
+| **modify_hole** | 3 | hole / array / grille variants |
+| **modify_fillet** | 3 | fillet variants |
+| **modify_antenna** | 2 | antenna_slit / polymer_inlay |
+| **reverse_engineer** | 2 | extract_feature_catalog / plan_from_feature_catalog |
+| **modify_plateau** | 1 | extrude_plateau |
+
+**전체 category 21**: inspect(102), modify_pocket(76), modify_boss(27), create(25), assembly(14), modify_curvature(12), modify_pattern(11), modify_sheet(10), modify_finish(9), fem_cae(9), modify_mold(8), repair(7), compose(5), modify_chamfer(5), pmi(5), modify_3dprint(4), modify_hole(3), modify_fillet(3), modify_antenna(2), reverse_engineer(2), modify_plateau(1) = **340**.
 
 ## 3. 표준 카탈로그 (23 디렉터리)
 
@@ -175,21 +219,29 @@ STEP/IGES/BREP/mesh
 6. **CAE handoff** — `body + BC/material/contact/modal tags → Abaqus INP`
 7. **Mold tooling auto** — `body → parting_surface + draft → core/cavity split + cooling channel + gate/runner candidate`
 
-## 9. 커밋 히스토리 (12 commits)
+## 9. 커밋 히스토리 (20 commits pushed)
 
 ```
+b1ea268 Items 1-4 — detector speedup + symmetry-aware plan + outer-surface base + multi-shell
+39d94e1 iPhone real-world round-trip — first PASS milestone doc
+de02b77 plan_from_feature_catalog — RectangleSketch field names fix
+413f451 plan_from_feature_catalog — base_thickness sanity floor
+08fb374 mesh_to_brep multi-shell + fill_small_holes early-return
+1369244 Normalize bugs surfaced by iPhone pipeline (post_condition + volume + body_kind)
+afc8280 iPhone full-pipeline Run 3 — 90k face housing end-to-end
+e831979 Fix 4 limits surfaced by iPhone real-world demo
+381cf2b Real-world iPhone glb → BREP demo — first outer-surface validation
+70725ce Skill audit — full 338/338 coverage, honest final verdict
+f3eba10 Skill audit v3 — 232/338 in-process, real fixtures
+b413bfb Skill audit v2 — in-process harness + real fixtures
+0a30051 Honest skill audit — parametric reality check on 338 skills
+8ecbaf7 Status snapshot — 338 skills / 22 categories
 4670c5e Round 7 tail — abaqus + plan args fixes
 36fcb69 Round 7 — PMI + CAE + UI + optical
 ec76b82 Cleanup — RT doc + ignore scratch
 9d91228 RE Tier C followup — mesh→BREP + CI gate + corpus CLI
 772b3a4 RE Tier C — coverage + mapping enrichment
 73cf747 RE Tier B — sweep/revolve/loft + pattern regen
-be5df7e RE pipeline — placeholder bbox + fidelity gate
-2b62486 Round 6 — 3D-print + FEM/CAE + finishes + biometric/phone/audio
-9e6f6d9 Round 5 — 3D-print DFM + mold + GD&T + assembly + LLM control
-ec91e1f Loosen worm_thread test bound
-c8d2565 RE boost — 38 new skills
-e30fd09 Initial — 220 skills baseline
 ```
 
 ## 10. 알려진 한계 / 다음 영역
@@ -208,7 +260,7 @@ e30fd09 Initial — 220 skills baseline
 ```
 SmartTwinModeller/
 ├── src/phone_designer/
-│   ├── skills/            # 338 skills, 22 categories
+│   ├── skills/            # 340 skills, 21 categories
 │   │   ├── repair/        (5)   ── shape healing
 │   │   ├── reverse_engineer/ (2) ── catalog extract + plan generate
 │   │   ├── pmi/           (5)   ── GD&T export

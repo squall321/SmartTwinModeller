@@ -63,3 +63,56 @@ $env:PYTHONPATH = "src"
 ```
 
 Script at `run_logs/_tmp/iphone_round_trip.py`. Output STEP at `plans/reconstructed_plan.yaml` + regen body in memory.
+
+## 8k face decimation re-run
+
+Re-ran the pipeline targeting `target_face_count=8000` (matching the new macro
+cap in `extract_feature_catalog`). The quadric pass left 16,508 faces (over the
+10% headroom of the 8k target) so the cluster fallback fired and collapsed it to
+349 faces — the cluster backend's pitch heuristic over-decimates on this mesh
+(target 8000 → actual 349). mesh_to_brep produced 3 open shells (350 faces),
+fill_small_holes patched 1 of 5 boundaries.
+
+`extract_feature_catalog` ran in 12.1 s wall-clock against the 350-face shell
+(under the 8000 cap so no skip) with these per-detector hotspots:
+
+| detector | seconds |
+|---|---|
+| classify_pockets | 7.54 |
+| detect_mirror_symmetry | 2.66 |
+| detect_circular_array | 0.62 |
+| detect_linear_array | 0.61 |
+| detect_lugs | 0.40 |
+| all others | <0.1 each |
+
+### Feature delta vs 132-face baseline
+
+| feature | 132-face | 350-face | Δ |
+|---|---|---|---|
+| pockets | 2 | **3** | +1 |
+| holes | 0 | 0 | 0 |
+| bosses | 0 | **2** | +2 |
+| ribs | 0 | 0 | 0 |
+| lugs | 0 | 0 | 0 |
+| patterns | 0 | 0 | 0 |
+| symmetries | 6 | 6 | 0 |
+| sweep/loft/revolve | 0/0/0 | 0/0/0 | 0 |
+
+The richer (350-face vs 132-face) mesh surfaced **2 new bosses** and **1 extra
+pocket** that the aggressive cluster pass had washed out. Symmetry detection
+was stable (6 planes both ways — bilateral symmetry is dominant). No new
+holes/ribs/lugs — those would require an even finer mesh (~3-5k) plus the
+quadric backend (cluster smears small features). `base_thickness_mm` collapsed
+to 0.07 mm (an artifact of multi-shell pairs being picked), so the planner
+floor (`bbox_h/10`) will still take over for the regen.
+
+### Next-decimation lever
+
+Cluster's pitch heuristic ignores the explicit `target_face_count` once the
+input is already moderately decimated. To realistically hit the 8000 face
+budget we'd need either (a) a per-input pitch search in `mesh_decimate`'s
+cluster path, or (b) chain another quadric pass (16,508 → 8000) since quadric
+respects the target tightly. The macro cap is plenty of headroom; the bottleneck
+is the decimator's target-overshoot, not `extract_feature_catalog`.
+
+Script: `run_logs/_tmp/iphone_8k_demo.py`.
