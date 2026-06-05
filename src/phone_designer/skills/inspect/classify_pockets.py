@@ -460,6 +460,24 @@ class ClassifyPockets(SkillBase):
             description="Pockets whose measured depth is below this threshold "
                         "are filtered out (noise / chamfer-like creases).",
         )
+        min_top_d_mm: float = Field(
+            default=0.0, ge=0.0,
+            description="Reject pockets whose top opening diameter < this. "
+                        "Useful on mesh-derived shells where decimation creates "
+                        "sub-mm concave clusters that aren't real pockets.",
+        )
+        min_depth_to_width_ratio: float = Field(
+            default=0.0, ge=0.0,
+            description="Reject pockets whose depth/top_d ratio < this. A flat "
+                        "patch (depth=0.1, top_d=20) would have ratio 0.005 — "
+                        "set this to 0.05 or higher to filter such artefacts.",
+        )
+        min_face_count_per_pocket: int = Field(
+            default=1, ge=1,
+            description="Reject pockets whose face_indices count < this. A real "
+                        "pocket usually has ≥3 faces (opening, bottom, sides); "
+                        "raise this to 3 on mesh shells to drop 2-face creases.",
+        )
         max_face_count: int | None = Field(
             default=_DEFAULT_MAX_FACE_COUNT,
             description="If the body has more than this many faces, skip "
@@ -511,10 +529,23 @@ class ClassifyPockets(SkillBase):
         comps = _components(seeds, pairs)
 
         pockets: list[dict[str, Any]] = []
+        filtered = 0
         for comp in comps:
             desc = _classify_one(faces, comp, body_bbox)
-            if desc["depth_mm"] < args.min_depth_mm:
-                continue
+            # 4 filters — each one rejects a different class of artefact.
+            top_d = float(desc.get("top_d_mm") or 0.0)
+            depth = float(desc.get("depth_mm") or 0.0)
+            fc = len(desc.get("face_indices") or [])
+            if depth < args.min_depth_mm:
+                filtered += 1; continue
+            if top_d < args.min_top_d_mm:
+                filtered += 1; continue
+            if fc < args.min_face_count_per_pocket:
+                filtered += 1; continue
+            if args.min_depth_to_width_ratio > 0.0:
+                width = max(top_d, 1e-9)
+                if (depth / width) < args.min_depth_to_width_ratio:
+                    filtered += 1; continue
             desc["id"] = len(pockets)
             pockets.append({
                 "id": desc["id"],
@@ -530,5 +561,5 @@ class ClassifyPockets(SkillBase):
         return SkillResult(
             body=body,
             history=EntityHistoryMap(),
-            extras={"pockets": pockets},
+            extras={"pockets": pockets, "pockets_filtered_count": filtered},
         )
