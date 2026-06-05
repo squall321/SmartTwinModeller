@@ -254,6 +254,7 @@ import phone_designer.skills.inspect.fit_torus  # noqa: F401
 import phone_designer.skills.inspect.classify_pockets  # noqa: F401
 import phone_designer.skills.inspect.classify_holes  # noqa: F401
 import phone_designer.skills.inspect.detect_bosses  # noqa: F401
+import phone_designer.skills.inspect.detect_shell_holes  # noqa: F401
 import phone_designer.skills.inspect.detect_ribs  # noqa: F401
 import phone_designer.skills.inspect.detect_standoffs  # noqa: F401
 import phone_designer.skills.inspect.detect_lugs  # noqa: F401

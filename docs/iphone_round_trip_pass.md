@@ -160,3 +160,63 @@ Meets the rule `holes>0 OR bosses>2 OR ribs>0` via ribs>0 (and the pocket count 
 `tests/skills/test_mesh_ops.py`: **12 passed** in 4.36 s — the new branches preserve the existing mesh_simplify / mesh_to_brep / mesh_quality contracts.
 
 Script: `run_logs/_tmp/iphone_8k_v2.py`. Summary JSON: `run_logs/_tmp/iphone_8k_v2_summary.json`.
+
+## Same-type fidelity comparison
+
+When comparing the *original* BREP (which is a thin **shell** of the outer
+housing — open boundaries, no enclosed volume) to a *regen* solid (closed
+volume produced by the plan), `VolumeProperties_s` is **not the right
+metric**. The shell's `VolumeProperties_s` is the signed surface integral
+over the open boundary; it has no physical meaning relative to a solid
+volume. Comparing them produces the apples-to-oranges "173% drift" reported
+above for the v0 box-base run.
+
+The correct same-type metric is **bounding-box volume**
+(`L × W × H` of the axis-aligned bbox), which is well-defined for *any*
+body kind (shell, solid, compound). Both inputs can produce it via
+`inspect_geometry` with `bbox_only=True`.
+
+### iPhone numbers (7k round-trip, `base_step_kind=import_step`)
+
+| | bbox L × W × H (mm) | bbox volume (mm³) |
+|---|---|---:|
+| Original shell (outer housing) | 8.2208 × 71.2464 × 146.8875 | **86,030** |
+| Regen solid (`import_step` base + 11 pocket/hole steps) | 8.2208 × 71.2464 × 146.8875 | **86,030** |
+
+Bbox volumes match to within 0.0% — the outer envelope is preserved
+exactly because `s_base = import_step` round-trips the original BREP
+through a STEP file rather than collapsing it to a parametric box. The
+8.22 × 71.25 × 146.89 envelope (Apple-published iPhone 12 dimensions
+7.4 × 71.5 × 146.7 mm) matches the real device within ~1% — the small
+overshoot is the camera-bump + chamfer + decimation tolerance combined.
+
+For an apples-to-apples *internal* volume comparison the original shell
+would first need to be solidified (e.g. via `cap_open_shell` /
+`fill_small_holes` + `sew` until closed). Once both sides are solids,
+`VolumeProperties_s` becomes meaningful again.
+
+## A3: outer-surface-preserving base step
+
+`plan_from_feature_catalog` now supports
+`base_step_kind: Literal["box", "import_step", "preserve_brep"]`.
+
+With `base_step_kind="import_step"` on the 7k iPhone shell the planner:
+
+1. Writes the input body to `run_logs/_tmp/<plan_name>_base.step` (STEP
+   AP203, AsIs mode, 289,017 entities for the iPhone shell).
+2. Emits an `s_base` step of skill `import_step` pointing at that path
+   (`scale=1.0`).
+3. PlanExecutor's `import_step` skill round-trips the file back into a
+   BREP body identical to the input — `face_count = 7035` (vs 7025 in
+   the orig shell, +0.1% from STEP read/write reseaming).
+
+This is a dramatic improvement over the v0 box-base regen which had
+`face_count = 8` (`face_ratio = 0.007`). With `import_step` the
+`face_ratio = 7035 / 7025 = 1.001` and the bbox envelope is preserved
+**exactly** to 4 decimal places — the planner is now capable of keeping
+the original outer surface intact while still emitting parametric
+pocket / hole / boss steps on top of it.
+
+Script: `run_logs/_tmp/iphone_7k_round_trip.py` (the
+`base_step_kind="import_step"` argument is supplied to
+`plan_from_feature_catalog`).

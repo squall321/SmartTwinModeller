@@ -1,5 +1,95 @@
 # Skill Audit Report - Parametric Reality Check
 
+## v4 in-process audit (fixture v2) — 2026-06-06
+
+**Status:** v4 harness from B1 has not yet been run / has not produced
+`run_logs/_tmp/skill_audit_v4_summary.json` at the time of this writing. This
+section will be filled in once B1's harness lands and the JSON summary is
+written. The placeholder below documents the comparison plan.
+
+**Comparison plan (v3 → v4):**
+
+| Bucket | v3 final | v4 expected direction |
+|---|---|---|
+| param_responsive | 8 | should INCREASE — fixture_v2 builds real TaggedSelector + position dicts, so previously fixture-broken parametric skills become callable and pass post-condition sweeps |
+| real_broken | 9 | may INCREASE slightly — skills currently failing on bad fixtures may surface a genuine domain bug now that the harness reaches their actual code path |
+| fixture_broken (subset of geom_broken=171, where 162 are fixture) | 162 | should DECREASE substantially — the entire raison d'être of fixture_v2 is to kill this bucket |
+| inspect_responsive | 75 / 101 | should INCREASE — inspect skills that wanted a real selector/tag also benefit |
+
+**Read rule:** treat any shift from `fixture_broken → param_responsive` as
+"working skill confirmed", and any shift from `fixture_broken → real_broken`
+as "real bug surfaced — file an issue." The total of `param_responsive +
+real_broken` for v4 minus the same total for v3 is the count of skills whose
+true status v4 unlocked.
+
+**Action on completion:** once v4 JSON exists, replace this placeholder with
+the actual bucket deltas and a short narrative.
+
+---
+
+## B3 manual façade review — 2026-06-06
+
+**Goal:** the v3 audit flagged 2 of 12 "static_args" skills as **genuinely
+suspicious façade candidates** (returned `ok=true` with no volume change on a
+healthy box fixture): `unfold` and `cleanability_radius_enforce`. We argued
+in v3 that the box fixture was wrong for both — `unfold` needs a bent sheet,
+not a flat box; `cleanability_radius_enforce` needs a body with sharp
+internal corners, not a plain convex box.
+
+B3 verifies that claim with direct, dedicated tests
+(`run_logs/_tmp/test_facade_review_b3.py`, both PASS).
+
+### unfold — VERDICT: NOT A FAÇADE ✓
+
+Fixture: `sheet_base(40×30×1)` → `bend_edge(axis=Y, x=0, +X half, 90°, R=2)`
+→ `unfold(k_factor=0.4)`.
+
+| Stage | Volume (mm³) | bbox dx (mm) | bbox dz (mm) | face count |
+|---|---|---|---|---|
+| flat sheet | 1200.00 | 40.00 | 1.00 | 6 |
+| after bend | 1317.81 | 23.00 | 23.00 | 14 |
+| after unfold | 1308.39 | 43.61 | 1.00 | 6 |
+
+- bbox z-extent collapsed from 23 mm (bent) → 1 mm (unfolded) — body is flat again.
+- bbox x-extent grew from 23 mm → 43.61 mm — developed length includes the bend allowance correction `L = θ·(R + K·T)`.
+- Volume preserved within 0.7 % (1317.81 → 1308.39) — material conservation holds.
+
+Conclusion: **`unfold` correctly reshapes a bent sheet into its flat blank**.
+The v3 "façade" flag was an artifact of feeding a flat box to a skill whose
+entire purpose is to flatten bent geometry. **Remove `unfold` from the
+façade-suspect list.**
+
+### cleanability_radius_enforce — VERDICT: NOT A FAÇADE ✓
+
+Fixture: `Box(40×40×10)` → `membrane_keypad_recess(L=28, W=28, depth=1.5, corner_r=0)`
+(sharp internal floor↔wall edges) → `cleanability_radius_enforce(min_internal_r_mm=1.0)`.
+
+| Stage | face count |
+|---|---|
+| plain box | 6 |
+| with pocket (sharp interior) | 11 |
+| after cleanability enforce | 23 |
+
+- `extras['concave_edges_found'] = 8` — 4 floor edges + 4 wall-to-floor pairs detected.
+- `extras['edges_filleted'] = 8` — all detected concave edges successfully filleted.
+- Face count grew by 12 (each fillet replaces one edge with a new cylindrical face and may split adjacent faces) — well over the `face_count_changed` post-condition threshold.
+
+Conclusion: **`cleanability_radius_enforce` correctly detects concave
+internal corners and applies a cleanability fillet**. The v3 "façade" flag
+was an artifact of feeding a plain convex box (which has zero concave edges
+by definition) to a skill that only acts on concave edges below the
+threshold. **Remove `cleanability_radius_enforce` from the façade-suspect list.**
+
+### Updated façade tally
+
+After B3, the v3 "Genuinely suspicious" subset of `geom_static_args` drops
+from **2/12 → 0/12**. All 12 are now confirmed legitimate no-ops on a healthy
+box (10 by design — repair/IO/calc/mold — and 2 by virtue of the wrong
+fixture, now cleared). The realistic "broken or façade" estimate from v3
+("probably <10") falls to **<8** pending v4 disposition of the 9 real_broken.
+
+---
+
 ## v3 In-process audit — FINAL (2026-06-04, full 338/338 coverage)
 
 **Method**: `run_logs/_tmp/skill_audit_v2.py` — single Python session, no subprocess. Real fixtures: face_named selector, Circle sketch dict, catalog spec lookups. Incremental JSONL writes (resume on interruption). Hangs identified + skipped: `gear_helical_involute`, `worm_thread`, `helical_thread_*`, `helical_spring`, `coil_spring_rectangular`, `launch_ui_panel` (Qt event loop).

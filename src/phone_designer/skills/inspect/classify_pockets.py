@@ -37,6 +37,35 @@ extras["pockets"] = [
     ...
 ]
 
+False-positive filters
+----------------------
+On mesh-derived shells (mesh_to_brep on a decimated STL) the face graph
+contains hundreds of small concave clusters that look like pockets to the
+seed/component pass but are really tessellation noise. Four args reject
+each class of artefact:
+
+    min_depth_mm                 — drop sub-noise pockets (default 0.1).
+    min_top_d_mm                 — drop sub-mm openings.
+    min_depth_to_width_ratio     — drop "flat patch" pockets (depth ≪ top_d).
+    min_face_count_per_pocket    — drop 1-2 face creases.
+
+Default values are 0/1 (backward-compatible — no filtering).
+
+iPhone-tuned defaults
+~~~~~~~~~~~~~~~~~~~~~
+For raw iPhone-class teardown meshes decimated to ~7 k faces, the
+following set drops the unfiltered count of ~17 mesh-artefact pockets to
+≤8 real pockets while keeping every physically meaningful cavity:
+
+    {
+        "min_top_d_mm": 2.0,
+        "min_face_count_per_pocket": 3,
+        "min_depth_to_width_ratio": 0.05,
+    }
+
+Pass these via ``extract_feature_catalog(classify_pockets_extra_args=...)``
+or directly to ``ClassifyPockets().apply(body, {...})``.
+
 Body unchanged — post ``body_present``.
 """
 from __future__ import annotations

@@ -1,0 +1,76 @@
+name: skill_audit
+
+# C3: Weekly skill_audit_v4 run — non-blocking, exports bucket summary as an
+# artifact for manual review. Catches slow drift (façade regressions, new
+# fixture_broken skills) that the fidelity gate doesn't surface directly.
+
+on:
+  schedule:
+    # Every Monday 03:00 UTC (~ Mon 12:00 KST). Cron is in UTC on GitHub Actions.
+    - cron: "0 3 * * 1"
+  workflow_dispatch: {}  # allow manual kick
+
+concurrency:
+  group: skill-audit-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: skill_audit_v4 summary
+    runs-on: windows-latest
+    # NOT required — see branch protection. This job is review-only.
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install project + dev extras
+        shell: pwsh
+        run: |
+          python -m venv venv
+          venv\Scripts\python.exe -m pip install --upgrade pip wheel setuptools
+          venv\Scripts\python.exe -m pip install -e ".[dev]"
+
+      - name: Run skill_audit_v4 (in-process Pydantic-aware fixture audit)
+        shell: pwsh
+        env:
+          PYTHONUTF8: "1"
+        run: |
+          New-Item -ItemType Directory -Path run_logs\_tmp -Force | Out-Null
+          venv\Scripts\python.exe run_logs\_tmp\skill_audit_v4.py
+
+      - name: Upload skill_audit_v4 summary + jsonl
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: skill_audit_v4-${{ github.run_id }}
+          path: |
+            run_logs/_tmp/skill_audit_v4_summary.json
+            run_logs/_tmp/skill_audit_v4.jsonl
+            run_logs/_tmp/skill_audit_v4_last_attempted.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Print bucket summary to job log
+        if: always()
+        shell: pwsh
+        run: |
+          $p = "run_logs\_tmp\skill_audit_v4_summary.json"
+          if (Test-Path $p) {
+            Get-Content $p -Raw
+          } else {
+            Write-Output "skill_audit_v4_summary.json was not produced — inspect last_attempted.txt artifact."
+          }

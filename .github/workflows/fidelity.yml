@@ -1,0 +1,80 @@
+name: fidelity
+
+# C1: Hard gate — round-trip RE pipeline fidelity must hold on every push and PR.
+# Marked REQUIRED in branch protection so PRs cannot merge while this job fails.
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+# Only one fidelity run per ref — newer pushes cancel older queued runs.
+concurrency:
+  group: fidelity-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  fidelity:
+    name: FIDELITY_STRICT pytest -m fidelity
+    # Windows runner required: build123d / cadquery-ocp (OCCT 7.8) wheels
+    # are first-class on win64 + native PySide6/VTK desktop stack.
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Create venv (matches local layout — venv\Scripts\python.exe)
+        shell: pwsh
+        run: |
+          python -m venv venv
+          venv\Scripts\python.exe -m pip install --upgrade pip wheel setuptools
+
+      - name: Install project + dev extras from pyproject.toml
+        shell: pwsh
+        run: |
+          venv\Scripts\python.exe -m pip install -e ".[dev]"
+
+      - name: Sanity — show installed CAD kernel versions
+        shell: pwsh
+        run: |
+          venv\Scripts\python.exe -c "import build123d, cadquery_ocp; print('build123d', build123d.__version__); print('OCP wheel ok')"
+
+      - name: Skill manifest drift check (registered count == manifest.json count)
+        shell: pwsh
+        run: |
+          venv\Scripts\python.exe -m pytest tests/skills/test_manifest_drift.py -v --no-header
+
+      - name: FIDELITY_STRICT pytest -m fidelity
+        shell: pwsh
+        env:
+          FIDELITY_STRICT: "1"
+          # Headless: skip Qt event loop tests inadvertently pulled in by deps
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          venv\Scripts\python.exe -m pytest -m fidelity -v --tb=short --strict-markers
+
+      - name: Upload fidelity logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fidelity-logs-${{ github.run_id }}
+          path: |
+            run_logs/
+            corpus/oem/_reports/
+          if-no-files-found: ignore
+          retention-days: 14

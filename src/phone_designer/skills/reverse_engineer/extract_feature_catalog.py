@@ -396,6 +396,16 @@ class ExtractFeatureCatalog(SkillBase):
                         "typical on multi-core boxes. Set False for "
                         "deterministic single-threaded execution.",
         )
+        classify_pockets_extra_args: dict = Field(
+            default_factory=dict,
+            description="Extra kwargs merged into the ClassifyPockets call. "
+                        "Use this on mesh-derived shells to enable the four "
+                        "false-positive filters (min_depth_mm, min_top_d_mm, "
+                        "min_depth_to_width_ratio, min_face_count_per_pocket). "
+                        "iPhone-tuned defaults: "
+                        "{'min_top_d_mm': 2.0, 'min_face_count_per_pocket': 3, "
+                        "'min_depth_to_width_ratio': 0.05}.",
+        )
 
     def _build_catalog_for(
         self,
@@ -467,9 +477,10 @@ class ExtractFeatureCatalog(SkillBase):
 
         # ── Independent detectors — run in parallel if requested ───────────
         # All six release the GIL inside OCP so threading helps.
+        cp_extra = dict(getattr(self, "_classify_pockets_extra_args", {}) or {})
         independent = [
             ("classify_holes",         ClassifyHoles().apply,        body, {"match_standards": True}),
-            ("classify_pockets",       ClassifyPockets().apply,      body, {}),
+            ("classify_pockets",       ClassifyPockets().apply,      body, cp_extra),
             ("detect_bosses",          DetectBosses().apply,         body, {}),
             ("detect_ribs",            DetectRibs().apply,           body, {}),
             ("detect_lugs",            DetectLugs().apply,           body, {}),
@@ -631,6 +642,7 @@ class ExtractFeatureCatalog(SkillBase):
     def _apply(self, body: Any, args: Args) -> SkillResult:
         # Wire arg → instance attr so _build_catalog_for can read it.
         self._parallel_mode = bool(args.parallel)
+        self._classify_pockets_extra_args = dict(args.classify_pockets_extra_args or {})
         # ── Whole-body catalog (always computed) ───────────────────────────
         feature_catalog = self._build_catalog_for(body, args.max_face_count)
 
