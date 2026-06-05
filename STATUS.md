@@ -1,22 +1,35 @@
 # SmartTwinModeller — Project Status
 
-**마지막 갱신**: 2026-06-05 · **현 commit**: `b1ea268` · **GitHub**: https://github.com/squall321/SmartTwinModeller
+**마지막 갱신**: 2026-06-06 · **현 commit**: `c719f33` · **GitHub**: https://github.com/squall321/SmartTwinModeller
 
 ## 한 줄 요약
 
-LLM-driven **양방향** parametric CAD skill library — build123d / OCCT 7.8 기반. **340 등록 skill / 21 카테고리 / 23 도메인 카탈로그 / 116 테스트 파일 / 1324 PASS**. Watch v0 합성 + 7 round 도메인 확장 + reverse-engineering 풀파이프라인 + **iPhone 12 teardown glb → BREP 첫 PASS round-trip**.
+LLM-driven **양방향** parametric CAD skill library — build123d / OCCT 7.8 기반. **340 등록 skill / 21 카테고리 / 23 도메인 카탈로그 / 116 테스트 파일 / 1324 PASS**. Watch v0 합성 + 7 round 도메인 확장 + reverse-engineering 풀파이프라인 + **iPhone 12 teardown glb → BREP → Plan → 재합성 PASS** (2번 검증: 132 face / 7,000 face).
 
-## Real-world round-trip — iPhone teardown (2026-06-05)
+## Real-world round-trip — iPhone teardown (2026-06-05 ~ 2026-06-06)
 
-iPhone 12 teardown `.glb` (실제 3D-scan 자산) 으로 end-to-end 파이프라인 첫 PASS 달성. 합성 fixture 가 아니라 OEM 스캔 메쉬에서의 **실증**.
+iPhone 12 teardown `.glb` (실제 3D-scan 자산) 으로 end-to-end 파이프라인 PASS 달성. 합성 fixture 가 아닌 OEM 스캔 메쉬에서의 **실증**. 4 단계 evolution:
 
-| 단계 | 결과 |
-|---|---|
-| glb 로드 (trimesh) | 364k tri / 90k face 외피 housing 추출 |
-| `mesh_to_brep` (multi-shell + fill_small_holes) | open-shell 도 solid 화, 16k face shell 정상 빌드 |
-| `extract_feature_catalog` (detector 가속 후) | 16k face shell @ **0.94s** (이전 660s → 700x 가속) |
-| `plan_from_feature_catalog` (RectangleSketch 필드 수정 + base_thickness floor) | Plan YAML 생성 성공, RE-STEP 재합성 PASS |
-| symmetry-aware plan + outer-surface base | Run 3 90k face housing 완주 |
+| run | mesh face | catalog | plan steps | executor | features 검출 |
+|---|---:|---:|---:|---|---|
+| **v0** (132 face) | 132 | 0.4 s | 3 (box + 2 pocket) | PASS | 2 pockets, 6 symmetries |
+| **v1** (350 face, cluster over-decimate) | 350 | 12 s | 4 (box + 3 pocket) | PASS | 3 pockets, **2 bosses** |
+| **v2** (7,043 face, quadric+chain) | 7,043 | 47 s | — | — | **15 pockets**, 1 boss, 1 rib |
+| **v3** (6,969 face, target hit) | 6,969 | **51 s parallel** | 11 (box + 7 pockets + 1 hole) | **PASS** ★ | 17 pockets, 6 symmetries |
+
+v3 (`c719f33`) 가 가장 의미 있음 — `mesh_decimate` 의 새 cluster binary-search 가 target 7000 을 ±0.4% 정확히 hit, plan 이 **hole step** 까지 emit, PlanExecutor 가 11-step plan 을 0 error 로 실행. regen body bbox 가 8.22×71.25×146.89mm (iPhone 12 정확).
+
+## Verified bug fixes (2026-06-04 ~ 2026-06-06) — 14건
+
+iPhone 실증 파이프라인을 돌리며 surfaced 된 정상화. 모두 테스트로 lock-down.
+
+| commit | 영역 | 내용 |
+|---|---|---|
+| `c719f33` | classify_pockets | 4 FP filter 인자 추가 (min_top_d / depth_ratio / face_count_per_pocket); extract_feature_catalog 에 parallel:bool=True (ThreadPoolExecutor 4 workers) |
+| `27e62e3` | mesh_decimate | cluster pitch binary-search + quadric chain fallback → target ±15% 정확 hit. iPhone 90k→7k 가능 |
+| `bf02e79` | docs | per-component + 8k recovery + feature fidelity test + STATUS refresh |
+| `b1ea268` | detector + plan + base | symmetry-aware plan / outer-surface base / multi-shell components / detector speedup |
+| `39d94e1` | docs | iPhone first PASS milestone doc |
 
 문서: [`iPhone real-world round-trip — first PASS milestone`](docs/iphone_first_pass.md) 및 commit `39d94e1`.
 

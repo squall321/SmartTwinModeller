@@ -4,90 +4,119 @@ steps:
 - id: s_base
   skill: box
   args:
-    length_mm: 50.00554543444804
-    width_mm: 50.00554543444804
-    height_mm: 10.0
-- id: s_sweep_boss_0
-  skill: swept_boss_along_curve
+    length_mm: 8.220794877734383
+    width_mm: 71.2463876816895
+    height_mm: 146.88749455544018
+- id: s_pocket_0
+  skill: extrude_pocket
+  args:
+    face_selector: &id002
+      kind: face_named
+      name: top
+    sketch:
+      kind: rectangle
+      length_mm: 10.6397
+      width_mm: 10.6397
+      center_x_mm: 0.1231
+      center_y_mm: 34.5671
+    depth_mm: 1.5552
+- id: s_pocket_1
+  skill: extrude_pocket
   args:
     face_selector: &id001
       kind: face_named
-      name: top
-    profile_sketch:
-      kind: circle
-      diameter_mm: 2.9658
-    path_points:
-    - - -14.881
-      - -13.1173
-      - 10.0
-    - - -14.881
-      - -10.1514
-      - 15.1173
-    - - -14.881
-      - -7.1856
-      - 15.1173
-    path_type: polyline
-- id: s_loft_boss_0
-  skill: loft_boss_between_sketches
+      name: bottom
+    sketch:
+      kind: rectangle
+      length_mm: 6.8628
+      width_mm: 6.8628
+      center_x_mm: -1.0325
+      center_y_mm: -35.0898
+    depth_mm: 2.2824
+- id: s_pocket_2
+  skill: extrude_pocket
   args:
     face_selector: *id001
-    lower_sketch:
-      kind: circle
-      diameter_mm: 9.9509
-      center_x_mm: 10.0758
-      center_y_mm: 10.0505
-    upper_sketch:
-      kind: circle
-      diameter_mm: 9.9509
-      center_x_mm: 10.0758
-      center_y_mm: 10.0505
-    height_mm: 5.092
-- id: s_hole_0
-  skill: tap_drill_hole
+    sketch:
+      kind: rectangle
+      length_mm: 3.4079
+      width_mm: 3.4079
+      center_x_mm: -3.7221
+      center_y_mm: -7.3021
+    depth_mm: 0.5156
+- id: s_pocket_3
+  skill: hole
+  args:
+    position:
+    - 0.1834
+    - 6.1723
+    - 144.7091
+    diameter_mm: 2.7852
+    depth_mm: 5.2586
+    direction: -Z
+- id: s_pocket_4
+  skill: extrude_pocket
   args:
     face_selector: *id001
-    position_xy:
-    - -15.0
-    - -10.0
-    thread_spec: M4
-    depth_mm: 3.3
-- id: s_hole_1
-  skill: hole
+    sketch:
+      kind: rectangle
+      length_mm: 2.1931
+      width_mm: 2.1931
+      center_x_mm: 3.7246
+      center_y_mm: -34.4826
+    depth_mm: 0.5118
+- id: s_pocket_5
+  skill: extrude_pocket
   args:
-    position:
-    - -24.6
-    - -25.0
-    - 9.6
-    diameter_mm: 0.8
-    depth_mm: 50.0
-    direction: +Y
-- id: s_hole_2
-  skill: hole
+    face_selector: *id002
+    sketch:
+      kind: rectangle
+      length_mm: 2.1525
+      width_mm: 2.1525
+      center_x_mm: 2.5083
+      center_y_mm: 11.8691
+    depth_mm: 1.0782
+- id: s_pocket_6
+  skill: extrude_pocket
   args:
-    position:
-    - -25.0
-    - -24.6
-    - 9.6
-    diameter_mm: 0.8
-    depth_mm: 50.0
-    direction: +X
-- id: s_hole_3
-  skill: hole
+    face_selector: *id001
+    sketch:
+      kind: rectangle
+      length_mm: 1.5709
+      width_mm: 1.5709
+      center_x_mm: 1.4662
+      center_y_mm: -4.2308
+    depth_mm: 1.1662
+- id: s_pocket_7
+  skill: extrude_pocket
   args:
-    position:
-    - -25.0
-    - 24.6
-    - 9.6
-    diameter_mm: 0.8
-    depth_mm: 50.0
-    direction: +X
-- id: s_hole_4
-  skill: hole
+    face_selector: *id002
+    sketch:
+      kind: rectangle
+      length_mm: 1.2639
+      width_mm: 1.2639
+      center_x_mm: -1.2345
+      center_y_mm: -13.08
+    depth_mm: 1.5586
+- id: s_pocket_8
+  skill: extrude_pocket
   args:
-    position:
-    - 24.6
-    - -25.0
-    - 9.6
-    diameter_mm: 0.8
-    depth_mm: 50.0
-    direction: +Y
+    face_selector: *id002
+    sketch:
+      kind: rectangle
+      length_mm: 1.1113
+      width_mm: 1.1113
+      center_x_mm: 1.812
+      center_y_mm: -2.2132
+    depth_mm: 0.521
+- id: s_pocket_9
+  skill: extrude_pocket
+  args:
+    face_selector: *id002
+    sketch:
+      kind: rectangle
+      length_mm: 1.0783
+      width_mm: 1.0783
+      center_x_mm: 3.6853
+      center_y_mm: -16.5733
+    depth_mm: 0.5571
