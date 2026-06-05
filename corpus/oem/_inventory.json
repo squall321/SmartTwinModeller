@@ -1,0 +1,154 @@
+[
+  {
+    "filename": "occt__screw.step",
+    "source_url": "https://raw.githubusercontent.com/Open-Cascade-SAS/OCCT/master/data/step/screw.step",
+    "source": "occt",
+    "kind": "step",
+    "size_bytes": 88552,
+    "sha256": "4b3649a4f5c4f05c7a06a402a91fe2fd7e3cba1615520fbd8c62a62610ad3e69"
+  },
+  {
+    "filename": "occt__linkrods.step",
+    "source_url": "https://raw.githubusercontent.com/Open-Cascade-SAS/OCCT/master/data/step/linkrods.step",
+    "source": "occt",
+    "kind": "step",
+    "size_bytes": 1793282,
+    "sha256": "3674e4b01ee0e983c81ed170f0574cda201ad08e0f7b46e05e4f4613400fd5f7"
+  },
+  {
+    "filename": "occt-iges__bearing.iges",
+    "source_url": "https://raw.githubusercontent.com/Open-Cascade-SAS/OCCT/master/data/iges/bearing.iges",
+    "source": "occt-iges",
+    "kind": "iges",
+    "size_bytes": 1284903,
+    "sha256": "e148b6f4240694049c8a2b894dc9f7c74113bb8991e5a12a5dead160fb9f0106"
+  },
+  {
+    "filename": "occt-iges__hammer.iges",
+    "source_url": "https://raw.githubusercontent.com/Open-Cascade-SAS/OCCT/master/data/iges/hammer.iges",
+    "source": "occt-iges",
+    "kind": "iges",
+    "size_bytes": 1038825,
+    "sha256": "b62fb4823e109737b56ba2fd18e2d10ecd988776cb16262d59f3e1784feb0a65"
+  },
+  {
+    "filename": "pythonocc__as1-oc-214.step",
+    "source_url": "https://raw.githubusercontent.com/tpaviot/pythonocc-demos/master/assets/models/as1-oc-214.stp",
+    "source": "pythonocc",
+    "kind": "step",
+    "size_bytes": 441968,
+    "sha256": "038be659c54b16c9f3da8d7b2da7b63e3fd8879d3abe5b7826108336a7c0bae9"
+  },
+  {
+    "filename": "pythonocc__as1_pe_203.step",
+    "source_url": "https://raw.githubusercontent.com/tpaviot/pythonocc-demos/master/assets/models/as1_pe_203.stp",
+    "source": "pythonocc",
+    "kind": "step",
+    "size_bytes": 139752,
+    "sha256": "e14f7a52b3f0c53e36730c0f56654b01a17822f1b864dc6c42657223c54cafb6"
+  },
+  {
+    "filename": "pythonocc__face_recognition_sample_part.step",
+    "source_url": "https://raw.githubusercontent.com/tpaviot/pythonocc-demos/master/assets/models/face_recognition_sample_part.stp",
+    "source": "pythonocc",
+    "kind": "step",
+    "size_bytes": 36763,
+    "sha256": "de7b8a513ae923cd11de2323e798ac084cc94f9aa7d7a2a8adab65fc592f8d0b"
+  },
+  {
+    "filename": "pythonocc__splinecage.step",
+    "source_url": "https://raw.githubusercontent.com/tpaviot/pythonocc-demos/master/assets/models/splinecage.stp",
+    "source": "pythonocc",
+    "kind": "step",
+    "size_bytes": 28886,
+    "sha256": "e6d3c25c4a3777de1cb71c4988fc1a5cbb9fb5587e4085273d1844a479ddfe33"
+  },
+  {
+    "filename": "pythonocc__Ventilator.step",
+    "source_url": "https://raw.githubusercontent.com/tpaviot/pythonocc-demos/master/assets/models/Ventilator.stp",
+    "source": "pythonocc",
+    "kind": "step",
+    "size_bytes": 2257591,
+    "sha256": "19a11c6949aff4d003a4750d0d9f7e4ee21ab12401dfb07bd97350777266e4d5"
+  },
+  {
+    "filename": "pythonocc__11752.step",
+    "source_url": "https://raw.githubusercontent.com/tpaviot/pythonocc-demos/master/assets/models/11752.stp",
+    "source": "pythonocc",
+    "kind": "step",
+    "size_bytes": 1579363,
+    "sha256": "c2748324a36018ff1d88cfb0a80946636f29431417b9f1052a0dfc13576b0d41"
+  },
+  {
+    "filename": "pythonocc-iges__curve_geom_plate.iges",
+    "source_url": "https://raw.githubusercontent.com/tpaviot/pythonocc-demos/master/assets/models/curve_geom_plate.igs",
+    "source": "pythonocc-iges",
+    "kind": "iges",
+    "size_bytes": 7452,
+    "sha256": "39004c2f27d5d48a08bacb9570c39fcf8e901569a6eadfacc54ab16a3df65ef6"
+  },
+  {
+    "filename": "pythonocc-iges__surf114.iges",
+    "source_url": "https://raw.githubusercontent.com/tpaviot/pythonocc-demos/master/assets/models/surf114.igs",
+    "source": "pythonocc-iges",
+    "kind": "iges",
+    "size_bytes": 135792,
+    "sha256": "4f4861df35acf8ce2c61e6308fc32f6e39c3a207318436c193db1bbd6b7b26df"
+  },
+  {
+    "filename": "kicad__C_0402_1005Metric.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Capacitor_SMD.3dshapes/C_0402_1005Metric.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 43502,
+    "sha256": "03e44c4b2b727b8d4b6b1fd598cbd12dd5e614f1dfeefa96a92a07e3a3b312a2"
+  },
+  {
+    "filename": "kicad__CP_Elec_3x5.4.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Capacitor_SMD.3dshapes/CP_Elec_3x5.4.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 80480,
+    "sha256": "f3424b28bf80f158659122b8404a8bef50a97af2f7457fa5a3fe99eb13e9d049"
+  },
+  {
+    "filename": "kicad__CP_Elec_10x10.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Capacitor_SMD.3dshapes/CP_Elec_10x10.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 82045,
+    "sha256": "8af72237638a055d91e7b5db024aa87cce0ae52e62a77308a6489843773d9c38"
+  },
+  {
+    "filename": "kicad__R_0402_1005Metric.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Resistor_SMD.3dshapes/R_0402_1005Metric.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 40756,
+    "sha256": "91507e5af4251cb4ef38e04889c9b98da29904432bd83786bba13ae9b605eacb"
+  },
+  {
+    "filename": "kicad__LED_0402_1005Metric.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/LED_SMD.3dshapes/LED_0402_1005Metric.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 77782,
+    "sha256": "401a17c0a337a26edbde24f58dabfc1560d6cb1bfb8c8fc5c31b8692e321eb12"
+  },
+  {
+    "filename": "kicad__L_0402_1005Metric.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Inductor_SMD.3dshapes/L_0402_1005Metric.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 43502,
+    "sha256": "8bf2ae2bbd9d8b716db21d8d7fb903fac5ba2696150c3ec2e35bcea17b208ff2"
+  },
+  {
+    "filename": "kicad__D_0603_1608Metric.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Diode_SMD.3dshapes/D_0603_1608Metric.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 73193,
+    "sha256": "b6c3db4577543309a6fc7af7bc65e6ca9d773b00c75ad23026795f850c77df21"
+  }
+]
