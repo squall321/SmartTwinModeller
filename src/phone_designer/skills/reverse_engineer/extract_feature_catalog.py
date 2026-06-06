@@ -140,6 +140,45 @@ def _detect_swept_loft_revolve(body, bosses, base_z_max):
     shape = _occt_shape(body)
     faces = _all_faces(shape)
 
+    # ── Outer-envelope guard ─────────────────────────────────────────────────
+    # Cone / surface-of-extrusion / surface-of-revolution faces that span
+    # most of the body's Z extent are NOT loft / sweep / revolve features
+    # added on top of the slab — they ARE the slab's outer envelope (e.g.
+    # the threaded-shaft cone of a screw, the body of a bottle). Emitting
+    # them as boss steps duplicates the body height (FALSE-PASS-DRIFT —
+    # the executor reports PASS while the regen bbox grows to 2x original).
+    #
+    # Body bbox once, then for each candidate face: if its z-extent is more
+    # than 50 % of the body z-extent OR it extends below ``base_z_max - tol``,
+    # treat it as outer envelope and skip.
+    body_bb = None
+    try:
+        from OCP.Bnd import Bnd_Box as _BB
+        from OCP.BRepBndLib import BRepBndLib as _BL
+        _bb = _BB()
+        try:
+            _BL.AddOptimal_s(shape, _bb)
+        except Exception:
+            _BL.Add_s(shape, _bb)
+        if not _bb.IsVoid():
+            body_bb = _bb.Get()
+    except Exception:
+        body_bb = None
+    body_z_extent = (body_bb[5] - body_bb[2]) if body_bb is not None else None
+
+    def _is_outer_envelope(fbb) -> bool:
+        if fbb is None or body_z_extent is None or body_z_extent <= 1e-6:
+            return False
+        face_z_extent = fbb[5] - fbb[2]
+        # (a) spans most of the body height ⇒ outer wall, not on-top feature.
+        if face_z_extent / body_z_extent >= 0.5:
+            return True
+        # (b) sits below the slab top ⇒ part of the base body, not added on
+        #     top of it.
+        if base_z_max is not None and fbb[2] < float(base_z_max) - 0.5:
+            return True
+        return False
+
     extrusion_faces = []
     bspline_faces = []
     cone_faces = []
@@ -151,12 +190,18 @@ def _detect_swept_loft_revolve(body, bosses, base_z_max):
         except Exception:
             continue
         if t == int(GeomAbs_SurfaceOfExtrusion):
+            if _is_outer_envelope(_face_bbox_local(f)):
+                continue
             extrusion_faces.append((fi, f))
         elif t == int(GeomAbs_BSplineSurface):
             bspline_faces.append((fi, f))
         elif t == int(GeomAbs_Cone):
+            if _is_outer_envelope(_face_bbox_local(f)):
+                continue
             cone_faces.append((fi, f))
         elif t == int(GeomAbs_SurfaceOfRevolution):
+            if _is_outer_envelope(_face_bbox_local(f)):
+                continue
             revol_faces.append((fi, f))
 
     sweep_features: list[dict] = []
@@ -232,6 +277,14 @@ def _detect_swept_loft_revolve(body, bosses, base_z_max):
         if bot_d > top_d:
             top_d, bot_d = bot_d, top_d
         anchor_z = base_z_max if base_z_max is not None else zmin
+        # PACK-C false-pass-drift guard: if the implied loft height is
+        # comparable to the body's own Z extent, this cone face is part of
+        # the outer envelope (screw shaft/head, bottle body) — emitting it
+        # as a loft_boss DUPLICATES the body height. Skip.
+        _loft_h = max(zmax - anchor_z, 0.5)
+        if body_z_extent is not None and body_z_extent > 1e-6:
+            if _loft_h / body_z_extent >= 0.5:
+                continue
         cx, cy = 0.5 * (xmin + xmax), 0.5 * (ymin + ymax)
         loft_features.append({
             "id": ci,

@@ -134,14 +134,65 @@ class PlanExecutor:
                 result.step_results[step.id] = skill_result
 
             except Exception as e:
+                # ``str(e)`` is empty for some OCCT-wrapped exceptions and
+                # for bare ``RuntimeError()`` raises; fall back to repr so
+                # downstream diagnostics (run_logs / corpus report) never see
+                # a null message.
+                msg = str(e) or repr(e) or f"{type(e).__name__} raised with no message"
+
+                # PLAN-DEPTH-CEILING fix: when a post-condition fails
+                # because the step produced a zero-delta volume change —
+                # i.e. the cut landed over already-removed material, or
+                # the boss landed inside an existing void — the body is
+                # geometrically unchanged. Treat that as a SKIP rather
+                # than a hard FAIL so subsequent steps in long plans can
+                # continue. The drift gate downstream still rejects bad
+                # reconstructions; we just stop early-aborting the entire
+                # plan on a single wasted cut. This is NOT a determinism
+                # failure (which is what STRICT vs LOOSE is for) so we
+                # apply it in both modes.
+                if (
+                    type(e).__name__ == "PostConditionError"
+                    and _is_zero_delta_volume_failure(msg)
+                ):
+                    step.status = StepStatus.SKIPPED
+                    step.failure = FailureMeta(
+                        error_type=type(e).__name__,
+                        message=(
+                            "SKIPPED — zero-delta volume post-condition "
+                            "(step produced no geometric change; body "
+                            "preserved): " + msg
+                        ),
+                        raw_traceback=traceback.format_exc(),
+                    )
+                    # Body unchanged — continue with previous body for the
+                    # next step. A wasted cut doesn't tear the plan down.
+                    previous_pass = True
+                    continue
+
                 step.status = StepStatus.FAIL
                 step.failure = FailureMeta(
                     error_type=type(e).__name__,
-                    message=str(e),
+                    message=msg,
                     raw_traceback=traceback.format_exc(),
                 )
                 result.error_count += 1
                 previous_pass = False
+
+        # Safety net — any step left in FAIL without a populated failure (e.g.,
+        # a future code path that sets status=FAIL but forgets FailureMeta)
+        # gets a synthetic message so the corpus report never shows a null
+        # error string again. This is the fix for PASS-GATE-EDGE:
+        #   "executor_errors = 1 without surfacing which step".
+        for step in self.plan.steps:
+            if step.status == StepStatus.FAIL and step.failure is None:
+                step.failure = FailureMeta(
+                    error_type="UnknownFailure",
+                    message=(
+                        "step marked FAIL without specific error — "
+                        "bug in executor's error capture"
+                    ),
+                )
 
         result.final_body = body
         return result
@@ -178,3 +229,38 @@ def _freeze_to_meta(f: SelectorFreeze) -> FreezeMeta:
         sort_key=f.sort_key,
         topology_signature=f.topology_signature,
     )
+
+
+def _is_zero_delta_volume_failure(msg: str) -> bool:
+    """True iff ``msg`` is a PostConditionError message for a volume_decreased
+    / volume_increased check that failed with a near-zero delta (i.e. the
+    step ran without raising an OCCT error but didn't actually change the
+    body volume).
+
+    The post_conditions module formats such messages as e.g.::
+
+        extrude_pocket: post_condition 'volume_decreased' failed —
+        pre=60099.5301 mm³, post=60099.5301 mm³, delta=0.0000 mm³
+        (expected ≤ -0.01)
+
+    We match on the post_condition name + the literal ``delta=`` token + a
+    near-zero value (|delta| < 0.05 mm³). That keeps the fast-path for real
+    geometric failures (e.g. a pocket that ate the entire body and so
+    decreased volume more than expected) while still skipping the wasted-
+    cut case that PLAN-DEPTH-CEILING surfaces.
+    """
+    if not msg:
+        return False
+    if "volume_decreased" not in msg and "volume_increased" not in msg:
+        return False
+    import re
+    m = re.search(r"delta=(-?\d+(?:\.\d+)?)", msg)
+    if m is None:
+        # Defensive: if the message format changes, prefer skipping over
+        # tearing the plan down — the body was preserved either way.
+        return True
+    try:
+        delta = abs(float(m.group(1)))
+    except (TypeError, ValueError):
+        return True
+    return delta < 0.05

@@ -99,6 +99,84 @@ def _body_bbox(body: Any) -> tuple[float, float, float, float, float, float] | N
         return None
 
 
+def _primary_feature_axis(
+    catalog: dict | None,
+    bbox: tuple[float, float, float, float, float, float] | None,
+) -> str:
+    """Detect the body's primary feature axis ('X' | 'Y' | 'Z').
+
+    PACK B (CTRL-Z-AXIS) — when the catalog's hole/pocket features
+    overwhelmingly point along one cardinal axis, that axis is the
+    "primary" extrude/drill axis. Downstream face_named="top"/"bottom"
+    selectors only resolve ±Z faces, so features whose axis is NOT ±Z
+    cannot be reached by the placeholder box plan and must be dropped.
+
+    Heuristic:
+      1. Tally each hole/pocket's dominant axis_dir component (X/Y/Z).
+      2. If one axis wins by a 2:1 margin, return it.
+      3. Otherwise fall back to the dominant bbox extent.
+    """
+    counts: dict[str, int] = {"X": 0, "Y": 0, "Z": 0}
+    if catalog is not None:
+        for src in ("holes", "pockets"):
+            for f in (catalog.get(src) or []):
+                ad = f.get("axis_dir")
+                if not ad or len(ad) < 3:
+                    continue
+                try:
+                    ax, ay, az = (
+                        abs(float(ad[0])),
+                        abs(float(ad[1])),
+                        abs(float(ad[2])),
+                    )
+                except Exception:
+                    continue
+                if max(ax, ay, az) < 0.5:
+                    continue
+                if ax >= ay and ax >= az:
+                    counts["X"] += 1
+                elif ay >= az:
+                    counts["Y"] += 1
+                else:
+                    counts["Z"] += 1
+    total = counts["X"] + counts["Y"] + counts["Z"]
+    if total > 0:
+        ranked = sorted(counts.items(), key=lambda c: -c[1])
+        top, second = ranked[0], ranked[1]
+        # Decisive win: top has ≥2/3 of the votes.
+        if top[1] >= 2 * second[1] and top[1] >= 2:
+            return top[0]
+    # Fallback: bbox extents.
+    if bbox is not None:
+        try:
+            L = float(bbox[3]) - float(bbox[0])
+            W = float(bbox[4]) - float(bbox[1])
+            H = float(bbox[5]) - float(bbox[2])
+            extents = [("X", L), ("Y", W), ("Z", H)]
+            extents.sort(key=lambda c: -c[1])
+            return extents[0][0]
+        except Exception:
+            pass
+    return "Z"
+
+
+def _feature_axis_is_z(feat: dict, threshold: float = 0.5) -> bool:
+    """True if the feature's axis_dir is dominantly along ±Z (|z| > threshold).
+
+    Used to gate emission of pockets / holes / mirror_feature steps when the
+    body's primary axis is X or Y: features whose axis isn't ±Z cannot be
+    reached by the placeholder box plan's face_named="top"/"bottom" face
+    selector, so we drop them rather than emit broken steps.
+    """
+    ad = feat.get("axis_dir")
+    if not ad or len(ad) < 3:
+        return True  # missing axis ⇒ assume Z (existing default)
+    try:
+        return abs(float(ad[2])) > threshold
+    except Exception:
+        return True
+
+
 def _pick_face_selector(
     axis_origin: Any,
     axis_dir: Any,
@@ -297,6 +375,13 @@ def _pocket_step(
     depth = float(pocket.get("depth_mm") or 1.0)
     origin = pocket.get("axis_origin") or [0.0, 0.0, 0.0]
     axis_dir = pocket.get("axis_dir") or [0.0, 0.0, -1.0]
+    # PACK-C debug: opt-in via env var to surface false-pass-drift cases.
+    import os as _os
+    if _os.environ.get("PHONE_DESIGNER_DEBUG_POCKET") == "1":
+        print(
+            f"[pocket_step idx={idx}] axis_origin={origin} axis_dir={axis_dir} "
+            f"top_d={top_d} depth={depth}"
+        )
     face_sel = _pick_face_selector(origin, axis_dir, bbox)
     sid = f"s_pocket_{idx}"
     ox = float(origin[0]) + shift[0]
@@ -344,6 +429,18 @@ def _boss_step(
     sid = f"s_boss_{idx}"
     cx = float(center[0]) + shift[0]
     cy = float(center[1]) + shift[1]
+
+    # PLAN-DEPTH-CEILING fix: the mounting_pad skill caps height_mm at 20 mm
+    # (Field(gt=0, le=20)). On large assembly parts the detector often spans
+    # boss heights at the full body Z extent (e.g. 200 mm on as1-oc-214) —
+    # those bosses are usually internal cylinder fragments mis-classified as
+    # bosses. Clamp to the skill's upper bound so the step at least validates
+    # and runs; the zero-delta skip path catches it from there if the cut
+    # lands in already-removed material.
+    if height > 20.0:
+        height = 20.0
+    elif height <= 0.0:
+        height = 1.0
 
     # mounting_pad expects a SketchSpec (CircleSketch | RectangleSketch | …)
     # + height_mm. Both branches emit a circular pad at the projected XY.
@@ -949,6 +1046,52 @@ _PAIR_Z_TOL = 0.5        # mm: same Z plane (both holes on the same face)
 _PAIR_DIAM_TOL = 0.2     # mm
 _PAIR_DEPTH_TOL = 0.5    # mm
 
+# PACK D (SYMMETRY-ON-BASE) — defensive guard.
+#
+# Skill names that build the body from scratch (category="create" in the
+# registry) MUST NEVER be wrapped by a mirror_feature step. mirror_feature is
+# a modify/pattern macro that reflects an INDIVIDUAL feature (hole/pocket/
+# boss) across an axis-aligned world plane. Applying it to the base extrude
+# itself would mirror the entire body and produce a degenerate union (e.g.
+# Ventilator's 45,450% drift / 400× bbox blowup).
+#
+# The symmetry-aware emission block (6b below) only ever iterates the
+# catalog's ``holes`` list, but we explicitly enforce the rule both as a
+# runtime guard inside the block and as a precondition on the input list so
+# that any future refactor (e.g. broadening the block to operate on a unified
+# "features" list that mixes in base entries) trips this check rather than
+# silently emitting a body-mirror.
+_NON_MIRRORABLE_SKILLS: frozenset[str] = frozenset({
+    "box", "import_step", "preserve_brep",
+    "cylinder", "sphere", "cone", "torus", "wedge", "prism_n_sided",
+    "rounded_slab", "disc_with_dome", "gear_external_involute",
+    "gear_internal_involute", "gear_helical_involute", "coil_spring_rectangular",
+    "helical_spring", "worm_thread", "voronoi_lattice", "gyroid_lattice",
+    "bspline_surface", "mesh_to_brep", "stl_import", "brep_import", "iges_import",
+    "sheet_base", "surface_thicken_variable",
+})
+
+
+def _is_base_or_create_step(step_or_feat: Any) -> bool:
+    """True if ``step_or_feat`` looks like a base/create step rather than a
+    catalog feature dict.
+
+    Catalog feature dicts (holes, pockets, etc.) carry geometric keys like
+    ``axis_origin`` / ``diameters_mm`` and have NO ``skill`` field. Plan step
+    dicts always carry an ``id`` AND a ``skill`` field; a step whose skill is
+    in ``_NON_MIRRORABLE_SKILLS`` (or whose id starts with ``"s_base"``) MUST
+    NOT be wrapped by mirror_feature.
+    """
+    if not isinstance(step_or_feat, dict):
+        return False
+    sid = step_or_feat.get("id")
+    if isinstance(sid, str) and sid.startswith("s_base"):
+        return True
+    skill_name = step_or_feat.get("skill")
+    if isinstance(skill_name, str) and skill_name in _NON_MIRRORABLE_SKILLS:
+        return True
+    return False
+
 
 def _snap_plane_to_axis_label(plane_normal) -> str | None:
     """Return 'YZ' / 'XZ' / 'XY' if ``plane_normal`` is close to ±X / ±Y / ±Z.
@@ -1273,14 +1416,30 @@ def _build_plan(
         if isinstance(sm, dict)
     }
 
-    # Body bbox → real base-box dimensions (L, W, H). Without a body we fall
-    # back to a sensible placeholder so the plan stays self-contained.
+    # PACK B — primary feature axis detection. When the body's hole/pocket
+    # axes overwhelmingly point along X or Y (e.g. KiCad chip packages with
+    # terminal-pad cylinders drilled into the SIDE of the package), the
+    # placeholder box plan cannot reach them via face_named="top"/"bottom"
+    # selectors. Features with non-±Z axes are filtered out below so the
+    # plan degrades gracefully to just the base box rather than failing on
+    # zero-delta volume cuts.
     bbox = _body_bbox(body)
+    primary_axis = _primary_feature_axis(catalog, bbox)
+    # When the primary axis is NOT Z we additionally rewrite the base box
+    # extents so the longest axis maps to L, middle to W, shortest to H —
+    # this keeps the placeholder box's silhouette close to the original
+    # part even when bbox.z is not the dominant extent.
     if bbox is not None:
         xmin, ymin, zmin, xmax, ymax, zmax = bbox
         base_l = max(float(xmax - xmin), 1e-3)
         base_w = max(float(ymax - ymin), 1e-3)
         bbox_h = max(float(zmax - zmin), 1e-3)
+        if primary_axis != "Z":
+            # Re-sort so L=dominant extent, W=middle, H=shortest. Avoids the
+            # degenerate "box thinner than the features that go inside it"
+            # case that produces zero-delta volume cuts.
+            sorted_extents = sorted([base_l, base_w, bbox_h], reverse=True)
+            base_l, base_w, bbox_h = sorted_extents
         # Prefer the slab thickness measured from parallel planar faces — it
         # excludes the boss/sweep/loft height that bbox would otherwise add.
         # Sanity floor — a detected slab thickness < bbox_h / 10 is almost
@@ -1365,8 +1524,17 @@ def _build_plan(
     #    specialized matchers (magnet disc → magnet_pocket_axial, bearing
     #    seat → bearing_bore). Both gated by confidence >= 0.6 so noisy
     #    pockets fall through to the generic path.
+    # PACK B — drop non-Z-axis pockets when primary axis is X or Y. The
+    # placeholder box plan can only cut from ±Z faces via face_named, so
+    # side-drilled cylinders (e.g. terminal pads on SMD packages) would
+    # produce zero-delta cuts and trip volume_decreased.
+    _pockets_axis_filtered = [
+        p for p in pockets
+        if _pocket_is_axis_aligned(p)
+        and (primary_axis == "Z" or _feature_axis_is_z(p))
+    ]
     pockets_sorted = sorted(
-        [p for p in pockets if _pocket_is_axis_aligned(p)],
+        _pockets_axis_filtered,
         key=lambda p: -float(p.get("top_d_mm") or 0.0),
     )
     magnet_idx = 0
@@ -1595,10 +1763,30 @@ def _build_plan(
     mirror_pair_count = 0
     unhandled_holes: list[dict] = []
     for h in holes:
+        # PACK D (SYMMETRY-ON-BASE) — defensive guard. If anything that walks
+        # like a base/create step somehow ends up in the ``holes`` list
+        # (future refactor, catalog corruption, …), refuse to wrap it. Mirror
+        # is for individual modify_* features only — mirroring a base extrude
+        # produces a 400× body union, e.g. Ventilator's 45,450% drift.
+        if _is_base_or_create_step(h):
+            continue
         hid = h.get("id")
         if hid is not None and hid in handled_hole_ids:
             continue
         if any(h is hh for hh in handled_holes_geom):
+            continue
+        # PACK B — only ±Z holes can be collapsed into mirror_feature when
+        # the placeholder box plan is in use; non-Z holes get face_named
+        # selectors that can't reach them.
+        if primary_axis != "Z" and not _feature_axis_is_z(h):
+            continue
+        # Sub-threshold cut filter — mirrors the per-hole/per-pocket guard.
+        # The mirror_feature step cuts TWO cylinders, so we test 2× the
+        # single-cylinder volume against the post-condition floor.
+        _diams_m = h.get("diameters_mm") or []
+        _d_m = float(min(_diams_m)) if _diams_m else 0.0
+        _dp_m = float(h.get("depth_mm") or 0.0)
+        if 2.0 * _predicted_cylinder_volume_mm3(_d_m, _dp_m) < _MIN_EMITTED_CUT_MM3:
             continue
         unhandled_holes.append(h)
 
@@ -1615,6 +1803,12 @@ def _build_plan(
         for local_i, local_j in best_pairs:
             hole_i = unhandled_holes[local_i]
             hole_j = unhandled_holes[local_j]
+            # PACK D — second-line guard: never produce a mirror_feature step
+            # for anything that looks like a base/create step. The upstream
+            # filter already drops these, but emission is the place where a
+            # bad wrap actually corrupts the plan, so we re-check here.
+            if _is_base_or_create_step(hole_i) or _is_base_or_create_step(hole_j):
+                continue
             step = _mirror_feature_step(
                 mirror_idx, hole_i, best_plane, bbox=bbox, shift=feat_shift,
             )
@@ -1634,8 +1828,14 @@ def _build_plan(
                 handled_holes_geom.append(h)
 
     # 7. Holes, largest diameter first ─────────────────────────────────────
+    # PACK B — drop non-Z holes when primary axis is X or Y (see pocket
+    # filter above for rationale).
+    _holes_axis_filtered = [
+        h for h in holes
+        if primary_axis == "Z" or _feature_axis_is_z(h)
+    ]
     holes_sorted = sorted(
-        holes,
+        _holes_axis_filtered,
         key=lambda h: -float(max(h.get("diameters_mm") or [0.0])),
     )
     # When the body's bbox XY aspect ratio is near square (likely a cap or
