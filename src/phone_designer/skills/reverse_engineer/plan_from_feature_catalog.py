@@ -56,6 +56,25 @@ def _load(family, name):
 _DEFAULT_FACE_SELECTOR: dict[str, Any] = {"kind": "face_named", "name": "top"}
 _BOTTOM_FACE_SELECTOR: dict[str, Any] = {"kind": "face_named", "name": "bottom"}
 
+# Minimum predicted cut volume (mm³) for an emitted hole/pocket. Below this
+# the executor's volume_decreased PostCondition (default 0.01 mm³) trips on
+# OCCT roundoff and the whole plan FAILs even though the geometry is sound.
+# Set to 2× the post-condition floor so sub-mm catalog noise (e.g. 0402
+# capacitor terminal pads with d≈0.04 mm) drops out instead of poisoning the
+# plan. Real holes on consumer-electronics scale parts are orders of
+# magnitude above this.
+_MIN_EMITTED_CUT_MM3 = 0.02
+
+
+def _predicted_cylinder_volume_mm3(diameter_mm: float, depth_mm: float) -> float:
+    """Predicted cylinder volume for a hole/pocket cut. Used to drop catalog
+    features whose cut would land below the volume_decreased threshold."""
+    import math as _math
+    if diameter_mm <= 0.0 or depth_mm <= 0.0:
+        return 0.0
+    r = float(diameter_mm) * 0.5
+    return _math.pi * r * r * float(depth_mm)
+
 
 def _new_step(id_: str, skill_name: str, args: dict[str, Any]) -> dict[str, Any]:
     return {"id": id_, "skill": skill_name, "args": args}
@@ -118,11 +137,38 @@ def _pick_face_selector(
         return _DEFAULT_FACE_SELECTOR
 
 
+def _world_to_box_shift(
+    bbox: tuple[float, float, float, float, float, float] | None,
+) -> tuple[float, float, float]:
+    """Compute the translation (tx, ty, tz) that maps world coordinates into
+    the placeholder ``box`` skill's frame.
+
+    The ``box`` skill builds an XY-centered slab whose bottom sits at Z=0
+    (Align.CENTER, Align.CENTER, Align.MIN). The catalog stores feature
+    positions in the *original* body's world frame. To align catalog
+    features with the placeholder box we shift each coordinate by
+    ``(-cx, -cy, -zmin)`` where ``cx, cy`` are the bbox XY centre and
+    ``zmin`` is the bbox floor.
+
+    Returns ``(0, 0, 0)`` when the bbox is unknown so callers degrade
+    gracefully (existing behaviour). Callers that build plans on top of the
+    original BREP (preserve_brep / import_step) should pass ``None`` so no
+    shift is applied — the original world frame is already correct.
+    """
+    if bbox is None:
+        return (0.0, 0.0, 0.0)
+    xmin, ymin, zmin, xmax, ymax, _zmax = bbox
+    cx = (float(xmin) + float(xmax)) * 0.5
+    cy = (float(ymin) + float(ymax)) * 0.5
+    return (-cx, -cy, -float(zmin))
+
+
 def _hole_step(
     idx: int,
     hole: dict,
     std_match: dict | None,
     bbox: tuple[float, float, float, float, float, float] | None = None,
+    shift: tuple[float, float, float] = (0.0, 0.0, 0.0),
 ) -> dict:
     """Pick the most specific hole skill for this hole descriptor.
 
@@ -140,6 +186,11 @@ def _hole_step(
     axis_dir = hole.get("axis_dir") or [0.0, 0.0, -1.0]
     axis_origin = hole.get("axis_origin") or [0.0, 0.0, 0.0]
     face_sel = _pick_face_selector(axis_origin, axis_dir, bbox)
+    # Re-anchor catalog world-frame coords into the placeholder box's frame
+    # (shift = (-cx, -cy, -zmin)). Identity when shift is (0,0,0).
+    ox = float(axis_origin[0]) + shift[0]
+    oy = float(axis_origin[1]) + shift[1]
+    oz = float(axis_origin[2]) + shift[2]
 
     # ── thread spec source: prefer the hole's own standard_match (which
     #    classify_holes attached), fall back to the per-hole standard match
@@ -166,7 +217,7 @@ def _hole_step(
     if htype == "counterbore" and thread_spec:
         return _new_step(sid, "counterbore_hole", {
             "face_selector": face_sel,
-            "position_xy": [float(axis_origin[0]), float(axis_origin[1])],
+            "position_xy": [ox, oy],
             "thread_spec": thread_spec,
             "fit": "medium",
             "depth_mm": depth,
@@ -174,7 +225,7 @@ def _hole_step(
     if htype == "countersink" and thread_spec:
         return _new_step(sid, "countersink_hole", {
             "face_selector": face_sel,
-            "position_xy": [float(axis_origin[0]), float(axis_origin[1])],
+            "position_xy": [ox, oy],
             "thread_spec": thread_spec,
             "fit": "medium",
             "depth_mm": depth,
@@ -182,14 +233,14 @@ def _hole_step(
     if htype == "threaded" and thread_spec:
         return _new_step(sid, "tap_drill_hole", {
             "face_selector": face_sel,
-            "position_xy": [float(axis_origin[0]), float(axis_origin[1])],
+            "position_xy": [ox, oy],
             "thread_spec": thread_spec,
             "depth_mm": depth,
         })
     if thread_spec:
         return _new_step(sid, "clearance_hole", {
             "face_selector": face_sel,
-            "position_xy": [float(axis_origin[0]), float(axis_origin[1])],
+            "position_xy": [ox, oy],
             "thread_spec": thread_spec,
             "fit": "medium",
             "depth_mm": depth,
@@ -197,10 +248,32 @@ def _hole_step(
 
     # Direction inferred from dominant axis component.
     dir_str = _axis_dir_to_str(axis_dir)
+    # Face-aware direction + position correction. The catalog stores
+    # axis_origin at the cylindrical face's anchor (which can be either
+    # cap), and axis_dir as the cylinder's parametric axis (which is NOT
+    # necessarily the drilling direction). The hole skill expects the
+    # ``position`` to be the entry point and ``direction`` to point INTO
+    # the body. For ±Z holes we pick that direction from the face selector
+    # — bottom face ⇒ drill +Z (upward into slab); top face ⇒ drill -Z
+    # (downward into slab) — and clamp the entry Z to the matching bbox
+    # face so the cylinder always overlaps the placeholder slab regardless
+    # of the catalog's axis_origin Z (which may sit at the deep cap, not
+    # the entry).
+    try:
+        _az = abs(float(axis_dir[2]))
+    except Exception:
+        _az = 0.0
+    if _az > 0.5 and bbox is not None and shift != (0.0, 0.0, 0.0):
+        # Box-mode: after shift the slab spans z=0 .. (zmax-zmin).
+        slab_top_z = float(bbox[5]) - float(bbox[2])
+        if face_sel is _BOTTOM_FACE_SELECTOR:
+            dir_str = "+Z"
+            oz = 0.0  # entry at slab bottom
+        else:
+            dir_str = "-Z"
+            oz = slab_top_z  # entry at slab top
     return _new_step(sid, "hole", {
-        "position": [
-            float(axis_origin[0]), float(axis_origin[1]), float(axis_origin[2]),
-        ],
+        "position": [ox, oy, oz],
         "diameter_mm": primary_d,
         "depth_mm": depth,
         "direction": dir_str,
@@ -218,19 +291,22 @@ def _pocket_step(
     idx: int,
     pocket: dict,
     bbox: tuple[float, float, float, float, float, float] | None = None,
+    shift: tuple[float, float, float] = (0.0, 0.0, 0.0),
 ) -> dict:
-    ptype = pocket.get("type", "blind")
     top_d = float(pocket.get("top_d_mm") or 0.0)
     depth = float(pocket.get("depth_mm") or 1.0)
     origin = pocket.get("axis_origin") or [0.0, 0.0, 0.0]
     axis_dir = pocket.get("axis_dir") or [0.0, 0.0, -1.0]
     face_sel = _pick_face_selector(origin, axis_dir, bbox)
     sid = f"s_pocket_{idx}"
+    ox = float(origin[0]) + shift[0]
+    oy = float(origin[1]) + shift[1]
+    oz = float(origin[2]) + shift[2]
 
     # Circular pockets whose depth dominates → treat as a raw hole.
     if top_d > 0 and depth / max(top_d, 1e-3) >= 1.5:
         return _new_step(sid, "hole", {
-            "position": [float(origin[0]), float(origin[1]), float(origin[2])],
+            "position": [ox, oy, oz],
             "diameter_mm": top_d,
             "depth_mm": depth,
             "direction": _axis_dir_to_str(axis_dir),
@@ -246,8 +322,8 @@ def _pocket_step(
             "kind": "rectangle",
             "length_mm": size,
             "width_mm": size,
-            "center_x_mm": float(origin[0]),
-            "center_y_mm": float(origin[1]),
+            "center_x_mm": ox,
+            "center_y_mm": oy,
         },
         "depth_mm": depth,
     })
@@ -257,8 +333,8 @@ def _boss_step(
     idx: int,
     boss: dict,
     bbox: tuple[float, float, float, float, float, float] | None = None,
+    shift: tuple[float, float, float] = (0.0, 0.0, 0.0),
 ) -> dict:
-    btype = boss.get("type", "prismatic")
     center = boss.get("center") or [0.0, 0.0, 0.0]
     height = float(boss.get("height_mm") or 1.0)
     size = float(boss.get("diameter_or_size_mm") or 4.0)
@@ -266,36 +342,37 @@ def _boss_step(
     # based on the boss centre Z.
     face_sel = _pick_face_selector(center, [0.0, 0.0, 1.0], bbox)
     sid = f"s_boss_{idx}"
+    cx = float(center[0]) + shift[0]
+    cy = float(center[1]) + shift[1]
 
-    if btype == "cylindrical":
-        # If a hole is implied (e.g. seat boss) use boss_with_hole, else
-        # mounting_pad. We default to mounting_pad without a hole.
-        return _new_step(sid, "mounting_pad", {
-            "face_selector": face_sel,
-            "position_xy": [float(center[0]), float(center[1])],
-            "diameter_mm": size,
-            "height_mm": height,
-        })
-
-    # Prismatic / conical fallback — mounting_pad with the measured size.
+    # mounting_pad expects a SketchSpec (CircleSketch | RectangleSketch | …)
+    # + height_mm. Both branches emit a circular pad at the projected XY.
     return _new_step(sid, "mounting_pad", {
         "face_selector": face_sel,
-        "position_xy": [float(center[0]), float(center[1])],
-        "diameter_mm": size,
+        "sketch": {
+            "kind": "circle",
+            "diameter_mm": size,
+            "center_x_mm": cx,
+            "center_y_mm": cy,
+        },
         "height_mm": height,
     })
 
 
-def _rib_step(idx: int, rib: dict) -> dict:
+def _rib_step(idx: int, rib: dict, base_top_z: float = 0.0) -> dict:
     sid = f"s_rib_{idx}"
     length = float(rib.get("length_mm") or 10.0)
     thickness = float(rib.get("thickness_mm") or 1.0)
     height = float(rib.get("height_mm") or 3.0)
-    # Rib needs start/end + width/height/up_axis; without knowing the cluster
-    # axis we anchor a placeholder centred on origin along +X.
+    # Rib needs start/end + width/height/up_axis. The detector reports only
+    # length/thickness/height (no anchor), so we centre the rib on the top
+    # face of the placeholder box (z = base_top_z). With up_axis="+Z" and
+    # Align.MIN on the rib_box, the rib grows ABOVE the slab, producing a
+    # real volume_increased delta. Anchoring at z=0 would put the rib
+    # entirely INSIDE the slab and the post_condition would see no change.
     return _new_step(sid, "rib", {
-        "start": [-length / 2.0, 0.0, 0.0],
-        "end": [length / 2.0, 0.0, 0.0],
+        "start": [-length / 2.0, 0.0, float(base_top_z)],
+        "end": [length / 2.0, 0.0, float(base_top_z)],
         "width_mm": thickness,
         "height_mm": height,
         "up_axis": "+Z",
@@ -518,6 +595,7 @@ def _magnet_pocket_step(
     pocket: dict,
     magnet_spec: str,
     bbox: tuple[float, float, float, float, float, float] | None = None,
+    shift: tuple[float, float, float] = (0.0, 0.0, 0.0),
 ) -> dict:
     origin = pocket.get("axis_origin") or [0.0, 0.0, 0.0]
     axis_dir = pocket.get("axis_dir") or [0.0, 0.0, -1.0]
@@ -525,7 +603,7 @@ def _magnet_pocket_step(
     sid = f"s_magnet_pocket_{idx}"
     return _new_step(sid, "magnet_pocket_axial", {
         "face_selector": face_sel,
-        "position_xy": [float(origin[0]), float(origin[1])],
+        "position_xy": [float(origin[0]) + shift[0], float(origin[1]) + shift[1]],
         "magnet_spec": magnet_spec,
         "retention": "glue",
     })
@@ -573,13 +651,16 @@ def _bearing_bore_step(
     idx: int,
     pocket: dict,
     bearing_spec: str,
+    shift: tuple[float, float, float] = (0.0, 0.0, 0.0),
 ) -> dict:
     origin = pocket.get("axis_origin") or [0.0, 0.0, 0.0]
     axis_dir = pocket.get("axis_dir") or [0.0, 0.0, -1.0]
     sid = f"s_bearing_bore_{idx}"
     return _new_step(sid, "bearing_bore", {
         "axis_origin": [
-            float(origin[0]), float(origin[1]), float(origin[2]),
+            float(origin[0]) + shift[0],
+            float(origin[1]) + shift[1],
+            float(origin[2]) + shift[2],
         ],
         "axis_direction": [
             float(axis_dir[0]), float(axis_dir[1]), float(axis_dir[2]),
@@ -626,6 +707,7 @@ def _o_ring_groove_step(
     inner_d: float,
     depth: float,
     bbox: tuple[float, float, float, float, float, float] | None = None,
+    shift: tuple[float, float, float] = (0.0, 0.0, 0.0),
 ) -> dict:
     axis_origin = revolve_feat.get("axis_origin") or [0.0, 0.0, 0.0]
     axis_dir = revolve_feat.get("axis_direction") or [0.0, 0.0, 1.0]
@@ -636,8 +718,8 @@ def _o_ring_groove_step(
         "outer_diameter_mm": float(outer_d),
         "inner_diameter_mm": float(inner_d),
         "depth_mm": float(depth),
-        "center_x_mm": float(axis_origin[0]),
-        "center_y_mm": float(axis_origin[1]),
+        "center_x_mm": float(axis_origin[0]) + shift[0],
+        "center_y_mm": float(axis_origin[1]) + shift[1],
     })
 
 
@@ -685,7 +767,11 @@ def _swept_relief_step(idx: int, payload: dict) -> dict:
     return _new_step(sid, "swept_relief", payload)
 
 
-def _revolve_pocket_step(idx: int, feat: dict) -> dict:
+def _revolve_pocket_step(
+    idx: int,
+    feat: dict,
+    shift: tuple[float, float, float] = (0.0, 0.0, 0.0),
+) -> dict:
     """Emit a ``revolve_pocket`` step from a revolve_features entry."""
     sid = f"s_revolve_pocket_{idx}"
     axis_origin = feat.get("axis_origin") or [0.0, 0.0, 0.0]
@@ -699,7 +785,9 @@ def _revolve_pocket_step(idx: int, feat: dict) -> dict:
             "center_x_mm": 4.0,
         },
         "axis_origin": [
-            float(axis_origin[0]), float(axis_origin[1]), float(axis_origin[2]),
+            float(axis_origin[0]) + shift[0],
+            float(axis_origin[1]) + shift[1],
+            float(axis_origin[2]) + shift[2],
         ],
         "axis_direction": [
             float(axis_dir[0]), float(axis_dir[1]), float(axis_dir[2]),
@@ -750,6 +838,7 @@ def _circular_pattern_step(
     profile_diameter_mm: float,
     feature_depth_mm: float,
     bbox: tuple[float, float, float, float, float, float] | None = None,
+    shift: tuple[float, float, float] = (0.0, 0.0, 0.0),
 ) -> dict:
     """Wrap a circular-array of holes into a ``circular_pattern`` step.
 
@@ -770,8 +859,8 @@ def _circular_pattern_step(
         "feature_depth_mm": float(feature_depth_mm),
         "count": count,
         "pitch_radius_mm": radius,
-        "center_x_mm": float(center[0]),
-        "center_y_mm": float(center[1]),
+        "center_x_mm": float(center[0]) + shift[0],
+        "center_y_mm": float(center[1]) + shift[1],
         "start_angle_deg": 0.0,
         "total_sweep_deg": 360.0,
     })
@@ -783,6 +872,7 @@ def _linear_pattern_step(
     profile_diameter_mm: float,
     feature_depth_mm: float,
     bbox: tuple[float, float, float, float, float, float] | None = None,
+    shift: tuple[float, float, float] = (0.0, 0.0, 0.0),
 ) -> dict | None:
     """Wrap a linear-array of holes into a ``linear_pattern`` step.
 
@@ -811,8 +901,8 @@ def _linear_pattern_step(
 
     # Anchor offset: first position's XY relative to body center (origin).
     first = positions[0]
-    start_x = float(first[0])
-    start_y = float(first[1])
+    start_x = float(first[0]) + shift[0]
+    start_y = float(first[1]) + shift[1]
     # The seed feature is at axis_origin of the first; the seed's Z is
     # represented by the face_selector. We borrow the first point's axis-dir
     # heuristic via Z dominance: holes typically have axis_dir ≈ ±Z, so
@@ -1025,6 +1115,7 @@ def _mirror_feature_step(
     hole: dict,
     plane: dict,
     bbox: tuple[float, float, float, float, float, float] | None,
+    shift: tuple[float, float, float] = (0.0, 0.0, 0.0),
 ) -> dict | None:
     """Emit a ``mirror_feature`` step for ``hole`` mirrored across ``plane``.
 
@@ -1069,9 +1160,9 @@ def _mirror_feature_step(
         "count": 2,
         "mirror_plane": plane["label"],
         "mirror_origin": [
-            float(plane["origin"][0]),
-            float(plane["origin"][1]),
-            float(plane["origin"][2]),
+            float(plane["origin"][0]) + shift[0],
+            float(plane["origin"][1]) + shift[1],
+            float(plane["origin"][2]) + shift[2],
         ],
         "original_x_mm": original_x,
         "original_y_mm": original_y,
@@ -1254,6 +1345,17 @@ def _build_plan(
             "height_mm": base_h,
         }))
 
+    # Coordinate-frame shift: catalog features are in the original body's
+    # world frame, but the ``box`` placeholder is XY-centred at the origin
+    # with its bottom at Z=0. Translate world coords by (-cx, -cy, -zmin) so
+    # downstream pocket / hole / boss steps land INSIDE the placeholder box.
+    # For ``import_step`` and ``preserve_brep`` modes the original world frame
+    # is preserved so no shift is applied.
+    if base_step_kind == "box":
+        feat_shift = _world_to_box_shift(bbox)
+    else:
+        feat_shift = (0.0, 0.0, 0.0)
+
     # 2. Pockets, largest top_d first ──────────────────────────────────────
     #    Skip pockets whose axis is diagonal — those are detector artefacts
     #    (chains of unrelated cylindrical/planar faces grouped by adjacency)
@@ -1270,19 +1372,31 @@ def _build_plan(
     magnet_idx = 0
     bearing_idx = 0
     for i, p in enumerate(pockets_sorted):
+        # Drop pockets whose predicted cut volume is below the
+        # volume_decreased PostCondition threshold. Without this guard,
+        # sub-mm catalog noise on tiny parts (e.g. 0402 capacitor terminal
+        # pads with d≈0.04 mm, depth≈0.2 mm → ~0.00025 mm³) produces a hole
+        # step that cuts a geometrically valid but sub-threshold sliver,
+        # tripping the PostCondition and FAILing the entire plan.
+        _td = float(p.get("top_d_mm") or 0.0)
+        _dp = float(p.get("depth_mm") or 0.0)
+        if _predicted_cylinder_volume_mm3(_td, _dp) < _MIN_EMITTED_CUT_MM3:
+            continue
         bearing_match = _match_bearing_bore(p)
         if bearing_match is not None:
             spec, _conf = bearing_match
-            steps.append(_bearing_bore_step(bearing_idx, p, spec))
+            steps.append(_bearing_bore_step(bearing_idx, p, spec, shift=feat_shift))
             bearing_idx += 1
             continue
         magnet_match = _match_magnet_pocket(p)
         if magnet_match is not None:
             spec, _conf = magnet_match
-            steps.append(_magnet_pocket_step(magnet_idx, p, spec, bbox=bbox))
+            steps.append(
+                _magnet_pocket_step(magnet_idx, p, spec, bbox=bbox, shift=feat_shift)
+            )
             magnet_idx += 1
             continue
-        steps.append(_pocket_step(i, p, bbox=bbox))
+        steps.append(_pocket_step(i, p, bbox=bbox, shift=feat_shift))
 
     # 2b. Sweep / loft / revolve features — emitted BEFORE the per-boss loop
     #     so we can suppress overlapping detect_bosses entries (the swept and
@@ -1327,11 +1441,14 @@ def _build_plan(
         if oring_dims is not None:
             outer, inner, depth = oring_dims
             steps.append(
-                _o_ring_groove_step(oring_idx, feat, outer, inner, depth, bbox=bbox)
+                _o_ring_groove_step(
+                    oring_idx, feat, outer, inner, depth,
+                    bbox=bbox, shift=feat_shift,
+                )
             )
             oring_idx += 1
         else:
-            steps.append(_revolve_pocket_step(i, feat))
+            steps.append(_revolve_pocket_step(i, feat, shift=feat_shift))
 
     # 3. Bosses, tallest first ─────────────────────────────────────────────
     #    Suppress bosses whose centre footprint falls inside any sweep/loft
@@ -1354,15 +1471,25 @@ def _build_plan(
         key=lambda b: -float(b.get("height_mm") or 0.0),
     )
     for i, b in enumerate(bosses_sorted):
-        steps.append(_boss_step(i, b, bbox=bbox))
+        steps.append(_boss_step(i, b, bbox=bbox, shift=feat_shift))
 
     # 4. Lugs ──────────────────────────────────────────────────────────────
     for i, lg in enumerate(lugs):
         steps.append(_lug_step(i, lg))
 
     # 5. Ribs ──────────────────────────────────────────────────────────────
+    #    Anchor on top face of the placeholder box (or original body top
+    #    when preserve_brep / import_step). For "box" mode the slab top is
+    #    at z=base_h; for the other modes we use the bbox z-max (already in
+    #    world coords, no shift needed since feat_shift is identity there).
+    if base_step_kind == "box":
+        rib_top_z = float(base_h)
+    elif bbox is not None:
+        rib_top_z = float(bbox[5])
+    else:
+        rib_top_z = 0.0
     for i, rb in enumerate(ribs):
-        steps.append(_rib_step(i, rb))
+        steps.append(_rib_step(i, rb, base_top_z=rib_top_z))
 
     # 5b. Text features (engrave / emboss) ────────────────────────────────
     #     Forward-compat: extract_feature_catalog does not yet detect text,
@@ -1413,10 +1540,18 @@ def _build_plan(
         seed_diam = float(min(diams))
         seed_depth = float(seed_hole.get("depth_mm") or 5.0)
 
+        # Sub-threshold guard mirrors the per-hole/pocket loop: if the
+        # predicted cut volume across the pattern is below the
+        # volume_decreased PostCondition floor, skip emission. This drops
+        # tiny circular_pattern / linear_pattern groups that would FAIL on
+        # OCCT roundoff (e.g. 0402 capacitor terminal arrays).
+        if _predicted_cylinder_volume_mm3(seed_diam, seed_depth) * count < _MIN_EMITTED_CUT_MM3:
+            continue
         if pat.get("pattern_kind") == "circular" and count >= 4:
             steps.append(
                 _circular_pattern_step(
-                    circ_idx, pat, seed_diam, seed_depth, bbox=bbox,
+                    circ_idx, pat, seed_diam, seed_depth,
+                    bbox=bbox, shift=feat_shift,
                 )
             )
             circ_idx += 1
@@ -1429,7 +1564,8 @@ def _build_plan(
                     handled_holes_geom.append(h)
         elif pat.get("pattern_kind") == "linear" and count >= 3:
             step = _linear_pattern_step(
-                lin_idx, pat, seed_diam, seed_depth, bbox=bbox,
+                lin_idx, pat, seed_diam, seed_depth,
+                bbox=bbox, shift=feat_shift,
             )
             if step is not None:
                 steps.append(step)
@@ -1480,7 +1616,7 @@ def _build_plan(
             hole_i = unhandled_holes[local_i]
             hole_j = unhandled_holes[local_j]
             step = _mirror_feature_step(
-                mirror_idx, hole_i, best_plane, bbox=bbox,
+                mirror_idx, hole_i, best_plane, bbox=bbox, shift=feat_shift,
             )
             if step is None:
                 # mirror_feature args couldn't be satisfied -- leave the pair
@@ -1502,6 +1638,19 @@ def _build_plan(
         holes,
         key=lambda h: -float(max(h.get("diameters_mm") or [0.0])),
     )
+    # When the body's bbox XY aspect ratio is near square (likely a cap or
+    # cylinder), holes whose XY position lies outside the inscribed circle
+    # of the bbox will graze a region the placeholder box-mode plan ate
+    # away via prior pockets (round-cap → boxy-placeholder mismatch). Drop
+    # those: the cut volume collapses to roundoff and trips
+    # volume_decreased even though the geometry is technically valid.
+    inscribed_r: float | None = None
+    if base_step_kind == "box" and bbox is not None:
+        _hx = (float(bbox[3]) - float(bbox[0])) * 0.5
+        _hy = (float(bbox[4]) - float(bbox[1])) * 0.5
+        if _hx > 0 and _hy > 0 and 0.85 <= min(_hx, _hy) / max(_hx, _hy) <= 1.18:
+            inscribed_r = min(_hx, _hy)
+
     for i, h in enumerate(holes_sorted):
         hid = h.get("id")
         if hid is not None and hid in handled_hole_ids:
@@ -1509,8 +1658,40 @@ def _build_plan(
         # Geometric dedup fallback for holes that lack a stable id.
         if any(h is hh for hh in handled_holes_geom):
             continue
+        # Sub-threshold cut filter (mirrors the pocket loop): drop holes
+        # whose cylinder cut volume falls below the volume_decreased
+        # PostCondition floor. Prevents catalog noise on tiny parts from
+        # FAILing the entire plan on roundoff-scale deltas.
+        _diams = h.get("diameters_mm") or []
+        _d = float(min(_diams)) if _diams else 0.0
+        _dp = float(h.get("depth_mm") or 0.0)
+        if _predicted_cylinder_volume_mm3(_d, _dp) < _MIN_EMITTED_CUT_MM3:
+            continue
+        # Round-body guard: skip ±Z holes whose XY position falls outside
+        # the bbox's inscribed circle on near-square bodies. The placeholder
+        # box covers the full rect bbox, but earlier pocket steps round off
+        # the corners — a hole in that already-removed region cuts ~0 mm³.
+        if inscribed_r is not None:
+            _origin = h.get("axis_origin") or [0.0, 0.0, 0.0]
+            _axis = h.get("axis_dir") or [0.0, 0.0, -1.0]
+            try:
+                _az = abs(float(_axis[2]))
+            except Exception:
+                _az = 0.0
+            if _az > 0.5:
+                try:
+                    _ox = float(_origin[0])
+                    _oy = float(_origin[1])
+                    import math as _math
+                    _r_xy = _math.sqrt(_ox * _ox + _oy * _oy)
+                    # margin = half the hole diameter so a hole tangent to
+                    # the inscribed circle still emits.
+                    if _r_xy > inscribed_r - 0.5 * _d:
+                        continue
+                except Exception:
+                    pass
         sm = std_matches_by_hole.get(hid)
-        steps.append(_hole_step(i, h, sm, bbox=bbox))
+        steps.append(_hole_step(i, h, sm, bbox=bbox, shift=feat_shift))
 
     plan: dict[str, Any] = {
         "schema_version": 1,

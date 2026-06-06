@@ -4,6 +4,6 @@ steps:
 - id: s_base
   skill: box
   args:
-    length_mm: 50.0
-    width_mm: 50.0
-    height_mm: 10.0
+    length_mm: 37.711488866838174
+    width_mm: 29.24315020704821
+    height_mm: 7.477783105867034

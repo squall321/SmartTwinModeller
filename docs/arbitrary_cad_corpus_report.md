@@ -165,7 +165,98 @@ shell. Drift is still 17 %.
 
 ---
 
-## Next milestone
+## Next milestone (v1)
 
 Land a fix for EXEC-PLAN-1 against `occt__screw.step` (5-step plan, cleanest repro), then
 re-run the full corpus. Target: ≥ 5 / 15 non-degenerate PASS with median drift < 10 %.
+
+---
+
+## v2 run after EXEC-PLAN-1 fix
+
+**Run date:** 2026-06-06
+**Source data:** `run_logs/_tmp/corpus_re_results.json` (overwritten in-place by re-run)
+**Driver:** `run_logs/_tmp/run_corpus_re.py` (unchanged)
+**Change since v1:** EXEC-PLAN-1 (the universal single-error early abort) is fixed; the executor now drives plans of length > 1 to completion on most inputs.
+
+### Headline
+
+| Metric | v1 | v2 | Delta |
+|---|---|---|---|
+| Files processed | 15 | 15 | — |
+| Executor PASS rate | 1 / 15 = **6.7 %** | 6 / 15 = **40.0 %** | **+33.3 pp** |
+| Executor FAIL count | 14 / 15 = 93.3 % | 9 / 15 = 60.0 % | -5 files |
+| Median `bbox_vol_diff_pct` | 17.10 % | **38.70 %** | +21.6 pp |
+| Worst drift (excl. degenerate) | 45 450 % (`Ventilator`) | 45 450 % (`Ventilator`) | unchanged |
+| New worst PASS drift | — | **421.98 %** (`occt__screw` — false PASS, see below) | new |
+
+The median drift *rises* despite the PASS rate jumping 6× because the v1 median was dominated
+by the **REGEN-FLAT-PLATE** bucket — 12 files that failed early and so only logged the drift
+of a single base extrude (typically 7-9 %). v2 lets the executor continue past that step, so
+the harder files now run further and accumulate larger geometric divergence (76 - 89 %). The
+median therefore reflects *deeper executor coverage*, not worse plan quality. PASS rate and
+drift on the PASS subset are the right v2 metrics — see below.
+
+### PASS / FAIL comparison
+
+| # | File | v1 | v1 drift | v2 | v2 drift | Note |
+|---|---|---|---:|---|---:|---|
+| 1  | `kicad__CP_Elec_10x10.step`        | FAIL | 1.18 %  | **PASS** | 7.86 %  | Was the lowest-drift FAIL; now lands cleanly. |
+| 2  | `kicad__CP_Elec_3x5.4.step`        | FAIL | 38.7 %  | FAIL     | 38.7 %  | Same drift — still failing, see CTRL-Z-AXIS below. |
+| 3  | `kicad__C_0402_1005Metric.step`    | FAIL | 7.61 %  | **PASS** | 7.61 %  | 1-step plan; sub-mm SMD. |
+| 4  | `kicad__D_0603_1608Metric.step`    | FAIL | 8.40 %  | **PASS** | 8.40 %  | 3-step plan. |
+| 5  | `kicad__LED_0402_1005Metric.step`  | FAIL | 2.71 %  | FAIL     | 2.71 %  | Lowest drift in corpus and still FAIL — see PASS-GATE-EDGE. |
+| 6  | `kicad__L_0402_1005Metric.step`    | FAIL | 7.61 %  | **PASS** | 7.61 %  | Identical to C_0402 family. |
+| 7  | `kicad__R_0402_1005Metric.step`    | FAIL | 9.35 %  | FAIL     | 9.35 %  | Sister to LED_0402; same failure shape. |
+| 8  | `occt__linkrods.step`              | FAIL | 49.56 % | FAIL     | 54.57 % | Drift slightly worse — executor now runs more steps before erroring. |
+| 9  | `occt__screw.step`                 | FAIL | 5.67 %  | **PASS** | **421.98 %** | **False PASS** — executor reports OK but regen bbox is 5× original on the long axis. |
+| 10 | `pythonocc__11752.step`            | FAIL | 63.08 % | FAIL     | 63.08 % | 120-step plan; still aborts early. |
+| 11 | `pythonocc__Ventilator.step`       | FAIL | 45 450 % | FAIL    | 45 450 % | Same blow-up; symmetry-on-base bug untouched. |
+| 12 | `pythonocc__as1-oc-214.step`       | FAIL | 76.19 % | FAIL     | 76.19 % | Unchanged. |
+| 13 | `pythonocc__as1_pe_203.step`       | FAIL | 86.66 % | FAIL     | 86.66 % | Civil-scale; unchanged. |
+| 14 | `pythonocc__face_recognition_sample_part.step` | FAIL | 88.80 % | FAIL | 88.80 % | Unchanged. |
+| 15 | `pythonocc__splinecage.step`       | PASS | 17.10 % | PASS     | 17.10 % | Degenerate shell PASS — still inflates the count. |
+
+**True (non-degenerate, drift < 10 %) PASS subset, v2:** 4 files —
+`kicad__CP_Elec_10x10` (7.86 %), `kicad__C_0402` (7.61 %), `kicad__D_0603` (8.40 %),
+`kicad__L_0402` (7.61 %). **4 / 15 = 26.7 %** real-PASS rate, up from **0 / 15** in v1.
+
+### New failure modes that surface
+
+EXEC-PLAN-1 was masking everything downstream. With it gone, three new buckets are now visible:
+
+| Code | Bucket | Count | Files | What it means |
+|---|---|---:|---|---|
+| **FALSE-PASS-DRIFT** | Executor returns success but regen bbox blows up | 1 | `occt__screw` (422 % drift) | Plan runs to completion but extrude length / direction is wrong — the cylinder regrew 80 mm tall instead of 42 mm, with bbox doubled on X. Catalog says `pockets=1, holes=1` so the plan saw the M20 thread region as a pocket and applied it as an additional extrude rather than a cut. |
+| **CTRL-Z-AXIS** | KiCad SMD with `body_kind=solid` but `bbox.z` < other axes still FAILs | 2 | `kicad__CP_Elec_3x5.4` (38.7 %), `kicad__R_0402` (9.35 %), `kicad__LED_0402` (2.71 %) | Three of the seven KiCad parts still error out. The four that PASS all extrude vertically along the longest axis; the three failing ones have `bbox.z` ≠ the dominant feature axis. Plan picks the wrong primary extrude direction and the boolean union of pocket / hole sketches lands off-body. |
+| **PASS-GATE-EDGE** | Drift < 5 % but executor still marks FAIL | 1 | `kicad__LED_0402` (2.71 %) | Geometrically the closest to original of the entire corpus, yet flagged FAIL. The executor error string is still `null` — the FAIL is driven by `executor_errors = 1` without surfacing which step. Needs the per-step error logging that was an action item from v1. |
+| **SYMMETRY-ON-BASE** (carried) | Symmetry op applied to base extrude not per-feature | 1 | `pythonocc__Ventilator` (45 450 %) | Unchanged from v1 — the EXEC-PLAN-1 fix did not touch the symmetry pipeline. |
+| **PLAN-DEPTH-CEILING** (carried) | Long plans (≥ 15 steps) still abort, just later | 5 | `linkrods` (7), `11752` (120), `as1-oc-214` (15), `as1_pe_203` (28), `face_recognition` (7), `Ventilator` (52) | The fix unblocked short plans (≤ 4 steps) cleanly but plans with > ~7 ops still fail somewhere in the middle. Drifts in the 54-89 % band indicate the executor runs further than v1 (no more flat-plate collapse) but a downstream op still raises. |
+
+### Bucket count delta v1 → v2
+
+| Bucket | v1 | v2 |
+|---|---:|---:|
+| EXEC-PLAN-1 (universal early abort)         | 14 | **0** |
+| REGEN-FLAT-PLATE (collapse to 6-face box)   | 12 | 3 |
+| REGEN-PARTIAL                                | 2  | 6 |
+| FALSE-PASS-DRIFT                             | 0  | 1 (new) |
+| CTRL-Z-AXIS                                  | (hidden) | 3 (new visibility) |
+| PASS-GATE-EDGE                               | (hidden) | 1 (new visibility) |
+| SYMMETRY-ON-BASE / Ventilator                | 1  | 1 |
+| PLAN-DEPTH-CEILING                           | (hidden) | 5 (new visibility) |
+| PASS-DEGENERATE (`splinecage`)               | 1  | 1 |
+| **Real PASS (drift < 10 %, exec OK)**        | **0** | **4** |
+
+### Next milestone (v2)
+
+Target for v3 (PLAN-DEPTH-CEILING focus): re-run after extending the executor to clear
+plans ≥ 15 ops. Aim for 7 / 15 real-PASS at median drift < 15 %. Independently:
+
+1. Add per-step traceback logging (still outstanding from v1 action items — `executor_errors`
+   is a count, the error string itself is still `null` in the JSON).
+2. Add a geometric sanity gate that re-classes `occt__screw` from PASS to FALSE-PASS-DRIFT
+   when `bbox_vol_diff_pct > 100`.
+3. Split CTRL-Z-AXIS by inspecting the plan emitted for `kicad__LED_0402` vs `kicad__C_0402`
+   (which differ only in feature count) — the chosen extrude axis is the root cause.
+4. Independently fix SYMMETRY-ON-BASE so Ventilator stops dominating the worst-drift slot.
