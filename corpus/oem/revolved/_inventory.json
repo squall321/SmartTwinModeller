@@ -1,0 +1,326 @@
+[
+  {
+    "filename": "occt__screw.step",
+    "source_url": "https://raw.githubusercontent.com/Open-Cascade-SAS/OCCT/master/data/step/screw.step",
+    "source": "occt",
+    "kind": "step",
+    "category": "screw",
+    "size_bytes": 88552,
+    "sha256": "4b3649a4f5c4f05c7a06a402a91fe2fd7e3cba1615520fbd8c62a62610ad3e69"
+  },
+  {
+    "filename": "occt__linkrods.step",
+    "source_url": "https://raw.githubusercontent.com/Open-Cascade-SAS/OCCT/master/data/step/linkrods.step",
+    "source": "occt",
+    "kind": "step",
+    "category": "generic_revolved",
+    "size_bytes": 1793282,
+    "sha256": "3674e4b01ee0e983c81ed170f0574cda201ad08e0f7b46e05e4f4613400fd5f7"
+  },
+  {
+    "filename": "freecad__bearing_608ZZ.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Bearings/608ZZ_Ball_Bearing.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "bearing",
+    "size_bytes": 39363,
+    "sha256": "45246a4cf1bc63c8186ad8de22a74f44a63aecb450294356592c321bf281e3d3"
+  },
+  {
+    "filename": "freecad__bearing_623ZZ.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Bearings/623ZZ_Ball_Bearing.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "bearing",
+    "size_bytes": 42174,
+    "sha256": "900040c258cabfe83c113d8aa8f2fc0b1d73902afb92d6baa3e3a8cc9f429943"
+  },
+  {
+    "filename": "freecad__bearing_624ZZ.stp",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Bearings/624ZZ_Ball_Bearing.stp",
+    "source": "freecad",
+    "kind": "step",
+    "category": "bearing",
+    "size_bytes": 301499,
+    "sha256": "c2d0108b552fed079e467bff0a03a039d347919fc2baf3090c265779503f6d22"
+  },
+  {
+    "filename": "freecad__bearing_F623ZZ.stp",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Bearings/F623ZZ_Ball_Bearing.stp",
+    "source": "freecad",
+    "kind": "step",
+    "category": "bearing",
+    "size_bytes": 38055,
+    "sha256": "6f1627501c944b2cfbe81b243d73812d05261f57c6f0a0824d3d1ada9cc92ccd"
+  },
+  {
+    "filename": "freecad__pulley_GT2_16T.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Pulleys/GT2_16T.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "pulley",
+    "size_bytes": 615112,
+    "sha256": "7639554de256c584b3bbe731a5a943e7b082f2aa0b804069dd1fa88dac6a9eff"
+  },
+  {
+    "filename": "freecad__pulley_GT2_20T_5mm.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Pulleys/GT2_20T_Smooth_5mm_Bore.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "pulley",
+    "size_bytes": 51245,
+    "sha256": "f20d8de6ffe013061edd3d13e7f8e34df40ead68a5ac9c8b292decc1ae528d86"
+  },
+  {
+    "filename": "freecad__pulley_GT2_V2.stp",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Pulleys/GT2Pulley-V2.stp",
+    "source": "freecad",
+    "kind": "step",
+    "category": "pulley",
+    "size_bytes": 355213,
+    "sha256": "58e39331601d2f09509d7587974950303871e52e3a0a7969554fee187da84f3a"
+  },
+  {
+    "filename": "freecad__pulley_GT2_V3.stp",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Pulleys/GT2Pulley-V3.stp",
+    "source": "freecad",
+    "kind": "step",
+    "category": "pulley",
+    "size_bytes": 186546,
+    "sha256": "9a7827cce2e6c1bad3154993864db49871dbd5938b4688bbd087beac5d27b473"
+  },
+  {
+    "filename": "freecad__pulley_GT2.stp",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Pulleys/GT2Pulley.stp",
+    "source": "freecad",
+    "kind": "step",
+    "category": "pulley",
+    "size_bytes": 267639,
+    "sha256": "7feff0b6dee67f62842c363636fa91af55e93ab379a63d145d1689e7678f3e99"
+  },
+  {
+    "filename": "freecad__nut_ISO4032_M3.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Nuts/Metric/ISO4032_Hex_Nut_M3.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "nut",
+    "size_bytes": 117368,
+    "sha256": "e034d524d2466e4ad6558f1ac3b7ed878900b6d47923cc8d8fae31d258b292fc"
+  },
+  {
+    "filename": "freecad__nut_ISO4032_M4.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Nuts/Metric/ISO4032_Hex_Nut_M4.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "nut",
+    "size_bytes": 69081,
+    "sha256": "76fce7d1586e0e20634c35f1d3a1b5843b7193571a7e111cd66c0c6b32cb5e97"
+  },
+  {
+    "filename": "freecad__nut_ISO4032_M5.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Nuts/Metric/ISO4032_Hex_Nut_M5.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "nut",
+    "size_bytes": 90882,
+    "sha256": "8c8f859c59f159194b8fbfa3d2395953becbe587cc42eade9921e2bb62378c5b"
+  },
+  {
+    "filename": "freecad__nut_ISO4032_M6.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Nuts/Metric/ISO4032_Hex_Nut_M6.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "nut",
+    "size_bytes": 129871,
+    "sha256": "82efcde63a55c3bbeffd99e67da06e5b187c7455da2f9a4d91ebea986f9d3e47"
+  },
+  {
+    "filename": "freecad__nut_ISO4032_M8.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Nuts/Metric/ISO4032_Hex_Nut_M8.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "nut",
+    "size_bytes": 123112,
+    "sha256": "cd409ee163d21afb2d66ebc77891ecedbd7b3a21902dfe54df7222d6924c8c76"
+  },
+  {
+    "filename": "freecad__nut_ISO4032_M10.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Nuts/Metric/ISO4032_Hex_Nut_M10.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "nut",
+    "size_bytes": 57040,
+    "sha256": "d94eaac1212d339200e308751a2e11f6967be694dfb8569ce906c78464950a84"
+  },
+  {
+    "filename": "freecad__nut_Nyloc_M3.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Nuts/Metric/Nyloc-nut-M3.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "nut",
+    "size_bytes": 154078,
+    "sha256": "a905c2669f04940f4c47528f0100c9be0fadf76a80f732be75297a38f434346d"
+  },
+  {
+    "filename": "freecad__washer_DIN125_M3.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Washers/Metric/DIN%20125%20class%204%20M3%20Flat%20Washer.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "washer",
+    "size_bytes": 12025,
+    "sha256": "accaf8e883e9584c710a805755f8dbc804c76316565a50d6fb04f8e6ceb693a7"
+  },
+  {
+    "filename": "freecad__washer_DIN125_M8.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Washers/Metric/DIN%20125%20class%204%20M8%20Flat%20Washer.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "washer",
+    "size_bytes": 12115,
+    "sha256": "53b5666c7796144a9c9d8eb3077dfda79a81c8d49535856093ab48d44a25082d"
+  },
+  {
+    "filename": "freecad__washer_DIN125_M10.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Washers/Metric/DIN%20125%20class%204%20M10%20Flat%20Washer.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "washer",
+    "size_bytes": 12060,
+    "sha256": "87c116f0b9ce16a143182f3b8a045dd1c3faf521a113db2d9a4a4994188591e2"
+  },
+  {
+    "filename": "freecad__washer_DIN127_GrowerM4.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Washers/Metric/DIN127_CLASS_B_M4GrowerWasher.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "washer",
+    "size_bytes": 222858,
+    "sha256": "81032e9b839bc0e425d6f23f2851c0b3707880ebccd00dbe20dfa9ef57ed3cfe"
+  },
+  {
+    "filename": "freecad__washer_DIN127_GrowerM5.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Washers/Metric/DIN127_CLASS_B_M5GrowerWasher.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "washer",
+    "size_bytes": 223308,
+    "sha256": "f78607155726b7704b80cb803c33e78ebeb6726a800296bcb22ce1b0be360738"
+  },
+  {
+    "filename": "freecad__washer_DIN127_GrowerM6.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Washers/Metric/DIN127_CLASS_B_M6GrowerWasher.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "washer",
+    "size_bytes": 222541,
+    "sha256": "3f59f8acf9ed35052fb80c8b2cad775ed2527ed6fd5e1ca255e57813833912c4"
+  },
+  {
+    "filename": "freecad__washer_DIN127_GrowerM8.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Washers/Metric/DIN127_CLASS_B_M8GrowerWasher.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "washer",
+    "size_bytes": 223153,
+    "sha256": "5e34d6138f7954a07f46369c898a5bee15144499f3324e7a30976befe5b02982"
+  },
+  {
+    "filename": "freecad__washer_DIN127_GrowerM10.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Washers/Metric/DIN127_CLASS_B_M10GrowerWasher.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "washer",
+    "size_bytes": 223228,
+    "sha256": "8d0feea83520bdb035475315fea6d07e573347d658ccf7c98cf373330f45acab"
+  },
+  {
+    "filename": "freecad__screw_ISO4762_M3x10.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Bolts%20%26%20Screws/Metric/ISO4762_Hex_Socket_Head_Cap_Screw_M3x10.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "screw",
+    "size_bytes": 58475,
+    "sha256": "2c051b2b3366e1e198e02c3d6b996021f54f6d376aa26499afeb4fc0eb54b0a8"
+  },
+  {
+    "filename": "freecad__screw_ISO4762_M3x16.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Bolts%20%26%20Screws/Metric/ISO4762_Hex_Socket_Head_Cap_Screw_M3x16.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "screw",
+    "size_bytes": 58454,
+    "sha256": "86998bc84e25341cc12d7014a185f2d3e0da1d485391c12b7b6d01fabaee743a"
+  },
+  {
+    "filename": "freecad__screw_ISO4762_M3x25.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Bolts%20%26%20Screws/Metric/ISO4762_Hex_Socket_Head_Cap_Screw_M3x25.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "screw",
+    "size_bytes": 58506,
+    "sha256": "c3b39004c4ec3db867f6dec497474866a1370fdc28017c035bca1d4a47871747"
+  },
+  {
+    "filename": "freecad__screw_ISO4762_M4x20.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Bolts%20%26%20Screws/Metric/ISO4762_Hex_Socket_Head_Cap_Screw_M4x20.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "screw",
+    "size_bytes": 154422,
+    "sha256": "ede569ee5c234865cce4f319c5085613ca5bdd56819a43d5a4c9676592c4f651"
+  },
+  {
+    "filename": "freecad__screw_ISO4762_M6x40.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Bolts%20%26%20Screws/Metric/ISO4762_Hex_Socket_Head_Cap_Screw_M6x40.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "screw",
+    "size_bytes": 80743,
+    "sha256": "50b66ae53f506572bcc6c5a8970288d4b5abf8cc5545eb05405759b5776b048d"
+  },
+  {
+    "filename": "freecad__screw_ISO4017_M6x25.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Bolts%20%26%20Screws/Metric/ISO4017_Hex_Head_Cap_Screw_M6x25.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "screw",
+    "size_bytes": 68095,
+    "sha256": "4ece081262051e36ebad7ac8e9961c922218471fd04cc901810221154923e027"
+  },
+  {
+    "filename": "freecad__screw_ISO7380_M6x12.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Bolts%20%26%20Screws/Metric/ISO7380_Hex_Socket_Button_Head_Screw_M6x12.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "screw",
+    "size_bytes": 91529,
+    "sha256": "80d02488815473b20d0ee06fdc5439263a9e019b4e964d0ff63d3ace759155d5"
+  },
+  {
+    "filename": "freecad__screw_ISO10642_M3x10.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Bolts%20%26%20Screws/Metric/ISO10642_Hex_Socket_Countersunk_Head_Screw_M3x10.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "screw",
+    "size_bytes": 100849,
+    "sha256": "f940c8dadc7ad6fe0337a3802cafe12cc716e64c1c519f432a01dea892f6c25e"
+  },
+  {
+    "filename": "freecad__screw_DIN913_Setscrew_M3x5.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Fasteners/Bolts%20%26%20Screws/Metric/DIN913_Setscrew_M3x5.step",
+    "source": "freecad",
+    "kind": "step",
+    "category": "screw",
+    "size_bytes": 31083,
+    "sha256": "97c31b69781c0717a02123ef93bc84e32563d6d1e30bf9966c39be32b87c435f"
+  },
+  {
+    "filename": "pythonocc__Ventilator.stp",
+    "source_url": "https://raw.githubusercontent.com/tpaviot/pythonocc-demos/master/assets/models/Ventilator.stp",
+    "source": "pythonocc",
+    "kind": "step",
+    "category": "generic_revolved",
+    "size_bytes": 2257591,
+    "sha256": "19a11c6949aff4d003a4750d0d9f7e4ee21ab12401dfb07bd97350777266e4d5"
+  }
+]

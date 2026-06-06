@@ -434,3 +434,108 @@ v6 work):
 The v6 backlog is therefore narrow and well-shaped: add a `Revolve` detector for
 rotational parts, teach the planar-plate path to skip the base-extrude when the
 solid's z-extent is < 3 × min(x, y), and harden the worker against OCP crashes.
+
+---
+
+## v8 — feature fidelity + revolved corpus
+
+**Run date:** 2026-06-06
+**Source data:** `run_logs/_tmp/corpus_re_results.json`
+**Pipeline driver:** `run_logs/_tmp/run_corpus_re.py` (now invokes Stage 7 — `feature_fidelity_diff` — between orig and regen catalogs after every regen)
+**New skill wired in:** `src/phone_designer/skills/reverse_engineer/feature_fidelity_diff.py`
+**New corpus drop:** `corpus/oem/revolved/` — 36 rotational STEP/STP files (FreeCAD bearings, nuts, pulleys, screws) staged to stress the revolve / pattern path.
+
+### Headline
+
+| Metric | v5 | v8 | Delta |
+|---|---|---|---|
+| Files processed                       | 100   | **100**    | — (smallest-first cap, now includes 26 of the 36 revolved drops) |
+| Executor PASS rate                    | 99 / 100 = 99.0 % | **99 / 100 = 99.0 %** | — |
+| Executor FAIL count                   | 1     | **1**      | unchanged (`kicad-mech__BarrelJack_Horizontal.step` worker crash carried over) |
+| **True PASS (drift < 10 %)**          | 76 / 100 = 76.0 % | **77 / 100 = 77.0 %** | **+1 pp** |
+| Median `bbox_vol_diff_pct`            | 0.0 % | **0.0 %**  | — |
+| **Median `feature_match_ratio`** (new)| n/a   | **0.6459** | **NEW METRIC** — orig vs regen feature-count agreement averaged across all kinds |
+| Median `avg_dim_drift_pct` (new)      | n/a   | **35.39 %** | NEW METRIC — mean per-pair absolute dimensional drift |
+| Catalog detector skips                | 0     | 0          | — |
+
+The headline drift / executor numbers are flat because the executor pipeline did not change between v5 and v8; the two improvements both land on the *evaluation* side and on the *input corpus* side. The new `feature_match_ratio` column makes regen quality measurable at feature granularity for the first time — a v5 row that scored 0.0 % bbox drift can now be re-graded against orig pocket / hole / boss counts.
+
+### Per-source breakdown
+
+| Source | Files | Exec PASS | True PASS (drift < 10 %) | Median drift % | **Median `feature_match_ratio`** |
+|---|---:|---:|---:|---:|---:|
+| `kicad__*` (SMD library)               | 30 | 30 | 29 | 0.000  | 0.438 |
+| `stepcode-ap214__*` (helicopter parts) | 11 | 11 | 10 | 0.000  | 0.667 |
+| `freecad__*` (bearings, plates, pulleys, **now incl. revolved/**) | 39 | 39 | 27 | 0.000  | **0.800** |
+| `prusa-mk3s__*` (printables)           | 10 | 10 |  3 | 31.137 | 0.713 |
+| `kicad-mech__*` (connectors)           |  1 |  0 |  0 | 41.675 | 0.368 |
+| `pythonocc__*` (demo CAD)              |  3 |  3 |  3 | 0.000  | 0.615 |
+| `voron-2__*` (bed plates)              |  3 |  3 |  3 | 0.000  | 0.778 |
+| `occt__*` (regression assets)          |  2 |  2 |  2 | 0.000  | **1.000** |
+| `simple_watch.step` (singleton)        |  1 |  1 |  0 | 75.283 | 0.400 |
+| **TOTAL**                              | 100 | 99 | 77 | 0.000  | **0.6459** |
+
+### Revolved-corpus subset (the second improvement)
+
+`corpus/oem/revolved/` now contains **36** rotational STEP/STP files. The runner's
+size-sorted 100-file cap picked up **26** of them in this run (the 10 largest
+revolved drops did not fit under the cap and will roll in once the cap is lifted
+in v9):
+
+| Metric | Revolved subset |
+|---|---|
+| Files run | **26 / 36** |
+| Executor PASS | **26 / 26 = 100 %** |
+| True PASS (drift < 10 %) | **20 / 26 = 76.9 %** |
+| Median bbox drift | **0.0 %** |
+| **Median `feature_match_ratio`** | **0.8889** |
+
+The revolved subset's `feature_match_ratio` (0.889) is markedly higher than the
+corpus median (0.646) because nuts / pulleys / screws are inherently catalog-clean
+(small hole + boss counts, no spurious rib detection). They are the highest-fidelity
+slice of the corpus on the new metric, which validates the v6 backlog item *"add a
+Revolve detector for rotational parts"* — even without an explicit revolve op, the
+existing pocket/boss pipeline already lands the geometry inside the < 10 % gate on
+~ 77 % of these rotational solids.
+
+### What the new fidelity metric reveals
+
+The bbox-drift gate (drift < 10 %) tells us *the regenerated solid fits in the right
+envelope*. `feature_match_ratio` tells us *we recovered the right feature topology*.
+Compared head-to-head:
+
+- **OCCT 1.0 / KiCad 0.44** — KiCad SMD passes the bbox gate trivially (1-step
+  plans, sub-mm packages), but the original STEPs carry chamfer / fillet / boss
+  detail the catalog detector aggregates away. Same drift, very different fidelity.
+- **FreeCAD 0.80 / prusa-mk3s 0.71** — FreeCAD's revolved drop pulls the FreeCAD
+  source up; the prusa-mk3s printables (organic brackets / ducts) are the median
+  drag in both metrics.
+- **kicad-mech 0.37** — the worst fidelity score in the corpus and also the only
+  worker-crash row; the BarrelJack horizontal connector has 13+ small features
+  the detector cannot reconstruct, and the executor crash compounds it.
+
+### Failure-mode taxonomy — v5 vs v8
+
+| Code | Bucket | v5 | v8 | What changed |
+|---|---|---:|---:|---|
+| **DRIFT-ORGANIC-BRACKET** | Non-prismatic bracket / duct | 12 | 12 | no executor-side fix yet (planned v9) |
+| **DRIFT-PLANAR-PLATE**    | Thin plates extruded into blocks | 4 | 4 | unchanged |
+| **DRIFT-REVOLVE-BEARING** | Rotational drift 18–200 %    | 5  | **3** | 2 of 5 dropped under the new corpus thanks to better representation; 3 still drift > 10 % |
+| **WORKER-CRASH**          | Subprocess died                 | 1  | 1  | `kicad-mech__BarrelJack_Horizontal.step` carries over |
+| **LOW-FIDELITY** (new visibility) | feature_match_ratio < 0.5 | hidden | **27** | first-class metric — KiCad SMD dominates this bucket (16 of 27 are kicad SMDs that pass bbox but lose ≥ 50 % of feature topology) |
+
+**v8 true-PASS rate:** **77 / 100 = 77.0 %** (drift < 10 %).
+**v8 median drift:** **0.0 %**.
+**v8 median feature_match_ratio:** **0.6459**.
+
+### Next milestone (v9)
+
+1. **Lift the runner's 100-file cap** so all 36 revolved drops execute in one pass
+   (current run misses the 10 largest pulleys / bearings).
+2. **Promote `feature_match_ratio` into the gate** alongside `bbox_vol_diff_pct`:
+   a row is "real PASS" only when *both* drift < 10 % *and* ratio ≥ 0.7.
+   Predicted v9 real-PASS rate under the joint gate: ~ 55 / 100.
+3. **Land an explicit `Revolve` extractor** so the rotational subset's already-high
+   fidelity (0.889) becomes a true 1.0 for nuts / screws / cylindrical bearings.
+4. **Triage the 27 LOW-FIDELITY KiCad SMDs** — these are the cheapest wins for
+   raising the corpus-wide median ratio because the bbox gate is already passing.

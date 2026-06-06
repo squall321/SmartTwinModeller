@@ -54,6 +54,9 @@ def _process_one(step_path: str, result_q) -> None:
         from phone_designer.skills.reverse_engineer.plan_from_feature_catalog import (
             PlanFromFeatureCatalog,
         )
+        from phone_designer.skills.reverse_engineer.feature_fidelity_diff import (
+            FeatureFidelityDiff,
+        )
         from phone_designer.plan.executor import PlanExecutor
         from phone_designer.plan.yaml_io import load_plan
 
@@ -66,6 +69,9 @@ def _process_one(step_path: str, result_q) -> None:
             "executor_errors": None,
             "regen": None,
             "bbox_vol_diff_pct": None,
+            "feature_match_ratio": None,
+            "avg_dim_drift_pct": None,
+            "per_kind_diff": None,
             "error": None,
             "timings_s": {},
         }
@@ -167,6 +173,32 @@ def _process_one(step_path: str, result_q) -> None:
             except Exception as exc:
                 record["regen_error"] = f"{type(exc).__name__}: {exc}"
             record["timings_s"]["inspect_regen"] = round(time.perf_counter() - t0, 3)
+
+            # Stage 7: feature_fidelity_diff (orig catalog vs regen catalog)
+            t0 = time.perf_counter()
+            try:
+                regen_cat_res = ExtractFeatureCatalog().apply(regen_body, {})
+                regen_cat = regen_cat_res.extras.get("feature_catalog") or {}
+                fid_res = FeatureFidelityDiff().apply(
+                    regen_body,
+                    {"catalog_a": cat, "catalog_b": regen_cat},
+                )
+                fid = fid_res.extras.get("feature_fidelity") or {}
+                record["feature_match_ratio"] = fid.get("overall_match_ratio")
+                record["avg_dim_drift_pct"] = fid.get("avg_dim_drift_pct")
+                by_kind = fid.get("by_kind") or {}
+                # Summarize per-kind as "holes:3->2 pockets:5->5", omitting all-zero kinds.
+                parts: list[str] = []
+                for kind, v in by_kind.items():
+                    a = v.get("a", 0)
+                    b = v.get("b", 0)
+                    if a == 0 and b == 0:
+                        continue
+                    parts.append(f"{kind}:{a}->{b}")
+                record["per_kind_diff"] = " ".join(parts) if parts else ""
+            except Exception as exc:
+                record["fidelity_error"] = f"{type(exc).__name__}: {exc}"
+            record["timings_s"]["fidelity"] = round(time.perf_counter() - t0, 3)
 
         result_q.put(record)
     except Exception as exc:
