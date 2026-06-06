@@ -1532,7 +1532,8 @@ def _pick_base_shape(
         from OCP.BRepAdaptor import BRepAdaptor_Surface
         from OCP.BRepGProp import BRepGProp
         from OCP.GeomAbs import (
-            GeomAbs_Cylinder, GeomAbs_Sphere, GeomAbs_Torus,
+            GeomAbs_Cone, GeomAbs_Cylinder, GeomAbs_Plane,
+            GeomAbs_Sphere, GeomAbs_Torus,
         )
         from OCP.GProp import GProp_GProps
 
@@ -1544,13 +1545,20 @@ def _pick_base_shape(
             raise RuntimeError("no faces")
 
         area_by_kind: dict[str, float] = {
-            "cylinder": 0.0, "sphere": 0.0, "torus": 0.0, "other": 0.0,
+            "cylinder": 0.0, "sphere": 0.0, "torus": 0.0,
+            "cone": 0.0, "plane_circular": 0.0, "other": 0.0,
         }
         cyl_axis_dirs: list[tuple] = []
         cyl_radii: list[float] = []
         sph_radii: list[float] = []
         tor_majors: list[float] = []
         tor_minors: list[float] = []
+        cone_apex_radii: list[float] = []
+        cone_half_angles: list[float] = []
+        cone_axes: list[tuple] = []
+        # Circular planar caps — used for exact cylinder-height extraction.
+        # Stored as (axis_origin_z_along_normal, normal_dir, radius).
+        circ_caps: list[tuple] = []
         total_area = 0.0
 
         for f in faces:
@@ -1575,6 +1583,29 @@ def _pick_base_shape(
                     tt = surf.Torus()
                     tor_majors.append(float(tt.MajorRadius()))
                     tor_minors.append(float(tt.MinorRadius()))
+                elif kind_int == GeomAbs_Cone:
+                    area_by_kind["cone"] += a
+                    cc = surf.Cone()
+                    cone_apex_radii.append(float(cc.RefRadius()))
+                    cone_half_angles.append(float(cc.SemiAngle()))
+                    cd = cc.Axis().Direction()
+                    cone_axes.append((cd.X(), cd.Y(), cd.Z()))
+                elif kind_int == GeomAbs_Plane:
+                    # Detect circular planar caps for exact cyl-height extraction.
+                    # Circular face has area = π·r² with a SINGLE outer edge.
+                    import math as _math
+                    try:
+                        pl = surf.Plane()
+                        loc = pl.Location()
+                        n = pl.Axis().Direction()
+                        nx, ny, nz = n.X(), n.Y(), n.Z()
+                        r_est = _math.sqrt(a / _math.pi) if a > 0 else 0.0
+                        # Project location onto its own normal to get a 1D coord.
+                        z_along = loc.X() * nx + loc.Y() * ny + loc.Z() * nz
+                        circ_caps.append((z_along, (nx, ny, nz), r_est))
+                        area_by_kind["plane_circular"] += a
+                    except Exception:
+                        area_by_kind["other"] += a
                 else:
                     area_by_kind["other"] += a
             except Exception:
@@ -1583,9 +1614,10 @@ def _pick_base_shape(
         if total_area <= 0:
             raise RuntimeError("zero total area")
 
-        ratio_cyl = area_by_kind["cylinder"] / total_area
-        ratio_sph = area_by_kind["sphere"]   / total_area
-        ratio_tor = area_by_kind["torus"]    / total_area
+        ratio_cyl  = area_by_kind["cylinder"] / total_area
+        ratio_sph  = area_by_kind["sphere"]   / total_area
+        ratio_tor  = area_by_kind["torus"]    / total_area
+        ratio_cone = area_by_kind["cone"]     / total_area
 
         # Pick highest-confidence non-prismatic shape; generic thresholds.
         if ratio_sph > 0.5 and sph_radii:
@@ -1595,9 +1627,10 @@ def _pick_base_shape(
                 "major_radius_mm": max(tor_majors),
                 "minor_radius_mm": max(tor_minors),
             })
-        if ratio_cyl > 0.6 and cyl_radii:
-            # Height = bbox extent along the dominant cylinder axis.
-            ax = cyl_axis_dirs[0]
+        # Cone: dominated by GeomAbs_Cone faces.
+        if ratio_cone > 0.5 and cone_apex_radii:
+            # Estimate height from bbox along the cone axis.
+            ax = cone_axes[0]
             ax_abs = (abs(ax[0]), abs(ax[1]), abs(ax[2]))
             if bbox is not None:
                 (xmin, ymin, zmin), (xmax, ymax, zmax) = bbox
@@ -1609,9 +1642,44 @@ def _pick_base_shape(
                     height_mm = float(xmax - xmin)
             else:
                 height_mm = max(base_l, base_w, base_h)
-            return ("cylinder", {
-                "diameter_mm": 2.0 * max(cyl_radii),
+            return ("cone", {
+                "radius_lower_mm": max(cone_apex_radii),
+                "radius_upper_mm": 0.1,
                 "height_mm": max(0.1, height_mm),
+            })
+        if ratio_cyl > 0.6 and cyl_radii:
+            # Try exact height from paired circular caps first
+            # (parallel normals + colinear axes with the cylinder).
+            ax = cyl_axis_dirs[0]
+            ax_abs = (abs(ax[0]), abs(ax[1]), abs(ax[2]))
+            cyl_r = max(cyl_radii)
+            exact_height_mm: float | None = None
+            if len(circ_caps) >= 2:
+                # Caps that are parallel to the cylinder axis and whose
+                # radius matches the cylinder radius within 5 %.
+                aligned = []
+                for z_along, n, r_est in circ_caps:
+                    dot = abs(n[0] * ax[0] + n[1] * ax[1] + n[2] * ax[2])
+                    if dot < 0.95:
+                        continue
+                    if cyl_r > 1e-6 and abs(r_est - cyl_r) / cyl_r > 0.10:
+                        continue
+                    aligned.append(z_along)
+                if len(aligned) >= 2:
+                    exact_height_mm = float(max(aligned) - min(aligned))
+            if exact_height_mm is None and bbox is not None:
+                (xmin, ymin, zmin), (xmax, ymax, zmax) = bbox
+                if ax_abs[2] >= max(ax_abs[0], ax_abs[1]):
+                    exact_height_mm = float(zmax - zmin)
+                elif ax_abs[1] >= ax_abs[0]:
+                    exact_height_mm = float(ymax - ymin)
+                else:
+                    exact_height_mm = float(xmax - xmin)
+            if exact_height_mm is None:
+                exact_height_mm = max(base_l, base_w, base_h)
+            return ("cylinder", {
+                "diameter_mm": 2.0 * cyl_r,
+                "height_mm": max(0.1, exact_height_mm),
             })
     except Exception:
         pass
