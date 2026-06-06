@@ -509,6 +509,30 @@ class ExtractFeatureCatalog(SkillBase):
                               "calling extract_feature_catalog.",
                 }
 
+        # ── bbox snapshot (PACK B drift fix) ───────────────────────────────
+        # Detector pipelines below mutate the OCCT shape's optimal-bbox
+        # cache (BRepBndLib.AddOptimal_s gets ~0.5-1.0 mm wider after the
+        # detectors traverse all faces). Snapshot the bbox NOW so downstream
+        # consumers (plan_from_feature_catalog) can size the placeholder
+        # base box to the *original* extents instead of the inflated post-
+        # detector cache.
+        _initial_bbox: tuple[float, float, float, float, float, float] | None
+        try:
+            from OCP.Bnd import Bnd_Box
+            from OCP.BRepBndLib import BRepBndLib
+            _shape_for_bbox = _occt_shape(body)
+            _bb = Bnd_Box()
+            try:
+                BRepBndLib.AddOptimal_s(_shape_for_bbox, _bb)
+            except Exception:
+                BRepBndLib.Add_s(_shape_for_bbox, _bb)
+            if not _bb.IsVoid():
+                _initial_bbox = tuple(float(c) for c in _bb.Get())  # type: ignore[assignment]
+            else:
+                _initial_bbox = None
+        except Exception:
+            _initial_bbox = None
+
         # ── per-detector timings + skipped-due-to-too-big tracking ─────────
         timings_sec: dict[str, float] = {}
         skipped_detectors: list[str] = []
@@ -686,6 +710,11 @@ class ExtractFeatureCatalog(SkillBase):
             "base_thickness_mm": (
                 float(base_thickness) if base_thickness is not None else None
             ),
+            # PACK B drift fix — pre-detector optimal bbox in world coords as
+            # (xmin, ymin, zmin, xmax, ymax, zmax). Consumers should prefer
+            # this over re-computing _body_bbox at plan time, which returns
+            # the inflated post-detector AddOptimal_s cache.
+            "initial_bbox_mm": list(_initial_bbox) if _initial_bbox is not None else None,
             "_timings_sec": timings_sec,
         }
         if skipped_detectors:

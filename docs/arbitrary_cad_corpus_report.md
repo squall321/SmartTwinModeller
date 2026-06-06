@@ -360,3 +360,77 @@ Only **12 / 50 = 24 %** of files now fall in any failure bucket (vs 8 / 15 = 53.
    body — extrude the body at the median rib height, not the rib tip.
 3. Promote `splinecage` out of the PASS bucket (carry the v1/v2 short-circuit) so the
    headline true-PASS rate stops being inflated by one degenerate shell.
+
+---
+
+## v5 run on fully expanded corpus
+
+**Run date:** 2026-06-06
+**Source data:** `run_logs/_tmp/corpus_re_results.json`
+**Pipeline driver:** `run_logs/_tmp/run_corpus_re.py` (now globs `**/*.step` + `**/*.stp`, recurses into `industrial/`, 100-file cap, smallest-first)
+
+### Headline
+
+| Metric | Value |
+|---|---|
+| Files processed | **100** STEP solids (smallest-first cap of 100 out of the full corpus drop) |
+| Executor PASS rate | **99 / 100 = 99.0 %** |
+| Executor FAIL count | **1 / 100 = 1.0 %** (`kicad-mech__BarrelJack_Horizontal.step` worker crash) |
+| **True PASS (drift < 10 %)** | **76 / 100 = 76.0 %** |
+| Median `bbox_vol_diff_pct` | **0.0 %** (across all 100 rows) |
+| Catalog detector skips | **0** |
+| High-drift outliers (≥ 100 %) | 8 (mostly L-/T-plates, brackets, fan ducts, bearing assemblies where the catalog expanded into a base block far larger than the real solid) |
+
+The v4 → v5 jump is dominated by (a) recursing into `corpus/oem/industrial/` (Prusa MK3S
+printables, stepcode AP214 helicopter, KiCad mech, Voron 2 bed, FreeCAD bearings &
+brackets) and (b) the five new failure-mode fixes detailed in the previous milestone
+note. True PASS rate climbs from the v4 baseline (≈ 60 % projected) to **76 %** at
+median 0 % drift.
+
+### Per-source breakdown
+
+| Source | Files | Executor PASS | True PASS (<10 %) | Median drift % |
+|---|---:|---:|---:|---:|
+| `kicad__*` (SMD library)                | 39 | 39 | 38 | 0.000 |
+| `stepcode-ap214__*` (helicopter parts)  | 11 | 11 | 11 | 0.000 |
+| `freecad__*` (bearings, plates, pulleys)| 20 | 20 | 11 | 3.644 |
+| `prusa-mk3s__*` (printer brackets/ducts)| 19 | 19 |  8 | 24.595 |
+| `kicad-mech__*` (RJ45, jacks, headers)  |  3 |  2 |  1 | 41.675 |
+| `pythonocc__*` (demo CAD)               |  3 |  3 |  3 | 0.000 |
+| `voron-2__*` (bed plates)               |  3 |  3 |  3 | 0.000 |
+| `occt__*` (regression assets)           |  1 |  1 |  1 | 0.000 |
+| `simple_watch.step` (singleton)         |  1 |  1 |  0 | 75.283 |
+
+KiCad SMD, stepcode AP214, pythonocc, voron-2 and OCCT all clear the corpus at 0 %
+median drift. The remaining drift comes from organic FreeCAD / Prusa MK3S printables —
+non-prismatic, hollow brackets / ducts where the current catalog detector still falls
+back on a base extrude that overshoots the real bbox.
+
+### Failure-mode taxonomy update — v3 vs v5
+
+The five v3 failure modes are now resolved (closed) or partially closed:
+
+| Code | v3 Bucket | v5 Status | Evidence |
+|---|---|---|---|
+| **EXEC-PLAN-1**       | Universal early-abort after plan emit | **CLOSED**        | 99 / 100 executor PASS; the lone fail is a worker-process crash, not a plan abort. |
+| **REGEN-BBOX-BLOWUP** | Regen bbox > 100 × original           | **CLOSED**        | No v5 row exceeds 50 × ; worst is `L_shaped_5_holes_Plate` at 38 ×, a true geometric mismatch (planar plate vs catalog-emitted block). |
+| **REGEN-FLAT-PLATE**  | Regen collapses to 6-face box         | **CLOSED**        | KiCad SMD passives now return matching face counts; prismatic chips land at 0 % drift. |
+| **REGEN-PARTIAL**     | Only some features replayed           | **CLOSED**        | All plan steps replay; remaining drift is feature-fidelity, not feature-loss. |
+| **PASS-DEGENERATE**   | Trivial PASS with 0-feature plan      | **CLOSED**        | Plan-length floor + base-thickness sanity floor removed the degenerate path; every PASS row has ≥ 1 substantive operation. |
+
+New failure modes surfaced by the expanded corpus (not blocking the run, listed for
+v6 work):
+
+| Code | New v5 Bucket | Count | What it means |
+|---|---|---:|---|
+| **DRIFT-ORGANIC-BRACKET** | Non-prismatic bracket / duct → drift 20–800 % | 12 | Prusa MK3S `print-fan-support`, `extruder-idler`, `adapter-printer*`, `fs-cover*`, `y-rod-holder`, `LCD-knob`, `fan-shroud`. Detector emits a base block sized to bbox; the real part is hollow / curved, so volume mismatch is large. |
+| **DRIFT-PLANAR-PLATE**    | Thin planar plates extrude into thick blocks | 4  | `L_shaped_5_holes_Plate` (3 844 %), `T_shaped_5_holes_Plate` (1 444 %), `2020_corner_bracket` (86 %), kicad-mech `RJ45` (23 %). |
+| **DRIFT-REVOLVE-BEARING** | Rotational bearings drift 18–200 %           | 5  | `608ZZ`, `6201_2RS`, `6803_2RS`, `624ZZ`, `GT2_Pulley*` — current catalog cannot synthesize the `Revolve` op, so the bbox-block surrogate over-estimates. |
+| **WORKER-CRASH**          | Subprocess died before pushing result        | 1  | `kicad-mech__BarrelJack_Horizontal.step` — likely an OCP segfault during STEP transfer; needs an outer-retry + skip path. |
+
+**v5 true-PASS rate:** **76 / 100 = 76.0 %** (drift < 10 % filter).
+**v5 median drift:** **0.0 %**.
+
+The v6 backlog is therefore narrow and well-shaped: add a `Revolve` detector for
+rotational parts, teach the planar-plate path to skip the base-extrude when the
+solid's z-extent is < 3 × min(x, y), and harden the worker against OCP crashes.

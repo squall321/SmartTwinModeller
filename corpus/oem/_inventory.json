@@ -664,5 +664,446 @@
     "size_bytes": 356629,
     "sha256": "a2f7a9c513c3be0cbd5de8cdd22fdbf1c2e3510c72d682fd089d252fe71b9dc7",
     "industrial": true
+  },
+  {
+    "filename": "kicad__QFN-48_7x7mm_P0.5mm.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Package_DFN_QFN.3dshapes/QFN-48-1EP_7x7mm_P0.5mm_EP5.15x5.15mm.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 538512,
+    "sha256": "f2b38b0b4bf967c77e683e8d4599608b9f0503055ec535b93c4ebb5d0163e916",
+    "industrial": false
+  },
+  {
+    "filename": "kicad__SOT-353.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Package_TO_SOT_SMD.3dshapes/SOT-353_SC-70-5.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 89216,
+    "sha256": "2860de5b7b085919ff6e952148353f928798588d9f544dc69430545aff2ba908",
+    "industrial": false
+  },
+  {
+    "filename": "kicad__SOT-89.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Package_TO_SOT_SMD.3dshapes/SOT-89-3.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 58399,
+    "sha256": "844c0bb504d0c383535d9845c6376fe7a4053241a2ede8d8ef694df3fcfc37c8",
+    "industrial": false
+  },
+  {
+    "filename": "kicad__Buzzer_15x7.5RM7.6.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Buzzer_Beeper.3dshapes/Buzzer_15x7.5RM7.6.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 20398,
+    "sha256": "608239ccba36be30c09daff6d1050179f44be75b3f6b60561438d7c994fee976",
+    "industrial": false
+  },
+  {
+    "filename": "kicad__Trimmer_Bourns_3296.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Potentiometer_THT.3dshapes/Potentiometer_Bourns_3296W_Vertical.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 46171,
+    "sha256": "6840ef2119b907fb521c96fbec3b264341231a06f36ecb9ee71e11da5bfcab4a",
+    "industrial": false
+  },
+  {
+    "filename": "industrial/freecad__2020x50_V_slot_profile.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Mountings/2020_V-slot_Al_extrusion/2020x50_V_slot_profile-Part.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 233736,
+    "sha256": "ade2faa9698f0be1c6499bedc8c77caa862c86622fdb7a1d05d304a328c21153",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__2020_corner_bracket.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Mountings/Corner/2020_corner_bracket-Corner.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 132515,
+    "sha256": "25e3fbc171f13e1a96258ab084b2d8134a737ebd34098a312e297344481af348",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__Gantry_plate_20mm_v_slot.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Mountings/Gantry_plate/Gantry_plate_20mm_v_slot.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 489072,
+    "sha256": "d936ffdb6d4454e20d12dbfced4d1e6919f55af160b0aac447860457bc623960",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__L_shaped_5_holes_Plate.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Mountings/Joining_plate/L_shaped_5_holes-Plate.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 85934,
+    "sha256": "c38dd6fc5132cee0d660daad78eda3a7928cc4ea2c5b04bbd97443312de6a90b",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__T_shaped_5_holes_Plate.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Mountings/Joining_plate/T_shaped_5_holes-Plate.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 74481,
+    "sha256": "2af625067f0dfa31d1b251fdf9546af8e92db33947dd4a911f231ff0bcc7fae1",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__KFL08.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Mountings/KFL08/KFL08.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 1187725,
+    "sha256": "938d5e7e596d5e9586e7b2d7cef89da3003d3cf734dbfa5ab39f6e790319c090",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__KP08.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Mountings/KP08/KP08.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 1229331,
+    "sha256": "36db30999125844222fce7c15c9e49a91fec92cd5776f96207fa4c2c48527e26",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__LM8UU.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Mountings/LM8UU/LM8UU.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 42778,
+    "sha256": "1e2fb3226e6df8be982b76e1101e0a8bd2bf2db09a29ea3842beca4c3d29a1a0",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__SC8UU.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Mountings/SC8UU/SC8UU.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 175950,
+    "sha256": "5d436ba0ef1777f9b7b7381fbcc5983304b56408f0aecc22a8b6c0ae139e9123",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__SHF08.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Mountings/SHF08/SHF08.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 123065,
+    "sha256": "1f23fb4d766f0d7424bd1200c30c0d92117da96d4ada4fc320bfe8913e67d7dd",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__SK08.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Mountings/SK08/SK08-SK08.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 81426,
+    "sha256": "bb89218f5cd90ce713b08359d4d719f4297483039ef55d2abb33eb5af65d9cd5",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__T_nut_20S_M5.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Mountings/Slot_T_nuts/T_type_square_nut-20S-M5.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 546287,
+    "sha256": "fd0635c5428de4d5fee6144e936a91d400e6896c17a5fade23e89549c9bd87b4",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__T_nut_30S_M6.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Mountings/Slot_T_nuts/T_type_square_nut-30S-M6.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 549495,
+    "sha256": "5bee2df516f800202bfcda66c573633bf2af67065fe4bf571a4cd5b32bef9633",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__T8_housing_bracket.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Mountings/T8_housing_bracket/T8_housing_bracket.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 63261,
+    "sha256": "a40963b851c4d64dae6d251461883a02c3650b4467e4087b9250a65bb99f1b74",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__T8_antibacklash_nut.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Mountings/T8_screw_nut/Anti_backlash_nut/T8_antibacklash_nut.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 1643093,
+    "sha256": "6738af97e104283944e16a80bc09386a295b1ccaa20ae17ad026a9a3b1e63537",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__T8_Flange_nut.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Mountings/T8_screw_nut/Flange_nut/T8_Flange_nut.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 675646,
+    "sha256": "e62fa7316f034ff98adf3ba701b6bbbabf05786d037af2279e46abb422c8d427",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__Hirth_joint_D20x8.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Coupling/Hirth-joint/Hirth-joint-sample_D20x8_T16x60.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 507170,
+    "sha256": "0ee093e5e3078235835555131b34c78a7a0e7112125cebbd97ed681c0e1ec656",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__608ZZ_Ball_Bearing.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Bearings/608ZZ_Ball_Bearing.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 39363,
+    "sha256": "45246a4cf1bc63c8186ad8de22a74f44a63aecb450294356592c321bf281e3d3",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__623ZZ_Ball_Bearing.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Bearings/623ZZ_Ball_Bearing.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 42174,
+    "sha256": "900040c258cabfe83c113d8aa8f2fc0b1d73902afb92d6baa3e3a8cc9f429943",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__624ZZ_Ball_Bearing.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Bearings/624ZZ_Ball_Bearing.stp",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 301499,
+    "sha256": "c2d0108b552fed079e467bff0a03a039d347919fc2baf3090c265779503f6d22",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__6201_2RS.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Bearings/Ball%20Bearings/6201-2RS_Ball_Bearing.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 20641,
+    "sha256": "7b08a4e32a85f4fa91931b86c2649df99a8ff32a63788565e185883397525298",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__6803_2RS.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Bearings/Ball%20Bearings/6803-2RS_Ball_Bearing.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 20664,
+    "sha256": "5bb8e8399e72e0c72215216a11ddd07b1c2741d993429456824dc1a10f4d4551",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__F623ZZ.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Bearings/F623ZZ_Ball_Bearing.stp",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 38055,
+    "sha256": "6f1627501c944b2cfbe81b243d73812d05261f57c6f0a0824d3d1ada9cc92ccd",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__GT2_Pulley_V2.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Pulleys/GT2Pulley-V2.stp",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 355213,
+    "sha256": "58e39331601d2f09509d7587974950303871e52e3a0a7969554fee187da84f3a",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__GT2_Pulley_V3.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Pulleys/GT2Pulley-V3.stp",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 186546,
+    "sha256": "9a7827cce2e6c1bad3154993864db49871dbd5938b4688bbd087beac5d27b473",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__GT2_Pulley.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Pulleys/GT2Pulley.stp",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 267639,
+    "sha256": "7feff0b6dee67f62842c363636fa91af55e93ab379a63d145d1689e7678f3e99",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__GT2_16T.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Pulleys/GT2_16T.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 615112,
+    "sha256": "7639554de256c584b3bbe731a5a943e7b082f2aa0b804069dd1fa88dac6a9eff",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__GT2_20T_5mm.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Mechanical%20Parts/Pulleys/GT2_20T_Smooth_5mm_Bore.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 51245,
+    "sha256": "f20d8de6ffe013061edd3d13e7f8e34df40ead68a5ac9c8b292decc1ae528d86",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__CatNozzle.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Electrical%20Parts/Hotend/CatNozzle.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 562421,
+    "sha256": "dc08f564246f34defb982b1bf2aba5bf4f8df5878a146a638a20d340296efede",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__hotend_3d_printer.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Electrical%20Parts/Hotend/hotend-3d-printer.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 389087,
+    "sha256": "4987bfe7a21765f26d6fd9ec0a0292e66f221c4eb06af11c9bc330c6fbf7e01a",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/freecad__MK8_hotend.step",
+    "source_url": "https://raw.githubusercontent.com/FreeCAD/FreeCAD-library/master/Electrical%20Parts/Hotend/MK8.step",
+    "source": "freecad",
+    "kind": "step",
+    "size_bytes": 3234890,
+    "sha256": "f4a503227b5af1af30af75d8647d65ce01a599aeae9c2cfb370774a48518cf8a",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/prusa-mk3s__adapter-printer-mmu2s.step",
+    "source_url": "https://raw.githubusercontent.com/prusa3d/Original-Prusa-i3/MK3S/Printed-Parts/STEP/adapter-printer-mmu2s.stp",
+    "source": "prusa-mk3s",
+    "kind": "step",
+    "size_bytes": 189399,
+    "sha256": "183c376cc68aac2c43cb358832aeea532f04fcd46e401b8cb4abe5ec8193ddd1",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/prusa-mk3s__extruder-idler-mmu2s.step",
+    "source_url": "https://raw.githubusercontent.com/prusa3d/Original-Prusa-i3/MK3S/Printed-Parts/STEP/extruder-idler-mmu2s.stp",
+    "source": "prusa-mk3s",
+    "kind": "step",
+    "size_bytes": 194567,
+    "sha256": "7844a6cc0501d6bfd6cdbc7917c77cc178b40936d2ac3121ca868c12f3fffb4b",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/prusa-mk3s__fs-cover.step",
+    "source_url": "https://raw.githubusercontent.com/prusa3d/Original-Prusa-i3/MK3S/Printed-Parts/STEP/fs-cover.stp",
+    "source": "prusa-mk3s",
+    "kind": "step",
+    "size_bytes": 68904,
+    "sha256": "2286f52b2c6533a295a4c7b2f78abaf72f8c2ded77b35eb999dfc112df604e69",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/prusa-mk3s__fs-cover-mmu2s.step",
+    "source_url": "https://raw.githubusercontent.com/prusa3d/Original-Prusa-i3/MK3S/Printed-Parts/STEP/fs-cover-mmu2s.stp",
+    "source": "prusa-mk3s",
+    "kind": "step",
+    "size_bytes": 75469,
+    "sha256": "eacbebb68c27c4582cbd928a6aa227b8770630f934fcf3937c12b5a09e5bce0b",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/prusa-mk3s__fs-lever.step",
+    "source_url": "https://raw.githubusercontent.com/prusa3d/Original-Prusa-i3/MK3S/Printed-Parts/STEP/fs-lever.stp",
+    "source": "prusa-mk3s",
+    "kind": "step",
+    "size_bytes": 67162,
+    "sha256": "ac25d8684727a090f4b32ed91026487915913d241a99ede98b610c4c79e590cb",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/prusa-mk3s__ir-sensor-cover-mmu2s.step",
+    "source_url": "https://raw.githubusercontent.com/prusa3d/Original-Prusa-i3/MK3S/Printed-Parts/STEP/ir-sensor-cover-mmu2s.stp",
+    "source": "prusa-mk3s",
+    "kind": "step",
+    "size_bytes": 50128,
+    "sha256": "b8fbfa2b290407d83810e9660a688c2ba1bd3456e0ad03d18b95186834cbdddf",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/prusa-mk3s__ir-sensor-holder-mmu2s.step",
+    "source_url": "https://raw.githubusercontent.com/prusa3d/Original-Prusa-i3/MK3S/Printed-Parts/STEP/ir-sensor-holder-mmu2s.stp",
+    "source": "prusa-mk3s",
+    "kind": "step",
+    "size_bytes": 198118,
+    "sha256": "4a900bdd4fbdc365e395224b6cfb99123788353be456b36ca1a8b00ab47817cf",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/prusa-mk3s__plug-aligner.step",
+    "source_url": "https://raw.githubusercontent.com/prusa3d/Original-Prusa-i3/MK3S/Printed-Parts/STEP/plug-aligner.stp",
+    "source": "prusa-mk3s",
+    "kind": "step",
+    "size_bytes": 45600,
+    "sha256": "59cff095b08e6200556379cd98cbf6c6093a20deba1ca54560acaf7b6d73d0da",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/prusa-mk3s__print-fan-support.step",
+    "source_url": "https://raw.githubusercontent.com/prusa3d/Original-Prusa-i3/MK3S/Printed-Parts/STEP/print-fan-support.stp",
+    "source": "prusa-mk3s",
+    "kind": "step",
+    "size_bytes": 60285,
+    "sha256": "db80abfd21574d3a43df6e2f2cd6993bec8ea5603a2dc823b3a8dc5408e8a16e",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/prusa-mk3s__psu-cover-DELTA.step",
+    "source_url": "https://raw.githubusercontent.com/prusa3d/Original-Prusa-i3/MK3S/Printed-Parts/STEP/psu-cover-DELTA.step",
+    "source": "prusa-mk3s",
+    "kind": "step",
+    "size_bytes": 362423,
+    "sha256": "3b3a35bc65cb6cedc7b9dc21c02d292b07a19e8418d976e1676e939714e5b569",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/prusa-mk3s__y-motor-holder.step",
+    "source_url": "https://raw.githubusercontent.com/prusa3d/Original-Prusa-i3/MK3S/Printed-Parts/STEP/y-motor-holder.stp",
+    "source": "prusa-mk3s",
+    "kind": "step",
+    "size_bytes": 218944,
+    "sha256": "96ef4a393e2539f1c1f1ccce5949967d10546beca5470e918371ba1ddbf0eb43",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/prusa-mk3s__y-rod-holder.step",
+    "source_url": "https://raw.githubusercontent.com/prusa3d/Original-Prusa-i3/MK3S/Printed-Parts/STEP/y-rod-holder.stp",
+    "source": "prusa-mk3s",
+    "kind": "step",
+    "size_bytes": 149675,
+    "sha256": "906018e37f7b0182a7af8104d8b4f5966acc64ba723a49acdbd47ea093d83a32",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/stepcode-ap214__TAIL_MIDDLE_PART.step",
+    "source_url": "https://raw.githubusercontent.com/stepcode/stepcode/master/data/ap214e3/s1-c5-214/TAIL_MIDDLE_PART.stp",
+    "source": "stepcode-ap214",
+    "kind": "step",
+    "size_bytes": 38757,
+    "sha256": "f47c3046be3b9fd9260aad7855da8a98fe497631543270457c0f6e404018a4dd",
+    "industrial": true
   }
 ]

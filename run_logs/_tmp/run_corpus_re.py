@@ -229,12 +229,32 @@ def run_with_timeout(step_path: str, timeout_s: int) -> dict:
 
 
 def main() -> int:
-    step_files = sorted(
-        [p for p in CORPUS.glob("*.step") if p.is_file()]
-        + [p for p in CORPUS.glob("*.stp") if p.is_file()],
-        key=lambda p: p.name,
+    # Recursive discovery — include industrial/ and any other subdirs.
+    # Sort by size ascending so smaller (faster) files run first; cap at 100.
+    patterns = ("**/*.step", "**/*.stp", "**/*.STEP", "**/*.STP")
+    seen: set = set()
+    candidates: list = []
+    for pat in patterns:
+        for p in CORPUS.glob(pat):
+            if not p.is_file():
+                continue
+            key = str(p.resolve()).lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            try:
+                sz = p.stat().st_size
+            except OSError:
+                sz = 0
+            candidates.append((sz, p))
+    candidates.sort(key=lambda t: (t[0], t[1].name))
+    MAX_FILES = 100
+    step_files = [p for _sz, p in candidates[:MAX_FILES]]
+    print(
+        f"[corpus_re] discovered {len(candidates)} STEP file(s) under {CORPUS}; "
+        f"running first {len(step_files)} (capped at {MAX_FILES}, smallest first)",
+        flush=True,
     )
-    print(f"[corpus_re] discovered {len(step_files)} STEP file(s) under {CORPUS}", flush=True)
 
     records: list[dict] = []
     files_pass = 0

@@ -431,12 +431,52 @@ def _pocket_step(
     # the measured top diameter. RectangleSketch fields: kind="rectangle"
     # + length_mm + width_mm + center_x_mm + center_y_mm.
     size = top_d if top_d > 0 else 5.0
+    # PACK B drift fix — clamp sketch L/W so the pocket can't be larger than
+    # the body's XY footprint. The catalog frequently reports top_d_mm at
+    # the OUTER cap of a stepped/through pocket which can equal or exceed
+    # the body's shorter XY extent (e.g. JST B2B reports top_d=7.5 mm on a
+    # 7.5 × 3.8 mm body — the pocket then carves the full 7.5 × 7.5 square
+    # out of the body, collapsing Z drift to 40%+). Clamp each axis
+    # independently to (body_extent - 2 * shift) so the pocket is fully
+    # interior. Also reject the step entirely when the pocket centre falls
+    # outside the body's XY bbox — those are detector artefacts on
+    # off-axis cylinder chains and would emit a step that misses the body.
+    if bbox is not None:
+        try:
+            xmin, ymin, _zmin, xmax, ymax, _zmax = bbox
+            body_l = float(xmax) - float(xmin)
+            body_w = float(ymax) - float(ymin)
+            # leave a 1% slab margin so the pocket is strictly interior.
+            max_l = max(body_l * 0.98, 0.1)
+            max_w = max(body_w * 0.98, 0.1)
+            length_mm = min(size, max_l)
+            width_mm = min(size, max_w)
+            # Reject pockets whose XY centre is outside the body's bbox in
+            # local (shifted) coords: in box-mode the placeholder slab is
+            # centred at (0,0) so the body-local extents are
+            # (-body_l/2, body_l/2) × (-body_w/2, body_w/2). If the centre
+            # sits more than half-extent + margin away, it's spurious.
+            if shift != (0.0, 0.0, 0.0):
+                if abs(ox) > body_l * 0.5 + 0.5 or abs(oy) > body_w * 0.5 + 0.5:
+                    # Degenerate: the pocket would cut outside the slab.
+                    # Skip by emitting a near-zero pocket centred on origin
+                    # (executor's zero-delta skip path catches it).
+                    length_mm = 0.1
+                    width_mm = 0.1
+                    ox = 0.0
+                    oy = 0.0
+        except Exception:
+            length_mm = size
+            width_mm = size
+    else:
+        length_mm = size
+        width_mm = size
     return _new_step(sid, "extrude_pocket", {
         "face_selector": face_sel,
         "sketch": {
             "kind": "rectangle",
-            "length_mm": size,
-            "width_mm": size,
+            "length_mm": float(length_mm),
+            "width_mm": float(width_mm),
             "center_x_mm": ox,
             "center_y_mm": oy,
         },
@@ -1512,7 +1552,22 @@ def _build_plan(
     # selectors. Features with non-±Z axes are filtered out below so the
     # plan degrades gracefully to just the base box rather than failing on
     # zero-delta volume cuts.
-    bbox = _body_bbox(body)
+    # PACK B drift fix — prefer the pre-detector bbox snapshot recorded by
+    # extract_feature_catalog. Re-computing _body_bbox(body) at plan time
+    # returns the inflated post-detector AddOptimal_s cache (~+0.5-1.0 mm
+    # on every axis) which inflates the placeholder box and shows up as
+    # 10-20% bbox-volume drift even when every feature step is correct.
+    _initial_bb = catalog.get("initial_bbox_mm")
+    if (
+        isinstance(_initial_bb, (list, tuple))
+        and len(_initial_bb) >= 6
+    ):
+        try:
+            bbox = tuple(float(c) for c in _initial_bb[:6])  # type: ignore[assignment]
+        except Exception:
+            bbox = _body_bbox(body)
+    else:
+        bbox = _body_bbox(body)
     primary_axis = _primary_feature_axis(catalog, bbox)
     # When the primary axis is NOT Z we additionally rewrite the base box
     # extents so the longest axis maps to L, middle to W, shortest to H —
@@ -1569,9 +1624,28 @@ def _build_plan(
                     top_face_bosses.append(_b)
             except Exception:
                 continue
+        # PACK B drift fix — only count ribs as a Z-extender when they
+        # don't all collapse to one signature. The rib detector regularly
+        # mistakes pin shaft cylinders on KiCad parts (PinHeader, button)
+        # for ribs and emits 10-20 identical entries. Those are dropped
+        # later by the rib-dedup pass, so they MUST NOT influence the
+        # base-height choice here — otherwise has_z_extender stays True
+        # and the slab clamps base_h to base_thickness (≈ 2.54 mm) even
+        # though the orig bbox is 11.54 mm tall.
+        _raw_ribs = catalog.get("ribs") or []
+        _rib_sig_count: set[tuple] = set()
+        for _rb in _raw_ribs:
+            _rib_sig_count.add((
+                int(round(float(_rb.get("length_mm") or 0.0) * 100)),
+                int(round(float(_rb.get("thickness_mm") or 0.0) * 100)),
+                int(round(float(_rb.get("height_mm") or 0.0) * 100)),
+            ))
+        _real_ribs_likely = bool(_raw_ribs) and not (
+            len(_raw_ribs) >= 2 and len(_rib_sig_count) == 1
+        )
         has_z_extender = bool(
             top_face_bosses
-            or (catalog.get("ribs") or [])
+            or _real_ribs_likely
             or (catalog.get("sweep_features") or [])
             or (catalog.get("loft_features") or [])
         )
@@ -1599,14 +1673,32 @@ def _build_plan(
             # e.g. as1-oc-214 ratio=1.27 means 27% more material lives
             # above slab top: NOT a slab body).
             _ratio = body_vol / slab_vol
-            slab_fits_volume = 0.70 <= _ratio <= 1.05
+            # PACK B drift fix — tightened from [0.70, 1.05]. A ratio at or
+            # above 1.0 means the body has material extending ABOVE the
+            # slab top (e.g. BGA-49: ratio=1.05 from solder balls; CP_Elec:
+            # cylinder dominates). Slab is a better match only when the
+            # body fits inside the slab box with little headroom — tighten
+            # the upper bound so true near-bbox slab bodies still match
+            # (simple_watch / housing_only stay at ratio ≈ 0.9).
+            slab_fits_volume = 0.85 <= _ratio <= 1.00
+        # PACK B drift fix — tightened the no-extender slab acceptance
+        # threshold from 0.70 to 0.95. When NO Z-extender feature exists
+        # (no top bosses, ribs, sweeps, lofts) the placeholder slab IS
+        # the entire plan in Z — using a 70-95% slab leaves the regen
+        # 5-30% shorter than orig (e.g. BGA-49: slab=1.7 mm vs
+        # bbox_h=2.11 mm → 19.6% drift). Slab geometry that matches the
+        # bbox within 5% is fine; below that, prefer bbox_h.
+        _slab_near_bbox = (
+            base_thickness is not None
+            and float(base_thickness) >= 0.95 * bbox_h
+        )
         if (
             base_thickness is not None
             and bbox_h / 10.0 <= float(base_thickness) <= bbox_h
             and not z_dominant
             and (
                 has_z_extender
-                or float(base_thickness) >= 0.70 * bbox_h
+                or _slab_near_bbox
                 or slab_fits_volume
             )
         ):
@@ -1710,6 +1802,24 @@ def _build_plan(
         _dp = float(p.get("depth_mm") or 0.0)
         if _predicted_cylinder_volume_mm3(_td, _dp) < _MIN_EMITTED_CUT_MM3:
             continue
+        # PACK B drift fix — drop pockets whose top_d is comparable to the
+        # body's smallest XY extent. The pocket detector occasionally
+        # walks the entire body silhouette and reports a pocket whose
+        # outer cap spans the full slab (e.g. PinHeader: top_d=12.7 mm on
+        # a 5.08 × 12.7 slab; the placeholder rectangular sketch then
+        # cuts the entire slab away, collapsing regen Z drift to >99%).
+        # We treat top_d ≥ 0.90 × min(body_l, body_w) as a silhouette
+        # detection and skip emission — the slab alone is a closer match
+        # to the original than slab-minus-silhouette.
+        if bbox is not None and _td > 0.0:
+            try:
+                _bl = float(bbox[3]) - float(bbox[0])
+                _bw = float(bbox[4]) - float(bbox[1])
+                _b_min_xy = min(_bl, _bw)
+                if _b_min_xy > 0.0 and _td >= 0.90 * _b_min_xy:
+                    continue
+            except Exception:
+                pass
         bearing_match = _match_bearing_bore(p)
         if bearing_match is not None:
             spec, _conf = bearing_match
@@ -1824,6 +1934,16 @@ def _build_plan(
         except Exception:
             return False
 
+    # PACK A — non-Z primary axis suppression for bosses. mounting_pad
+    # always grows +Z from the resolved face; on bodies whose primary
+    # feature axis is X or Y the "bosses" the detector emits are usually
+    # internal cylinder fragments mis-classified as protrusions, and
+    # growing +Z from a non-existent top face pushes the pad outside
+    # the body bbox (see USB-A: a side-anchored pad at (0,-7.43) extends
+    # bbox Y from 15.26 to 15.47 mm). Drop all bosses when primary axis
+    # isn't Z so the regen bbox stays bounded.
+    if primary_axis != "Z":
+        bosses = []
     bosses_sorted = sorted(
         [
             b for b in bosses
@@ -1849,7 +1969,44 @@ def _build_plan(
         rib_top_z = float(bbox[5])
     else:
         rib_top_z = 0.0
-    for i, rb in enumerate(ribs):
+    # PACK A — non-Z primary axis suppression. When the body's primary
+    # feature axis is X or Y (e.g. KiCad USB_A_Horizontal connector whose
+    # holes drill into the side faces), the rib detector picks up the
+    # body's INTERNAL planar shelf as a "rib" but the rib_step skill anchors
+    # every rib at the slab-top centre, growing +Z above the placeholder
+    # box and inflating Z drift (USB-A: 1 rib of height 1.06 mm pushes
+    # regen Z from 11.53 to 12.59 → 10.7 % drift). When the primary axis
+    # isn't Z we drop all ribs as detector noise.
+    if primary_axis != "Z":
+        ribs = []
+    # PACK B drift fix — dedup ribs by (length, thickness, height) signature
+    # before emission. The rib detector mistakes parallel cylinder shafts
+    # (e.g. PinHeader pin legs, button leg pairs) as ribs and emits 10-20
+    # identical entries that all anchor at the same XY centre, stacking
+    # height on top of the slab and inflating Z drift dramatically. Real
+    # ribs vary in position so an identical (l, t, h) triple is almost
+    # certainly noise.
+    _seen_rib_sig: set[tuple[int, int, int]] = set()
+    _ribs_dedup: list[dict] = []
+    for _rb in ribs:
+        sig = (
+            int(round(float(_rb.get("length_mm") or 0.0) * 100)),
+            int(round(float(_rb.get("thickness_mm") or 0.0) * 100)),
+            int(round(float(_rb.get("height_mm") or 0.0) * 100)),
+        )
+        if sig in _seen_rib_sig:
+            continue
+        _seen_rib_sig.add(sig)
+        _ribs_dedup.append(_rb)
+    # When the detector returns ≥2 identical-signature ribs we treat the
+    # whole batch as a noise cluster and drop them entirely. A real design
+    # rarely repeats the exact same rib geometry at the same anchor — and
+    # the rib_step skill anchors every rib at the slab-top centre, so
+    # multiple identical ribs would stack on top of each other and inflate
+    # Z drift.
+    if len(ribs) >= 2 and len(_ribs_dedup) == 1:
+        _ribs_dedup = []
+    for i, rb in enumerate(_ribs_dedup):
         steps.append(_rib_step(i, rb, base_top_z=rib_top_z))
 
     # 5b. Text features (engrave / emboss) ────────────────────────────────
