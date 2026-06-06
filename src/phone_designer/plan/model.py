@@ -56,6 +56,14 @@ class Plan(BaseModel):
     plan_name: str
     description: str | None = None
     steps: list[Step]
+    # PACK F (PLAN-CONTINUE-ON-FAIL) — opt-in graceful degradation. When
+    # True, a failing step is recorded with status=FAIL + FailureMeta but
+    # subsequent steps still execute against the LAST KNOWN good body
+    # instead of being mass-SKIPPED. Default False keeps the strict
+    # fail-fast semantics that hand-authored plans rely on. Reverse-
+    # engineering pipelines (long auto-generated plans where a single bad
+    # step from catalog noise shouldn't tear down 119 others) opt in.
+    continue_on_step_failure: bool = False
 
     def find_step(self, step_id: str) -> Step | None:
         for s in self.steps:

@@ -99,6 +99,27 @@ def _body_bbox(body: Any) -> tuple[float, float, float, float, float, float] | N
         return None
 
 
+def _body_volume_mm3(body: Any) -> float | None:
+    """Best-effort body volume in mm³. Returns None on any failure (sheet
+    bodies, OCCT exceptions, missing body).
+    """
+    if body is None:
+        return None
+    try:
+        from OCP.BRepGProp import BRepGProp
+        from OCP.GProp import GProp_GProps
+
+        shape = body.wrapped if hasattr(body, "wrapped") else body
+        props = GProp_GProps()
+        BRepGProp.VolumeProperties_s(shape, props)
+        v = float(props.Mass())
+        if v <= 0.0:
+            return None
+        return v
+    except Exception:
+        return None
+
+
 def _primary_feature_axis(
     catalog: dict | None,
     bbox: tuple[float, float, float, float, float, float] | None,
@@ -261,6 +282,12 @@ def _hole_step(
     diams = hole.get("diameters_mm") or []
     primary_d = float(min(diams)) if diams else 3.4
     depth = float(hole.get("depth_mm") or 5.0)
+    # PACK F — clamp depth to the 200 mm cap shared by clearance_hole /
+    # tap_drill_hole / counterbore_hole / countersink_hole / hole. Big
+    # assembly parts (pythonocc__11752 — 1280 mm chassis) can otherwise
+    # emit depth=1147 mm which fails Args validation before the step runs.
+    if depth > 200.0:
+        depth = 200.0
     axis_dir = hole.get("axis_dir") or [0.0, 0.0, -1.0]
     axis_origin = hole.get("axis_origin") or [0.0, 0.0, 0.0]
     face_sel = _pick_face_selector(axis_origin, axis_dir, bbox)
@@ -373,6 +400,9 @@ def _pocket_step(
 ) -> dict:
     top_d = float(pocket.get("top_d_mm") or 0.0)
     depth = float(pocket.get("depth_mm") or 1.0)
+    # PACK F — clamp depth to extrude_pocket / hole ≤200 mm cap.
+    if depth > 200.0:
+        depth = 200.0
     origin = pocket.get("axis_origin") or [0.0, 0.0, 0.0]
     axis_dir = pocket.get("axis_dir") or [0.0, 0.0, -1.0]
     # PACK-C debug: opt-in via env var to surface false-pass-drift cases.
@@ -429,6 +459,30 @@ def _boss_step(
     sid = f"s_boss_{idx}"
     cx = float(center[0]) + shift[0]
     cy = float(center[1]) + shift[1]
+
+    # BBOX-AWARE BOSS HEIGHT CAP — detectors frequently report a boss
+    # ``height_mm`` that spans the FULL local cylinder length (e.g.
+    # linkrods reports height=2.0 mm for a boss whose center sits at z=1.0
+    # in a 2.0 mm tall body, so the cylinder fragment terminates at z=2.0
+    # — the actual protrusion above the top face is 1.0 mm). Emitting the
+    # raw height inflates the regen bbox Z extent past the original.
+    #
+    # When the bbox is known we cap height_mm to (bbox.zmax - center.z),
+    # which is the maximum protrusion that keeps the boss inside the
+    # original body's Z extent. If the result is non-positive the boss is
+    # internal to the slab and we degrade to a 1 mm shoulder so the step
+    # still validates.
+    if bbox is not None:
+        try:
+            zmax = float(bbox[5])
+            cz = float(center[2])
+            allowed = max(zmax - cz, 0.0)
+            if allowed > 0.0:
+                height = min(height, allowed)
+            else:
+                height = min(height, 1.0)
+        except Exception:
+            pass
 
     # PLAN-DEPTH-CEILING fix: the mounting_pad skill caps height_mm at 20 mm
     # (Field(gt=0, le=20)). On large assembly parts the detector often spans
@@ -929,6 +983,26 @@ def _pocket_is_axis_aligned(pocket: dict) -> bool:
     return max(ax, ay, az) >= 0.95
 
 
+def _clamp_feature_depth_mm(depth: float) -> float:
+    """Clamp depth to the pattern skills' ``feature_depth_mm`` bound (0,200].
+
+    PACK F (PLAN-DEPTH-CEILING-PATTERN): linear_pattern / circular_pattern /
+    mirror_feature all declare ``feature_depth_mm: Field(gt=0, le=200)``. On
+    large assembly parts (e.g. pythonocc__11752 — a 1280×144×133 mm chassis
+    plate) the seed hole's depth comes from the bbox extent and can be
+    1000+ mm, which fails Args validation BEFORE the step ever runs. Clamp
+    here so the step at least validates; if the cut lands in already-removed
+    material the executor's zero-delta-volume skip path handles it from
+    there.
+    """
+    d = float(depth)
+    if d <= 0.0:
+        return 1.0
+    if d > 200.0:
+        return 200.0
+    return d
+
+
 def _circular_pattern_step(
     idx: int,
     ring: dict,
@@ -953,7 +1027,7 @@ def _circular_pattern_step(
         "face_selector": face_sel,
         "profile_diameter_mm": float(profile_diameter_mm),
         "operation": "hole",
-        "feature_depth_mm": float(feature_depth_mm),
+        "feature_depth_mm": _clamp_feature_depth_mm(feature_depth_mm),
         "count": count,
         "pitch_radius_mm": radius,
         "center_x_mm": float(center[0]) + shift[0],
@@ -983,6 +1057,14 @@ def _linear_pattern_step(
     spacing = float(run.get("spacing_mm") or 0.0)
     if count < 2 or spacing <= 0.0 or not positions:
         return None
+    # PACK F — linear_pattern caps spacing_mm at 500 mm. On large assemblies
+    # (e.g. pythonocc__11752) the detected hole-run spacing can exceed
+    # 500 mm; clamp here so Args validates.
+    if spacing > 500.0:
+        spacing = 500.0
+    # linear_pattern caps count at 200.
+    if count > 200:
+        count = 200
 
     dx, dy = abs(float(direction_vec[0])), abs(float(direction_vec[1]))
     dz = abs(float(direction_vec[2]))
@@ -1012,7 +1094,7 @@ def _linear_pattern_step(
         "face_selector": face_sel,
         "profile_diameter_mm": float(profile_diameter_mm),
         "operation": "hole",
-        "feature_depth_mm": float(feature_depth_mm),
+        "feature_depth_mm": _clamp_feature_depth_mm(feature_depth_mm),
         "count": count,
         "spacing_mm": spacing,
         "direction": axis_letter,
@@ -1272,8 +1354,15 @@ def _mirror_feature_step(
     if profile_d <= 0.0 or profile_d > 100.0:
         return None
     depth = float(hole.get("depth_mm") or 0.0)
-    if depth <= 0.0 or depth > 200.0:
+    if depth <= 0.0:
         return None
+    # PACK F — clamp instead of drop. Holes whose depth exceeds the skill's
+    # 200 mm cap previously caused mirror_feature emission to skip the pair
+    # silently, leaving them to fall through to per-hole emission with the
+    # same upstream depth problem. Clamp here so the mirror step at least
+    # validates.
+    if depth > 200.0:
+        depth = 200.0
 
     origin = hole.get("axis_origin") or [0.0, 0.0, 0.0]
     axis_dir = hole.get("axis_dir") or [0.0, 0.0, -1.0]
@@ -1434,21 +1523,92 @@ def _build_plan(
         base_l = max(float(xmax - xmin), 1e-3)
         base_w = max(float(ymax - ymin), 1e-3)
         bbox_h = max(float(zmax - zmin), 1e-3)
-        if primary_axis != "Z":
-            # Re-sort so L=dominant extent, W=middle, H=shortest. Avoids the
-            # degenerate "box thinner than the features that go inside it"
-            # case that produces zero-delta volume cuts.
-            sorted_extents = sorted([base_l, base_w, bbox_h], reverse=True)
-            base_l, base_w, bbox_h = sorted_extents
+        # NOTE — historical "sorted_extents" rewrite for non-Z primary axis
+        # has been REMOVED. It corrupted the regen bbox for bodies whose
+        # feature axis is X or Y but whose silhouette already matches its
+        # world-frame extents (e.g. pythonocc__as1-oc-214: 200x150x84 was
+        # being silently rewritten to 200x84x150, ballooning bbox drift to
+        # 16-76%). Keeping the catalog's world-frame extents means the regen
+        # bbox matches the orig bbox up to feature-induced perturbation,
+        # which is exactly what the corpus fidelity metric measures.
+        #
         # Prefer the slab thickness measured from parallel planar faces — it
         # excludes the boss/sweep/loft height that bbox would otherwise add.
         # Sanity floor — a detected slab thickness < bbox_h / 10 is almost
         # always a paper-thin shell artefact (mesh→BREP open shell whose
         # front and back faces sit ~0.03 mm apart). Reject that and use the
         # bbox z-extent instead.
+        #
+        # CORPUS-DRIFT GATE — corpus parts (real CAD models) frequently
+        # report a base_thickness that captures a PCB-pad / mounting-flange
+        # slab much thinner than the actual outer envelope (e.g.
+        # CP_Elec_3x5.4 reports slab=3.3 mm for a 5.4 mm-tall capacitor
+        # body; Ventilator reports slab=8.6 mm for an 18 mm-tall fan
+        # rotor; linkrods reports slab=1.0 mm for a 2.0 mm slab). The slab
+        # approximation truncates the regen bbox in Z, inflating
+        # bbox-volume drift in the corpus metric from ~5% to 30-76%.
+        #
+        # We fall back to bbox_h when the body has NO catalog feature
+        # capable of extending the regen Z extent above the slab top —
+        # i.e. no TOP-FACE bosses (centre near zmax), no ribs, no sweep
+        # features and no loft features. INTERNAL bosses (centre far below
+        # zmax) are filtered downstream and never extend Z, so they don't
+        # count for this gate. In the no-extender case the slab is the
+        # ENTIRE plan in terms of Z extent and using bbox_h is the only
+        # way to match the orig bbox. When such features ARE present
+        # (synth fixtures, demo plans) the slab + feature combination
+        # already gives correct Z so the slab stays.
+        _BOSS_TOP_ANCHOR_RATIO_GATE = 0.10
+        zspan_for_gate = max(bbox_h, 1e-3)
+        top_face_bosses = []
+        for _b in (catalog.get("bosses") or []):
+            try:
+                _c = _b.get("center") or [0.0, 0.0, 0.0]
+                _cz = float(_c[2])
+                if (zmax - _cz) <= _BOSS_TOP_ANCHOR_RATIO_GATE * zspan_for_gate:
+                    top_face_bosses.append(_b)
+            except Exception:
+                continue
+        has_z_extender = bool(
+            top_face_bosses
+            or (catalog.get("ribs") or [])
+            or (catalog.get("sweep_features") or [])
+            or (catalog.get("loft_features") or [])
+        )
+        # Z-DOMINANT EXTENT — when bbox_h is the LARGEST extent of the
+        # bbox, the body is "taller than wide" and the slab approximation
+        # is almost certainly wrong (e.g. CP_Elec_3x5.4: 5.4 mm tall in a
+        # 3.8 × 3.31 footprint reports slab=3.3 mm but the cap cylinder
+        # dominates Z). Force bbox_h in that case.
+        z_dominant = bbox_h >= max(base_l, base_w)
+        # SLAB-FITS-VOLUME — when the slab box (base_l × base_w ×
+        # base_thickness) is within ~30% of the body's actual volume, the
+        # slab approximation captures the body well (synth fixtures
+        # simple_watch and simple_watch_housing_only are designed this
+        # way: orig vol ≈ 0.9 × slab_box vol). For corpus parts where the
+        # slab is much smaller than the body (Ventilator: slab_box covers
+        # 56% of orig vol; linkrods: 51%; CP_Elec_3x5.4: 94% — but
+        # Z-dominant trips first), the slab is wrong and we use bbox_h.
+        body_vol = _body_volume_mm3(body)
+        slab_vol = float(base_l) * float(base_w) * float(base_thickness or 0.0)
+        slab_fits_volume = False
+        if body_vol is not None and slab_vol > 0.0:
+            # Slab fits when body volume is ≥ 70% of the slab box AND
+            # ≤ 105% (only a small overshoot for rounding — a body whose
+            # volume exceeds the slab box clearly extends ABOVE the slab,
+            # e.g. as1-oc-214 ratio=1.27 means 27% more material lives
+            # above slab top: NOT a slab body).
+            _ratio = body_vol / slab_vol
+            slab_fits_volume = 0.70 <= _ratio <= 1.05
         if (
             base_thickness is not None
             and bbox_h / 10.0 <= float(base_thickness) <= bbox_h
+            and not z_dominant
+            and (
+                has_z_extender
+                or float(base_thickness) >= 0.70 * bbox_h
+                or slab_fits_volume
+            )
         ):
             base_h = float(base_thickness)
         else:
@@ -1634,8 +1794,41 @@ def _build_plan(
                 return True
         return False
 
+    # INTERNAL-BOSS GUARD — mounting_pad always grows ABOVE the face it
+    # anchors to (face_named="top" → the current top face of the body). So
+    # any boss whose centre sits well below bbox.zmax is, by definition, an
+    # INTERNAL cylinder fragment that the detector mis-classified rather
+    # than a real protrusion off the top face. Emitting it puts a stacking
+    # column above the slab and inflates regen Z (e.g. as1-oc-214 three
+    # internal-z bosses pushed regen Z from 84 mm to 144 mm; linkrods one
+    # side-protrusion at z=1 mm pushed regen Z from 2 mm to 3 mm).
+    #
+    # Real top-face bosses have center.z very close to bbox.zmax (because
+    # the cylinder anchor sits ON the top face). We treat any boss whose
+    # centre is more than ~10% of bbox.zmax below zmax as internal and
+    # skip it. This is conservative — top-anchored bosses with measurable
+    # height still have center.z within a small fraction of zmax.
+    _BOSS_TOP_ANCHOR_RATIO = 0.10
+    def _boss_is_internal(b: dict) -> bool:
+        if bbox is None:
+            return False
+        try:
+            center = b.get("center") or [0.0, 0.0, 0.0]
+            cz = float(center[2])
+            zmin, zmax = float(bbox[2]), float(bbox[5])
+            zspan = max(zmax - zmin, 1e-3)
+            # Skip if centre sits more than 10% of bbox.Z below the top.
+            if (zmax - cz) > _BOSS_TOP_ANCHOR_RATIO * zspan:
+                return True
+            return False
+        except Exception:
+            return False
+
     bosses_sorted = sorted(
-        [b for b in bosses if not _boss_is_duplicate(b)],
+        [
+            b for b in bosses
+            if not _boss_is_duplicate(b) and not _boss_is_internal(b)
+        ],
         key=lambda b: -float(b.get("height_mm") or 0.0),
     )
     for i, b in enumerate(bosses_sorted):
@@ -1706,6 +1899,14 @@ def _build_plan(
 
         diams = seed_hole.get("diameters_mm") or [3.4]
         seed_diam = float(min(diams))
+        # PACK F — pattern skills cap profile_diameter at 100 mm. Big seed
+        # holes (≥100 mm) come from misclassified bbox-scale features on
+        # large assemblies; clamp so Args validates and let the executor's
+        # zero-delta-skip catch the cut if it makes no sense.
+        if seed_diam > 100.0:
+            seed_diam = 100.0
+        elif seed_diam <= 0.0:
+            seed_diam = 3.4
         seed_depth = float(seed_hole.get("depth_mm") or 5.0)
 
         # Sub-threshold guard mirrors the per-hole/pocket loop: if the
@@ -1897,6 +2098,12 @@ def _build_plan(
         "schema_version": 1,
         "plan_name": plan_name,
         "steps": steps,
+        # PACK F — auto-generated RE plans opt into graceful step-failure.
+        # A single bad step from catalog noise (Args validation drift,
+        # selector miss on a much-mutated body, OCCT roundoff post_condition
+        # trip) should not mass-SKIP the remaining steps. Hand-authored
+        # plans opt out by leaving the flag at its False default.
+        "continue_on_step_failure": True,
     }
 
     # Compose the plan description from any base-step notes plus the

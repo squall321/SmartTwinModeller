@@ -150,5 +150,519 @@
     "kind": "step",
     "size_bytes": 73193,
     "sha256": "b6c3db4577543309a6fc7af7bc65e6ca9d773b00c75ad23026795f850c77df21"
+  },
+  {
+    "filename": "kicad__C_0603_1608Metric.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Capacitor_SMD.3dshapes/C_0603_1608Metric.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 43450,
+    "sha256": "4857b3dc717675bf1fb22edda622ac3b3ae03cf44d81eefaf3fa3ba3a86d84c1"
+  },
+  {
+    "filename": "kicad__C_0805_2012Metric.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Capacitor_SMD.3dshapes/C_0805_2012Metric.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 43618,
+    "sha256": "9a669c1a2f1ea25b88b401acef6efeaa80a067bd7da9db6993de719a7fbe155c"
+  },
+  {
+    "filename": "kicad__C_1206_3216Metric.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Capacitor_SMD.3dshapes/C_1206_3216Metric.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 43450,
+    "sha256": "11e948c72c90e2b6322436b72745f40ff4e8ba0da64fb2a0df943dfa61e89c1a"
+  },
+  {
+    "filename": "kicad__R_0603_1608Metric.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Resistor_SMD.3dshapes/R_0603_1608Metric.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 40618,
+    "sha256": "1875571c326d0d9e96f36b4efeb8094068ef7619f0a449c781caf0b49c2e5861"
+  },
+  {
+    "filename": "kicad__R_0805_2012Metric.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Resistor_SMD.3dshapes/R_0805_2012Metric.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 40592,
+    "sha256": "ded342cdb394fb45395227beaaa75cc390613cf2581b29cd6d22c12abd6103b2"
+  },
+  {
+    "filename": "kicad__R_1206_3216Metric.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Resistor_SMD.3dshapes/R_1206_3216Metric.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 40414,
+    "sha256": "f5d1ea5c47935091292bd1c6c698e0df88d3d4bbf92bf66b4c97e49df5be9ebc"
+  },
+  {
+    "filename": "kicad__SOIC-8_3.9x4.9mm_P1.27mm.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Package_SO.3dshapes/SOIC-8_3.9x4.9mm_P1.27mm.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 125320,
+    "sha256": "07f46cff378d30e6c27dfd5a03092c795323f86d91c71fc7e743f4f418dc553a"
+  },
+  {
+    "filename": "kicad__SOIC-14_3.9x8.7mm_P1.27mm.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Package_SO.3dshapes/SOIC-14_3.9x8.7mm_P1.27mm.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 199321,
+    "sha256": "3b9a775da256c8afcc28dcddfbc2eb3f266107fe61ce8446d96f2c52b6f44a70"
+  },
+  {
+    "filename": "kicad__SOIC-16_3.9x9.9mm_P1.27mm.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Package_SO.3dshapes/SOIC-16_3.9x9.9mm_P1.27mm.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 222166,
+    "sha256": "d5eeddb4c0b304dc61950919b126fc61d7586abd5f16ab71a2a79759ec6498bf"
+  },
+  {
+    "filename": "kicad__QFN-16-1EP_3x3mm_P0.5mm_EP1.7x1.7mm.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Package_DFN_QFN.3dshapes/QFN-16-1EP_3x3mm_P0.5mm_EP1.7x1.7mm.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 194606,
+    "sha256": "3eb81ffac423a66cdcfead8efe56401da171edaf1f2257049aad7b2d3900f6c8"
+  },
+  {
+    "filename": "kicad__QFN-32-1EP_5x5mm_P0.5mm_EP3.45x3.45mm.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Package_DFN_QFN.3dshapes/QFN-32-1EP_5x5mm_P0.5mm_EP3.45x3.45mm.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 363383,
+    "sha256": "ba0561bc79f5a9da290aa7993318c1df3e9b747fb31b8816e75afc092c57352b"
+  },
+  {
+    "filename": "kicad__LQFP-48_7x7mm_P0.5mm.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Package_QFP.3dshapes/LQFP-48_7x7mm_P0.5mm.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 631616,
+    "sha256": "9dea352d93177c2904afd7d7b68ea8855ce1ab691f69f8b3e13655600514b6bf"
+  },
+  {
+    "filename": "kicad__LQFP-64_10x10mm_P0.5mm.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Package_QFP.3dshapes/LQFP-64_10x10mm_P0.5mm.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 867325,
+    "sha256": "b0c827bc5c05552175d28affe44a5bd2ab45c9c36efff6ff07a74cc449b13db4"
+  },
+  {
+    "filename": "kicad__PinHeader_1x04_P2.54mm_Vertical.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Connector_PinHeader_2.54mm.3dshapes/PinHeader_1x04_P2.54mm_Vertical.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 145684,
+    "sha256": "a74079b8d06bda78847623b39ee1855ffd1d9a8c1e896b349e4f1dc2056d44d9"
+  },
+  {
+    "filename": "kicad__PinHeader_2x05_P2.54mm_Vertical.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Connector_PinHeader_2.54mm.3dshapes/PinHeader_2x05_P2.54mm_Vertical.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 305690,
+    "sha256": "cd99322b0ccc253157acbe9c5c672ce9b37dbcd4d59fb001240a93110052cdce"
+  },
+  {
+    "filename": "kicad__L_0603_1608Metric.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Inductor_SMD.3dshapes/L_0603_1608Metric.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 43450,
+    "sha256": "b0136ad7160588d2f5dac8c85da84a35646db656b5bc54bbb873b6b548eedbb3"
+  },
+  {
+    "filename": "kicad__Crystal_SMD_3225-4Pin.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Crystal.3dshapes/Crystal_SMD_3225-4Pin_3.2x2.5mm.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 44789,
+    "sha256": "d2a89df82ee5f0f56ef23ee59c8161b8d4e92af2b21959d72778316dde3f9f22"
+  },
+  {
+    "filename": "kicad__TO-220-3_Vertical.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Package_TO_SOT_THT.3dshapes/TO-220-3_Vertical.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 85145,
+    "sha256": "7cb065d935df5771f0ba6e48ddd180863a121af76483dad7f18e667a7b68204a"
+  },
+  {
+    "filename": "kicad__SOT-23.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Package_TO_SOT_SMD.3dshapes/SOT-23.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 60296,
+    "sha256": "dd5d1711204e1d8d26cd11490923bd84340820baa69538c385a4300ec2539bc0"
+  },
+  {
+    "filename": "kicad__SOT-223.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Package_TO_SOT_SMD.3dshapes/SOT-223.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 65065,
+    "sha256": "77ad6dbacc493cb619c728f26d2ddcf461eb0feb6b977b47d01d51e67016f654"
+  },
+  {
+    "filename": "kicad__BGA-100_9.0x9.0mm_P0.8mm.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Package_BGA.3dshapes/BGA-100_9.0x9.0mm_Layout10x10_P0.8mm.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 107716,
+    "sha256": "28280444bbde891aabf97f4dfb6006c63dd961d34185f69371b2f66f280e0fd0"
+  },
+  {
+    "filename": "kicad__BGA-49_6.25x6.25mm_P0.8mm.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Package_BGA.3dshapes/Analog_BGA-49_6.25x6.25mm_Layout7x7_P0.8mm.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 57032,
+    "sha256": "587d52a58a498f7015098e21c61422cdad131e061db0d6b6ff8c10af6696b609"
+  },
+  {
+    "filename": "kicad__USB_C_Receptacle_GCT_USB4085.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Connector_USB.3dshapes/USB_C_Receptacle_GCT_USB4085.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 804970,
+    "sha256": "82235f7275d07f720e3c050f781397f4bef47fdc7e15dd507d68ccba861f1a35"
+  },
+  {
+    "filename": "kicad__USB_A_Molex_67643_Horizontal.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Connector_USB.3dshapes/USB_A_Molex_67643_Horizontal.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 1260760,
+    "sha256": "d6a1e21b2a1b509fd4f36058bf01036c7a296c391e19486566ce10fe78907800"
+  },
+  {
+    "filename": "kicad__LQFP-100_14x14mm_P0.5mm.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Package_QFP.3dshapes/LQFP-100_14x14mm_P0.5mm.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 1335919,
+    "sha256": "51720097260ffba41c3062f85f67623721102fa535901c47cb555a1f444feeb3"
+  },
+  {
+    "filename": "kicad__LQFP-128_14x14mm_P0.4mm.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Package_QFP.3dshapes/LQFP-128_14x14mm_P0.4mm.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 1699671,
+    "sha256": "7c58a84c7972bfb65ec57c1a8618dfc37e54897d86a32015ddb0c453a7af1827"
+  },
+  {
+    "filename": "kicad__DFN-10-1EP_2x3mm_P0.5mm.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Package_DFN_QFN.3dshapes/DFN-10-1EP_2x3mm_P0.5mm_EP0.64x2.4mm.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 128338,
+    "sha256": "f32bf7ac72cd74fd3cd2ce5cc9cea9c0b978a57d74a28ba263b71c7e8b9d294b"
+  },
+  {
+    "filename": "kicad__DIP-8_W7.62mm.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Package_DIP.3dshapes/DIP-10_W7.62mm.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 324603,
+    "sha256": "d55cf1368e362bcb87f165c0a42ca34c9cdc0e591dae011d929545c8f6b7e91f"
+  },
+  {
+    "filename": "kicad__DIP-14_W7.62mm.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Package_DIP.3dshapes/DIP-12_W7.62mm.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 385572,
+    "sha256": "d0d14c257dc175efde81c54c2e63e5477a3af152f96520f6884aa7b452ad9e53"
+  },
+  {
+    "filename": "kicad__PinHeader_1x10_P2.54mm_Vertical.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Connector_PinHeader_2.54mm.3dshapes/PinHeader_1x10_P2.54mm_Vertical.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 356629,
+    "sha256": "a2f7a9c513c3be0cbd5de8cdd22fdbf1c2e3510c72d682fd089d252fe71b9dc7"
+  },
+  {
+    "filename": "kicad__PinHeader_2x10_P2.54mm_Vertical.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Connector_PinHeader_2.54mm.3dshapes/PinHeader_2x10_P2.54mm_Vertical.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 616807,
+    "sha256": "0e49b47f8c69859efe043c1071a608aeffed88093115ec940561ac35eee79be1"
+  },
+  {
+    "filename": "kicad__JST_EH_B2B_1x02_P2.50mm_Vertical.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Connector_JST.3dshapes/JST_EH_B2B-EH-A_1x02_P2.50mm_Vertical.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 128764,
+    "sha256": "2fe9ec183ec1af48b1ae0d143e75a4ff26d89374a34aa026a41093020ac61b00"
+  },
+  {
+    "filename": "kicad__JST_EH_B5B_1x05_P2.50mm_Vertical.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Connector_JST.3dshapes/JST_EH_B5B-EH-A_1x05_P2.50mm_Vertical.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 223679,
+    "sha256": "36b37c2d03465b2877269934a3320a6955dd9191cd7862e3ea1a3006f1d16037"
+  },
+  {
+    "filename": "kicad__Panasonic_EVQPUA_button.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Button_Switch_SMD.3dshapes/Panasonic_EVQPUJ_EVQPUA.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 119379,
+    "sha256": "88502ca94b12719aef367ebf68ba17d37f02468b0763d5997e70d2b705b609c8"
+  },
+  {
+    "filename": "kicad__HSOP-8-1EP_3.9x4.9mm.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Package_SO.3dshapes/HSOP-8-1EP_3.9x4.9mm_P1.27mm_EP2.41x3.1mm.step",
+    "source": "kicad",
+    "kind": "step",
+    "size_bytes": 129725,
+    "sha256": "4fd09ee3ef5c89805b57c5c37cc385500042cac2e5b688dab664aa47528d401f"
+  },
+  {
+    "filename": "industrial/prusa-mk3s__extruder-body.step",
+    "source_url": "https://raw.githubusercontent.com/prusa3d/Original-Prusa-i3/MK3S/Printed-Parts/STEP/extruder-body.stp",
+    "source": "prusa-mk3s",
+    "kind": "step",
+    "size_bytes": 577384,
+    "sha256": "2fb2879ee5e7993de2fe7c820cd297458d8a28d4b16f4812cb86dabf812446c7",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/prusa-mk3s__extruder-cover.step",
+    "source_url": "https://raw.githubusercontent.com/prusa3d/Original-Prusa-i3/MK3S/Printed-Parts/STEP/extruder-cover.stp",
+    "source": "prusa-mk3s",
+    "kind": "step",
+    "size_bytes": 402344,
+    "sha256": "fe350a14419ca5035655a260a92da92238a69b86fc4334ed6dad6f97055196d8",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/prusa-mk3s__extruder-idler.step",
+    "source_url": "https://raw.githubusercontent.com/prusa3d/Original-Prusa-i3/MK3S/Printed-Parts/STEP/extruder-idler.stp",
+    "source": "prusa-mk3s",
+    "kind": "step",
+    "size_bytes": 142934,
+    "sha256": "0992a48415528ed522b230b1f1bd04ecb6273ac1625435d73fdc3cf8014c7fdd",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/prusa-mk3s__extruder-motor-plate.step",
+    "source_url": "https://raw.githubusercontent.com/prusa3d/Original-Prusa-i3/MK3S/Printed-Parts/STEP/extruder-motor-plate.stp",
+    "source": "prusa-mk3s",
+    "kind": "step",
+    "size_bytes": 440966,
+    "sha256": "1b251185ba682c8d1e1ec45c84ad88d9da7ffc328d01b53d205a9ca28065988e",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/prusa-mk3s__fan-shroud.step",
+    "source_url": "https://raw.githubusercontent.com/prusa3d/Original-Prusa-i3/MK3S/Printed-Parts/STEP/fan-shroud.stp",
+    "source": "prusa-mk3s",
+    "kind": "step",
+    "size_bytes": 361601,
+    "sha256": "351e6a6b70abaf6a0d9817a35d6acb0f77a4440ce9351522e25ebf9c0a59e865",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/prusa-mk3s__y-belt-holder.step",
+    "source_url": "https://raw.githubusercontent.com/prusa3d/Original-Prusa-i3/MK3S/Printed-Parts/STEP/y-belt-holder.stp",
+    "source": "prusa-mk3s",
+    "kind": "step",
+    "size_bytes": 221214,
+    "sha256": "f42fef3afcc52aa1acc9f3871b20062ffa492fc1294801302c5a5ccd67679450",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/prusa-mk3s__y-belt-idler.step",
+    "source_url": "https://raw.githubusercontent.com/prusa3d/Original-Prusa-i3/MK3S/Printed-Parts/STEP/y-belt-idler.stp",
+    "source": "prusa-mk3s",
+    "kind": "step",
+    "size_bytes": 191581,
+    "sha256": "a64d84867e3853f9a7432b2183b108e683e71ab20c8e0764b41b65fd1dd09d30",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/prusa-mk3s__y-belt-tensioner.step",
+    "source_url": "https://raw.githubusercontent.com/prusa3d/Original-Prusa-i3/MK3S/Printed-Parts/STEP/y-belt-tensioner.stp",
+    "source": "prusa-mk3s",
+    "kind": "step",
+    "size_bytes": 238484,
+    "sha256": "37a519b14f2fa4eded41e24fd47869a140fb39cfdc59be18a93992f923b5e412",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/prusa-mk3s__adapter-printer.step",
+    "source_url": "https://raw.githubusercontent.com/prusa3d/Original-Prusa-i3/MK3S/Printed-Parts/STEP/adapter-printer.stp",
+    "source": "prusa-mk3s",
+    "kind": "step",
+    "size_bytes": 149083,
+    "sha256": "292ccb6198ccd43162399807e69b715204467d07736b7bd3a557d3a1ba58bbdc",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/prusa-mk3s__LCD-knob.step",
+    "source_url": "https://raw.githubusercontent.com/prusa3d/Original-Prusa-i3/MK3S/Printed-Parts/STEP/LCD-knob.stp",
+    "source": "prusa-mk3s",
+    "kind": "step",
+    "size_bytes": 160324,
+    "sha256": "c1c5f91083005951436a171d6ef9743a9b83d07151789362c4b00940115284f6",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/stepcode-ap214__dm1-id-214.step",
+    "source_url": "https://raw.githubusercontent.com/stepcode/stepcode/master/data/ap214e3/dm1-id-214.stp",
+    "source": "stepcode-ap214",
+    "kind": "step",
+    "size_bytes": 87564,
+    "sha256": "25e727cdc4d738064da7907d604bd4ceeb4e941c6fdc201f3df04c0b94671661",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/stepcode-ap214__sg1-c5-214.step",
+    "source_url": "https://raw.githubusercontent.com/stepcode/stepcode/master/data/ap214e3/sg1-c5-214.stp",
+    "source": "stepcode-ap214",
+    "kind": "step",
+    "size_bytes": 23827,
+    "sha256": "227467b4584d3bd5ddf5c96906649cb2f0f62901fbfb00c3993a17e49155e539",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/stepcode-ap214__io1-cm-214.step",
+    "source_url": "https://raw.githubusercontent.com/stepcode/stepcode/master/data/ap214e3/io1-cm-214.stp",
+    "source": "stepcode-ap214",
+    "kind": "step",
+    "size_bytes": 41720,
+    "sha256": "eb234e26bca411a6da39c311e74d5a47b5e7a1248ae589a3a86cd2dee1f91f9b",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/stepcode-ap214__MAINBODY_BACK.step",
+    "source_url": "https://raw.githubusercontent.com/stepcode/stepcode/master/data/ap214e3/s1-c5-214/MAINBODY_BACK.stp",
+    "source": "stepcode-ap214",
+    "kind": "step",
+    "size_bytes": 115322,
+    "sha256": "793567a2d1df1426a1f312edf4e14985f7910855395c964266217f89e99451c4",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/stepcode-ap214__MAINBODY_FRONT.step",
+    "source_url": "https://raw.githubusercontent.com/stepcode/stepcode/master/data/ap214e3/s1-c5-214/MAINBODY_FRONT.stp",
+    "source": "stepcode-ap214",
+    "kind": "step",
+    "size_bytes": 87512,
+    "sha256": "b28769a8ff8e10f71dd8c27bff702ac7497f59cdc1b68ccbbb0d619057a55449",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/stepcode-ap214__HEAD_BACK.step",
+    "source_url": "https://raw.githubusercontent.com/stepcode/stepcode/master/data/ap214e3/s1-c5-214/HEAD_BACK.stp",
+    "source": "stepcode-ap214",
+    "kind": "step",
+    "size_bytes": 46859,
+    "sha256": "eee2bed5280f3d1dd4cc1e324383267367f61f1a070640d1399f2f6561195ded",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/stepcode-ap214__HEAD_FRONT.step",
+    "source_url": "https://raw.githubusercontent.com/stepcode/stepcode/master/data/ap214e3/s1-c5-214/HEAD_FRONT.stp",
+    "source": "stepcode-ap214",
+    "kind": "step",
+    "size_bytes": 15935,
+    "sha256": "b56a39bc77bbca33b39114bd40bf300a7ed02559bf8e967ae742296d44d4b5bd",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/stepcode-ap214__TAIL_TURBINE.step",
+    "source_url": "https://raw.githubusercontent.com/stepcode/stepcode/master/data/ap214e3/s1-c5-214/TAIL_TURBINE.stp",
+    "source": "stepcode-ap214",
+    "kind": "step",
+    "size_bytes": 40447,
+    "sha256": "19f11d26b86381b5a6ea18f6c4d78173d99d6398546a81b304d1a789380639a5",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/stepcode-ap214__FOOT_BACK_000.step",
+    "source_url": "https://raw.githubusercontent.com/stepcode/stepcode/master/data/ap214e3/s1-c5-214/FOOT_BACK_000.stp",
+    "source": "stepcode-ap214",
+    "kind": "step",
+    "size_bytes": 26698,
+    "sha256": "06c85ba9f9082005c9ec86f04e3e615814a24d4ba839977194c3961d004f0591",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/stepcode-ap214__FOOT_FRONT_000.step",
+    "source_url": "https://raw.githubusercontent.com/stepcode/stepcode/master/data/ap214e3/s1-c5-214/FOOT_FRONT_000.stp",
+    "source": "stepcode-ap214",
+    "kind": "step",
+    "size_bytes": 26630,
+    "sha256": "99c3f61af3e1c2fc22bdb4cb2389423feed30bedf4b219c04b3b64378591a133",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/voron-2__MIC6_Bed_V2_250.step",
+    "source_url": "https://raw.githubusercontent.com/VoronDesign/Voron-2/Voron2.4/Drawing_DXFs/Build_Plate/MIC6_Bed_V2_250.step",
+    "source": "voron-2",
+    "kind": "step",
+    "size_bytes": 27716,
+    "sha256": "bfd065beb9cf92cfa6e84007b3180d5f97889ffd582c3b6c72340f140eea2ac9",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/voron-2__MIC6_Bed_V2_300.step",
+    "source_url": "https://raw.githubusercontent.com/VoronDesign/Voron-2/Voron2.4/Drawing_DXFs/Build_Plate/MIC6_Bed_V2_300.step",
+    "source": "voron-2",
+    "kind": "step",
+    "size_bytes": 27660,
+    "sha256": "55f77cd2749f87995197dcf4bb8fa64152fb1fcd089e780a7471a7dfe55cf24f",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/voron-2__MIC6_Bed_V2_350.step",
+    "source_url": "https://raw.githubusercontent.com/VoronDesign/Voron-2/Voron2.4/Drawing_DXFs/Build_Plate/MIC6_Bed_V2_350.step",
+    "source": "voron-2",
+    "kind": "step",
+    "size_bytes": 27659,
+    "sha256": "285a28c6662523aa04c7450b44224866ec4d7e3e06b6d51e6734f6b39435a7aa",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/kicad-mech__RJ45_Amphenol_RJHSE538X.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Connector_RJ.3dshapes/RJ45_Amphenol_RJHSE538X.step",
+    "source": "kicad-mech",
+    "kind": "step",
+    "size_bytes": 267884,
+    "sha256": "b807a51b5cc87d84177694b44f15ae2a461e51ef2685dc6f74e9e15ee1cd356a",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/kicad-mech__BarrelJack_Horizontal.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Connector_BarrelJack.3dshapes/BarrelJack_Horizontal.step",
+    "source": "kicad-mech",
+    "kind": "step",
+    "size_bytes": 118861,
+    "sha256": "53f1b2714ed169b5e314b9b42cc9943303769e29e0debdfb4ef7a0e2c4f369dd",
+    "industrial": true
+  },
+  {
+    "filename": "industrial/kicad-mech__PinHeader_1x10_P2.54mm_Vertical.step",
+    "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/Connector_PinHeader_2.54mm.3dshapes/PinHeader_1x10_P2.54mm_Vertical.step",
+    "source": "kicad-mech",
+    "kind": "step",
+    "size_bytes": 356629,
+    "sha256": "a2f7a9c513c3be0cbd5de8cdd22fdbf1c2e3510c72d682fd089d252fe71b9dc7",
+    "industrial": true
   }
 ]

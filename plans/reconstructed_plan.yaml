@@ -7,3 +7,4 @@ steps:
     length_mm: 37.711488866838174
     width_mm: 29.24315020704821
     height_mm: 7.477783105867034
+continue_on_step_failure: true

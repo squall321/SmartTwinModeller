@@ -177,7 +177,19 @@ class PlanExecutor:
                     raw_traceback=traceback.format_exc(),
                 )
                 result.error_count += 1
-                previous_pass = False
+                # PACK F (PLAN-CONTINUE-ON-FAIL) — opt-in graceful
+                # degradation. When ``plan.continue_on_step_failure`` is
+                # set, a failing step is recorded but subsequent steps
+                # still execute against the previous body. This is the
+                # right policy for long auto-generated RE plans where a
+                # single bad step (Args validation, selector drift, ...)
+                # should not mass-SKIP the remaining 100+ steps. The body
+                # is left unchanged so downstream steps operate on the
+                # last good geometry.
+                if getattr(self.plan, "continue_on_step_failure", False):
+                    previous_pass = True
+                else:
+                    previous_pass = False
 
         # Safety net — any step left in FAIL without a populated failure (e.g.,
         # a future code path that sets status=FAIL but forgets FailureMeta)

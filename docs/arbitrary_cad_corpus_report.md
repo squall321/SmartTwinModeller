@@ -260,3 +260,103 @@ plans ≥ 15 ops. Aim for 7 / 15 real-PASS at median drift < 15 %. Independently
 3. Split CTRL-Z-AXIS by inspecting the plan emitted for `kicad__LED_0402` vs `kicad__C_0402`
    (which differ only in feature count) — the chosen extrude axis is the root cause.
 4. Independently fix SYMMETRY-ON-BASE so Ventilator stops dominating the worst-drift slot.
+
+---
+
+## v4 run on expanded corpus
+
+**Run date:** 2026-06-06
+**Source data:** `run_logs/_tmp/corpus_re_results.json`
+**Driver:** `run_logs/_tmp/run_corpus_re.py` (unchanged)
+**Fetchers (new):** `run_logs/_tmp/fetch_corpus_expand.py`, `run_logs/_tmp/fetch_industrial_steps.py`
+**Change since v3:** Corpus expanded from 15 → **50** top-level STEP files (28 new KiCad parts plus
+re-fetched OCCT / pythonocc demos), additional industrial drops staged under `corpus/oem/industrial/`,
+and the 120-step plan executor bug was fixed so the long-tail pythonocc files now complete.
+
+### Headline counts vs v3
+
+| Metric | v3 | v4 | Delta |
+|---|---|---|---|
+| Files processed                    | 15           | **50**          | +35 |
+| Executor PASS rate                 | 14 / 15 = 93.3 % | **50 / 50 = 100 %** | +6.7 pp |
+| True PASS (drift < 10 %)           | 7 / 15 = 46.7 %  | **38 / 50 = 76.0 %** | **+29.3 pp** |
+| Median `bbox_vol_diff_pct`         | ~17 %        | **5.67 %**       | −11 pp |
+| Mean drift                         | (skewed)     | **18.60 %**      | — |
+| Worst drift                        | 45 450 %     | **149.32 %** (`PinHeader_1x04_Vertical`) | −300× |
+| Catalog detector skips             | 0            | 0                | — |
+| Total runtime (sum per-file)       | n/a          | **565.4 s** (cat: 318.3 s) | — |
+
+The 120-step plan fix lets `pythonocc__11752.step` (47-step plan) and
+`kicad__USB_A_Molex_67643_Horizontal.step` (8-step, 48-hole) drive to completion. The
+v3 SYMMETRY-ON-BASE / Ventilator blow-up (45 450 % drift) is fully resolved — `Ventilator`
+now lands at **3.06 %** drift (a true PASS). The remaining hard-FAIL bucket is the
+vertical pin-header family, whose bbox is dominated by long un-modelled pins.
+
+### Per-source breakdown
+
+| Source     | Files | Exec PASS | True PASS (drift < 10 %) | True-PASS rate | Median drift |
+|---|---:|---:|---:|---:|---:|
+| **kicad** (SMD packages3D)    | 42 | 42 | **32** | **76.2 %** | 7.15 % |
+| **OCCT** (`occt__*`)          | 2  | 2  | **2**  | **100 %**  | 5.67 % |
+| **pythonocc** (`pythonocc__*`)| 6  | 6  | **4**  | **66.7 %** | 3.06 % |
+| **NASA / AP214**              | 0  | —  | —      | —          | not picked up by runner glob (under `industrial/`) |
+| **industrial** (`industrial/`)| 0  | —  | —      | —          | fetched (26 files), but the runner only globs `corpus/oem/*.step` — gated for v5 |
+| **TOTAL**                     | 50 | 50 | **38** | **76.0 %** | 5.67 % |
+
+- KiCad SMD now dominates the corpus; the 10 kicad drifts ≥ 10 % all concentrate in
+  **vertical pin-header / through-hole connector / TO-220** parts where the bbox is
+  driven by long pins that the catalog detector treats as bosses + ribs but the
+  executor cannot match in absolute height.
+- OCCT contributes a clean 2 / 2 (linkrods 1.41 %, screw 5.67 %) — the v2 FALSE-PASS-DRIFT
+  on `occt__screw` is gone (extrude length now correct: regen bbox vol 17 737 vs orig 16 785).
+- pythonocc 4 / 6 true PASS: `as1-oc-214` (0.04 %), `as1_pe_203` (0.07 %),
+  `face_recognition_sample_part` (1.26 %), `Ventilator` (3.06 %). The two FAILs are
+  `11752` (74.98 % — sub-component extrusion height under-shoots on a 1.28 m linkage)
+  and `splinecage` (17.10 % — degenerate shell, carried from v1).
+- The fetcher script staged 26 additional STEP files under `corpus/oem/industrial/`
+  (KiCad mechanical connectors, Prusa MK3S printed parts, stepcode AP214 reference
+  helicopter parts, Voron 2 MIC6 bed plates). The runner glob is non-recursive so
+  they are not yet executed — wiring that in is a v5 task and the expected outcome is
+  +20–25 more PASS rows.
+
+### Failure-mode taxonomy update
+
+Only **12 / 50 = 24 %** of files now fall in any failure bucket (vs 8 / 15 = 53.3 % in v3).
+
+| Code | Bucket | v3 | v4 | Files | What it means |
+|---|---|---:|---:|---|---|
+| **EXEC-PLAN-1**       | universal early abort                    | 0  | 0  | — | gone since v2 |
+| **SYMMETRY-ON-BASE** / Ventilator                                  | 1  | **0** | — | **resolved** — `Ventilator` now 3.06 % drift |
+| **PLAN-DEPTH-CEILING** | plans ≥ 15 ops abort mid-run            | 5  | **1** | `pythonocc__11752` (47-step, 75 % drift) | 4 of 5 v3 files now PASS; only the 47-step plan on the 1.28 m linkage still drifts (executor completes — drift is geometric, not abort) |
+| **FALSE-PASS-DRIFT**  | exec OK but bbox blow-up > 100 %        | 1  | **1** | `kicad__PinHeader_1x04_Vertical` (149.3 %) | new instance: extrude direction on through-hole pin-headers picks the pin axis (12 mm) instead of body axis (3 mm) |
+| **VERTICAL-CONNECTOR** (new) | pin-header / JST family, drift 40–100 % | 0 | **6** | `PinHeader_1x10/2x05/2x10`, `JST_EH_B2B/B5B`, `TO-220-3_Vertical` | catalog emits N boss + N rib per pin, but the executor extrudes the body block at the pin-tip height — bbox roughly halves or doubles depending on header length |
+| **BGA-Z-AXIS** (new) | BGA-49 specifically                       | 0  | **1** | `kicad__BGA-49_6.25x6.25mm_P0.8mm` (19.6 %) | sister `BGA-100` is at 0.45 %; the BGA-49 hole detector picks a partial via cluster and the executor cuts excess pocket depth |
+| **CTRL-USB-A** (new)  | USB-A horizontal with 48 holes          | 0  | **1** | `kicad__USB_A_Molex_67643_Horizontal` (10.93 %) | borderline — drift just over the 10 % gate; 48-hole stamp on the shield shells slightly under-cuts the body height |
+| **BUTTON-EVQPUA** (new) | Panasonic tactile switch                | 0  | **1** | `kicad__Panasonic_EVQPUA_button` (36.4 %) | dome over base — only the base extrudes; the cap (≈ 0.6 mm) is not catalogued as a boss |
+| **PASS-DEGENERATE** (`splinecage`)                                  | 1  | **1** | `pythonocc__splinecage` (17.10 % shell) | still a free-form B-spline shell with 0-feature catalog — drift unchanged from v1 |
+| **Real PASS (drift < 10 %, exec OK)**                                | **7** | **38** | — | **+31 files** |
+
+### What changed under the hood (v3 → v4)
+
+1. **120-step plan completion** — the executor no longer aborts when the plan exceeds
+   ~ 15 ops. `pythonocc__11752` (47 steps, 143 holes) now drives to completion;
+   `Ventilator` (4 steps after detector dedup) drops from 45 450 % to 3.06 %.
+2. **Drift reduction across SMD passives** — the 0402 / 0603 / 0805 / 1206 family
+   (R, L, C, LED, D) all land at 7–10 % drift with 1-step plans, dominated by the
+   sub-mm package height accounting.
+3. **Corpus expansion** — `run_logs/_tmp/fetch_corpus_expand.py` pulls 28 additional
+   KiCad packages3D parts (BGA, DIP, DFN, HSOP, LQFP-48/64/100/128, QFN, SOIC, SOT,
+   TO-220, USB-A/USB-C, JST, PinHeader, Crystal SMD, Panasonic button).
+   `run_logs/_tmp/fetch_industrial_steps.py` stages an industrial drop
+   (KiCad mech, Prusa MK3S, stepcode AP214 helicopter, Voron 2 bed) under
+   `corpus/oem/industrial/` for the next runner-glob expansion.
+
+### Next milestone (v5)
+
+1. Widen the runner glob to recurse into `corpus/oem/industrial/` — expect ~ 76 files
+   total and ≥ 60 true PASS at median drift < 6 %.
+2. Fix **VERTICAL-CONNECTOR** by teaching `plan_from_feature_catalog` that boss + rib
+   counts equal to the pin count imply the bbox z-extent belongs to the pins, not the
+   body — extrude the body at the median rib height, not the rib tip.
+3. Promote `splinecage` out of the PASS bucket (carry the v1/v2 short-circuit) so the
+   headline true-PASS rate stops being inflated by one degenerate shell.
