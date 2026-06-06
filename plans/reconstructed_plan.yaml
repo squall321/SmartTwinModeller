@@ -4,7 +4,59 @@ steps:
 - id: s_base
   skill: box
   args:
-    length_mm: 7.5
-    width_mm: 3.8000000000000003
-    height_mm: 9.200000000000264
+    length_mm: 25.156183252196
+    width_mm: 22.300000000002314
+    height_mm: 62.800000000000004
+- id: s_pocket_0
+  skill: hole
+  args:
+    position:
+    - 0.9219083739020002
+    - -1.3934493827647498
+    - 35.955
+    diameter_mm: 16.0
+    depth_mm: 61.9522
+    direction: +Z
+- id: s_pocket_1
+  skill: hole
+  args:
+    position:
+    - 2.875108373902
+    - -0.21514938276474987
+    - 62.800000000000004
+    diameter_mm: 3.2
+    depth_mm: 62.8075
+    direction: +Z
+- id: s_hole_0
+  skill: hole
+  args:
+    position:
+    - 2.921908373902
+    - -0.19344938276474988
+    - 62.800000000000004
+    diameter_mm: 0.4
+    depth_mm: 62.8
+    direction: -Z
+- id: s_hole_1
+  skill: clearance_hole
+  args:
+    face_selector: &id001
+      kind: face_named
+      name: bottom
+    position_xy:
+    - -4.078091626098
+    - -8.19344938276475
+    thread_spec: M6
+    fit: medium
+    depth_mm: 16.0204
+- id: s_hole_2
+  skill: clearance_hole
+  args:
+    face_selector: *id001
+    position_xy:
+    - 2.921908373902
+    - -8.19344938276475
+    thread_spec: M3
+    fit: medium
+    depth_mm: 3.0129
 continue_on_step_failure: true

@@ -1513,6 +1513,111 @@ def _write_body_as_step(body: Any, plan_name: str) -> str | None:
         return None
 
 
+def _pick_base_shape(
+    body: Any,
+    base_l: float, base_w: float, base_h: float,
+    bbox: tuple | None,
+) -> tuple[str, dict]:
+    """Pick (skill_name, args) for the base step.
+
+    Topology-driven heuristic: total area per surface type → ratios decide
+    cylinder / sphere / torus / box. All thresholds are general (area ratio +
+    bbox aspect), NEVER per-file. Falls back to box on any failure.
+
+    Returns ("box", {length_mm, width_mm, height_mm}) by default.
+    """
+    if body is None:
+        return ("box", {"length_mm": base_l, "width_mm": base_w, "height_mm": base_h})
+    try:
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepGProp import BRepGProp
+        from OCP.GeomAbs import (
+            GeomAbs_Cylinder, GeomAbs_Sphere, GeomAbs_Torus,
+        )
+        from OCP.GProp import GProp_GProps
+
+        from phone_designer.skills._resolvers import _all_faces
+
+        shape = body.wrapped if hasattr(body, "wrapped") else body
+        faces = _all_faces(shape)
+        if not faces:
+            raise RuntimeError("no faces")
+
+        area_by_kind: dict[str, float] = {
+            "cylinder": 0.0, "sphere": 0.0, "torus": 0.0, "other": 0.0,
+        }
+        cyl_axis_dirs: list[tuple] = []
+        cyl_radii: list[float] = []
+        sph_radii: list[float] = []
+        tor_majors: list[float] = []
+        tor_minors: list[float] = []
+        total_area = 0.0
+
+        for f in faces:
+            try:
+                surf = BRepAdaptor_Surface(f)
+                kind_int = surf.GetType()
+                props = GProp_GProps()
+                BRepGProp.SurfaceProperties_s(f, props)
+                a = float(props.Mass())
+                total_area += a
+                if kind_int == GeomAbs_Cylinder:
+                    area_by_kind["cylinder"] += a
+                    c = surf.Cylinder()
+                    d = c.Axis().Direction()
+                    cyl_axis_dirs.append((d.X(), d.Y(), d.Z()))
+                    cyl_radii.append(float(c.Radius()))
+                elif kind_int == GeomAbs_Sphere:
+                    area_by_kind["sphere"] += a
+                    sph_radii.append(float(surf.Sphere().Radius()))
+                elif kind_int == GeomAbs_Torus:
+                    area_by_kind["torus"] += a
+                    tt = surf.Torus()
+                    tor_majors.append(float(tt.MajorRadius()))
+                    tor_minors.append(float(tt.MinorRadius()))
+                else:
+                    area_by_kind["other"] += a
+            except Exception:
+                continue
+
+        if total_area <= 0:
+            raise RuntimeError("zero total area")
+
+        ratio_cyl = area_by_kind["cylinder"] / total_area
+        ratio_sph = area_by_kind["sphere"]   / total_area
+        ratio_tor = area_by_kind["torus"]    / total_area
+
+        # Pick highest-confidence non-prismatic shape; generic thresholds.
+        if ratio_sph > 0.5 and sph_radii:
+            return ("sphere", {"radius_mm": max(sph_radii)})
+        if ratio_tor > 0.4 and tor_majors and tor_minors:
+            return ("torus", {
+                "major_radius_mm": max(tor_majors),
+                "minor_radius_mm": max(tor_minors),
+            })
+        if ratio_cyl > 0.6 and cyl_radii:
+            # Height = bbox extent along the dominant cylinder axis.
+            ax = cyl_axis_dirs[0]
+            ax_abs = (abs(ax[0]), abs(ax[1]), abs(ax[2]))
+            if bbox is not None:
+                (xmin, ymin, zmin), (xmax, ymax, zmax) = bbox
+                if ax_abs[2] >= max(ax_abs[0], ax_abs[1]):
+                    height_mm = float(zmax - zmin)
+                elif ax_abs[1] >= ax_abs[0]:
+                    height_mm = float(ymax - ymin)
+                else:
+                    height_mm = float(xmax - xmin)
+            else:
+                height_mm = max(base_l, base_w, base_h)
+            return ("cylinder", {
+                "diameter_mm": 2.0 * max(cyl_radii),
+                "height_mm": max(0.1, height_mm),
+            })
+    except Exception:
+        pass
+    return ("box", {"length_mm": base_l, "width_mm": base_w, "height_mm": base_h})
+
+
 def _build_plan(
     catalog: dict,
     body: Any = None,
@@ -1749,12 +1854,14 @@ def _build_plan(
             "so the original outer BREP surface is preserved."
         )
     else:
-        # Default backward-compatible behaviour.
-        steps.append(_new_step("s_base", "box", {
-            "length_mm": base_l,
-            "width_mm": base_w,
-            "height_mm": base_h,
-        }))
+        # Default — pick principled non-prismatic base when the input body's
+        # face inventory strongly suggests cylinder / sphere / torus. Falls
+        # back to "box" when topology is generic. All thresholds are pure
+        # area ratios; NO per-file hardcoding.
+        picked_skill, picked_args = _pick_base_shape(
+            body, base_l, base_w, base_h, bbox,
+        )
+        steps.append(_new_step("s_base", picked_skill, picked_args))
 
     # Coordinate-frame shift: catalog features are in the original body's
     # world frame, but the ``box`` placeholder is XY-centred at the origin
