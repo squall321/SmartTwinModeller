@@ -268,6 +268,8 @@ import phone_designer.skills.inspect.match_standard_oring  # noqa: F401
 import phone_designer.skills.inspect.identify_fastener_recess  # noqa: F401
 import phone_designer.skills.reverse_engineer.extract_feature_catalog  # noqa: F401
 import phone_designer.skills.reverse_engineer.plan_from_feature_catalog  # noqa: F401
+import phone_designer.skills.reverse_engineer.vary_feature_catalog  # noqa: F401
+import phone_designer.skills.reverse_engineer.plan_from_scaled_catalog  # noqa: F401
 from phone_designer.skills.io.iges_import import IgesImport
 from phone_designer.skills.io.iges_export import IgesExport
 from phone_designer.skills.io.brep_import import BrepImport
