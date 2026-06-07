@@ -46,9 +46,16 @@ class PostCondition:
 
     Args:
         kind: which check to perform.
-        min_delta_mm3: minimum volume change in mm³ (for volume_* checks).
-            Default 0.01 (10 µL — well above OCCT roundoff but small enough
-            to catch the cavity bug, which removed 0 mm³).
+        min_delta_mm3: absolute minimum volume change in mm³ (for volume_*
+            checks). Effective floor is ``max(min_delta_mm3,
+            min_delta_rel * |pre_volume|)`` — see ``min_delta_rel``.
+        min_delta_rel: COMPLEX-CAD fix (2026-06-08): volume-relative floor.
+            On a 42.7 G mm³ industrial assembly the old absolute 0.01 mm³
+            floor was 2.3e-13 of body volume — well inside BRepGProp
+            integration roundoff, so spurious ε-deltas could pass the gate
+            with no real material removal. Default 1e-6 (1 ppm) keeps the
+            gate above roundoff on every body scale (phone ~80,000 mm³ →
+            0.08 mm³ floor; 5 m assembly ~10¹⁰ mm³ → 10,000 mm³ floor).
         allow_no_change: if True, treat "no measurable effect" as a soft pass
             instead of raising. Useful for skills that legitimately may be
             no-ops on degenerate inputs (e.g., final_fillet without sharp edges).
@@ -56,6 +63,7 @@ class PostCondition:
 
     kind: PostConditionKind
     min_delta_mm3: float = 0.01
+    min_delta_rel: float = 1e-6
     allow_no_change: bool = False
 
 
@@ -87,18 +95,23 @@ def _measure(body: Any) -> dict[str, float] | None:
     if shape is None:
         return None
 
-    # Volume via BRepGProp.VolumeProperties. Use abs() because shells with
-    # mixed face orientation can produce a negative integral — the magnitude
-    # is what post-condition deltas care about.
-    volume = 0.0
+    # COMPLEX-CAD fix (2026-06-08): keep the SIGNED volume from
+    # VolumeProperties — abs() erased the orientation-flip signal that this
+    # gate exists to catch (a boolean cut that fails by re-orienting a
+    # shell flips the sign of the integral; only the sign reveals it).
+    # On measurement failure return None so _check_one can distinguish
+    # "could not measure" from "measured as zero". The previous bare-except
+    # to 0.0 could synthesize a phantom -pre_v delta strong enough to
+    # falsely satisfy volume_decreased.
+    volume: float | None = None
     try:
         from OCP.BRepGProp import BRepGProp
         from OCP.GProp import GProp_GProps
         props = GProp_GProps()
         BRepGProp.VolumeProperties_s(shape, props)
-        volume = abs(float(props.Mass()))
+        volume = float(props.Mass())
     except Exception:
-        volume = 0.0
+        volume = None
 
     # Face / edge count via TopExp_Explorer with dedup
     face_count = 0
@@ -129,7 +142,9 @@ def _measure(body: Any) -> dict[str, float] | None:
         pass
 
     return {
-        "volume_mm3": volume,
+        # COMPLEX-CAD fix (2026-06-08): volume_mm3 may be None on
+        # measurement failure; _check_one handles that explicitly.
+        "volume_mm3": volume if volume is None else volume,
         "face_count": face_count,
         "edge_count": edge_count,
     }
@@ -170,41 +185,54 @@ def _check_one(
         # a runtime bug.)
         return
 
-    pre_v = pre.get("volume_mm3", 0.0)
-    post_v = post.get("volume_mm3", 0.0)
+    pre_v = pre.get("volume_mm3")
+    post_v = post.get("volume_mm3")
+    # COMPLEX-CAD fix (2026-06-08): None means the BRepGProp integration
+    # threw — treat as a hard failure rather than coercing to 0.0 (which
+    # could synthesize a phantom huge delta).
+    if pre_v is None or post_v is None:
+        raise PostConditionError(
+            f"{skill_name}: post_condition '{cond.kind}' failed — "
+            f"could not measure volume (pre={pre_v}, post={post_v})"
+        )
     delta = post_v - pre_v
+    # COMPLEX-CAD fix (2026-06-08): scale-relative floor. On industrial
+    # bodies (~10¹⁰ mm³) the absolute 0.01 mm³ floor was 2e-13 of body
+    # volume — below OCCT integration roundoff, so spurious ε-deltas
+    # passed the gate. Effective floor = max(absolute, rel * |pre_v|).
+    eff_floor = max(cond.min_delta_mm3, cond.min_delta_rel * abs(pre_v))
 
     if cond.kind == "volume_decreased":
-        if delta < -cond.min_delta_mm3:
+        if delta < -eff_floor:
             return
-        if cond.allow_no_change and abs(delta) <= cond.min_delta_mm3:
+        if cond.allow_no_change and abs(delta) <= eff_floor:
             return
         raise PostConditionError(
             f"{skill_name}: post_condition 'volume_decreased' failed — "
             f"pre={pre_v:.4f} mm³, post={post_v:.4f} mm³, "
-            f"delta={delta:.4f} mm³ (expected ≤ -{cond.min_delta_mm3})"
+            f"delta={delta:.4f} mm³ (expected ≤ -{eff_floor:.4f})"
         )
 
     if cond.kind == "volume_increased":
-        if delta > cond.min_delta_mm3:
+        if delta > eff_floor:
             return
-        if cond.allow_no_change and abs(delta) <= cond.min_delta_mm3:
+        if cond.allow_no_change and abs(delta) <= eff_floor:
             return
         raise PostConditionError(
             f"{skill_name}: post_condition 'volume_increased' failed — "
             f"pre={pre_v:.4f} mm³, post={post_v:.4f} mm³, "
-            f"delta={delta:.4f} mm³ (expected ≥ +{cond.min_delta_mm3})"
+            f"delta={delta:.4f} mm³ (expected ≥ +{eff_floor:.4f})"
         )
 
     if cond.kind == "volume_changed":
-        if abs(delta) > cond.min_delta_mm3:
+        if abs(delta) > eff_floor:
             return
         if cond.allow_no_change:
             return
         raise PostConditionError(
             f"{skill_name}: post_condition 'volume_changed' failed — "
             f"pre={pre_v:.4f} mm³, post={post_v:.4f} mm³, "
-            f"|delta|={abs(delta):.4f} mm³ (expected > {cond.min_delta_mm3})"
+            f"|delta|={abs(delta):.4f} mm³ (expected > {eff_floor:.4f})"
         )
 
     if cond.kind == "face_count_changed":

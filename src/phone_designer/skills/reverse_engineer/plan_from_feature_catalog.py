@@ -2021,8 +2021,39 @@ def _build_plan(
     # against their natural entry face. Keep _pocket_is_axis_aligned to
     # filter genuine diagonals.
     _pockets_axis_filtered = [p for p in pockets if _pocket_is_axis_aligned(p)]
+    # COMPLEX-CAD fix (2026-06-08): dedup pockets that share (axis_origin,
+    # axis_dir, top_d, depth) within tolerance. The as1_pe_203 catalog
+    # repeatedly emits axis_origin = body centroid as a fallback for
+    # poorly-resolved features, producing many "pockets" that all collapse
+    # to the same face-centroid prism. Without this, only the first cut
+    # removes material and the rest become zero-delta SKIPs.
+    _DEDUP_XY_MM = 1.0
+    _DEDUP_DIM_FRAC = 0.05
+
+    def _pocket_key(p: dict) -> tuple:
+        ao = p.get("axis_origin") or [0, 0, 0]
+        ad = p.get("axis_dir") or [0, 0, 1]
+        return (
+            round(float(ao[0]) / _DEDUP_XY_MM),
+            round(float(ao[1]) / _DEDUP_XY_MM),
+            round(float(ao[2]) / _DEDUP_XY_MM),
+            round(float(ad[0])),
+            round(float(ad[1])),
+            round(float(ad[2])),
+            round(float(p.get("top_d_mm") or 0) / max(float(p.get("top_d_mm") or 1) * _DEDUP_DIM_FRAC, 1.0)),
+            round(float(p.get("depth_mm") or 0) / max(float(p.get("depth_mm") or 1) * _DEDUP_DIM_FRAC, 1.0)),
+        )
+
+    _seen_pocket_keys: set = set()
+    _deduped: list = []
+    for p in _pockets_axis_filtered:
+        k = _pocket_key(p)
+        if k in _seen_pocket_keys:
+            continue
+        _seen_pocket_keys.add(k)
+        _deduped.append(p)
     pockets_sorted = sorted(
-        _pockets_axis_filtered,
+        _deduped,
         key=lambda p: -float(p.get("top_d_mm") or 0.0),
     )
     magnet_idx = 0
