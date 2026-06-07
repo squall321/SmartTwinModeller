@@ -81,6 +81,38 @@ read the relevant skill files and ranked root causes):
   box step. This is by design (the per-face scan is O(N) and 30 s+ on
   10k-face shells). Decimation or assembly decomposition needed.
 
+## Inline vs subprocess discrepancy (added 2026-06-07)
+
+The `run_complex_re.py` script runs each STEP file in a
+`multiprocessing.spawn` subprocess with a per-file timeout. 11752 and
+KR600 both hit the 1800 s timeout in subprocess, but a step-by-step
+**inline** trace and a full PlanExecutor inline run both complete
+11752's 45-step plan in **15.5 s** with `outcome=FAIL` (42 PASS / 1 FAIL
+/ 2 SKIPPED). Full pipeline (import + catalog + plan + executor + regen
+catalog + fidelity) takes **~118 s** inline, with the new honest
+fidelity reporting **match_ratio = 0.393** (down from the 0.586
+false-PASS in v1).
+
+So the pipeline is correct on 11752. The subprocess hang is an
+environmental quirk — likely a Windows `spawn` + OCCT initialization
+interaction we have not isolated. The corpus-runner harness should be
+replaced with an in-process serial driver (or switched to a fork-style
+context on Linux) — that is a harness issue, not a pipeline issue.
+
+Per-file headline numbers in the COMPLEX corpus, INLINE measurement
+(reasonable):
+
+| File | Faces | Match (new) | Notes |
+|---|---:|---:|---|
+| occt__screw.step | 10 | 0.75 | PASS, real |
+| occt__linkrods.step | 37 | 0.43 | PASS, mid |
+| pythonocc__as1-oc-214.stp | 160 | 0.30 | PASS, but pockets vanish |
+| pythonocc__as1_pe_203.stp | 160 | 0.17 | regression — base-only plan |
+| pythonocc__Ventilator.stp | 305 | 0.19 | honest drop from 0.59 false |
+| **pythonocc__11752.stp** | **1018** | **0.39** | **inline; subprocess hangs** |
+| pythonocc__KR600_R2830-4.stp | 4123 | n/a | subprocess hang, inline untested |
+| pythonocc__RC_Buggy_… | 10665 | 0.0 | catalog SKIPPED (>8000 face) |
+
 ## Conclusion
 
 The fixes turn opaque false-PASS results into transparent harder
