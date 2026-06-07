@@ -4,139 +4,55 @@ steps:
 - id: s_base
   skill: box
   args:
-    length_mm: 18.0
-    width_mm: 18.0
-    height_mm: 9.0
+    length_mm: 31.2981000976123
+    width_mm: 36.14071967698379
+    height_mm: 3.0
+- id: s_bearing_bore_0
+  skill: bearing_bore
+  args:
+    axis_origin:
+    - 4.350950051193851
+    - 2.0605739337042905e-13
+    - 3.658300100000017
+    axis_direction:
+    - 0.0
+    - 0.0
+    - 1.0
+    bearing_spec: '625'
+    with_shoulder: false
 - id: s_pocket_1
   skill: hole
   args:
     position:
-    - 0.0
-    - 0.0
-    - -6.0
-    diameter_mm: 5.0
-    depth_mm: 9.019
-    direction: +Z
-- id: s_pattern_lin_0
-  skill: linear_pattern
+    - -9.333249948806149
+    - -1.499999999999794
+    - 3.9861001000000176
+    diameter_mm: 2.5927
+    depth_mm: 34.641
+    direction: +Y
+- id: s_rib_0
+  skill: rib
   args:
-    face_selector: &id001
+    start:
+    - -5.66075
+    - 0.0
+    - 3.0
+    end:
+    - 5.66075
+    - 0.0
+    - 3.0
+    width_mm: 2.7873
+    height_mm: 9.0208
+    up_axis: +Z
+- id: s_hole_0
+  skill: tap_drill_hole
+  args:
+    face_selector:
       kind: face_named
       name: bottom
-    profile_diameter_mm: 5.0
-    operation: hole
-    feature_depth_mm: 9.0
-    count: 3
-    spacing_mm: 6.7
-    direction: X
-    start_offset_x_mm: -6.3721
-    start_offset_y_mm: -2.0704
-- id: s_pattern_lin_1
-  skill: linear_pattern
-  args:
-    face_selector: *id001
-    profile_diameter_mm: 5.0
-    operation: hole
-    feature_depth_mm: 9.0
-    count: 3
-    spacing_mm: 6.7
-    direction: X
-    start_offset_x_mm: -5.4204
-    start_offset_y_mm: -3.9382
-- id: s_pattern_lin_2
-  skill: linear_pattern
-  args:
-    face_selector: *id001
-    profile_diameter_mm: 5.0
-    operation: hole
-    feature_depth_mm: 9.0
-    count: 3
-    spacing_mm: 6.7
-    direction: Y
-    start_offset_x_mm: -3.9382
-    start_offset_y_mm: -5.4204
-- id: s_pattern_lin_3
-  skill: linear_pattern
-  args:
-    face_selector: *id001
-    profile_diameter_mm: 5.0
-    operation: hole
-    feature_depth_mm: 9.0
-    count: 3
-    spacing_mm: 6.7
-    direction: Y
-    start_offset_x_mm: -2.0704
-    start_offset_y_mm: -6.3721
-- id: s_pattern_lin_4
-  skill: linear_pattern
-  args:
-    face_selector: *id001
-    profile_diameter_mm: 5.0
-    operation: hole
-    feature_depth_mm: 9.0
-    count: 3
-    spacing_mm: 6.7
-    direction: Y
-    start_offset_x_mm: -0.0
-    start_offset_y_mm: -6.7
-- id: s_pattern_lin_5
-  skill: linear_pattern
-  args:
-    face_selector: *id001
-    profile_diameter_mm: 5.0
-    operation: hole
-    feature_depth_mm: 9.0
-    count: 3
-    spacing_mm: 6.7
-    direction: Y
-    start_offset_x_mm: 2.0704
-    start_offset_y_mm: -6.3721
-- id: s_pattern_lin_6
-  skill: linear_pattern
-  args:
-    face_selector: *id001
-    profile_diameter_mm: 5.0
-    operation: hole
-    feature_depth_mm: 9.0
-    count: 3
-    spacing_mm: 6.7
-    direction: Y
-    start_offset_x_mm: 3.9382
-    start_offset_y_mm: -5.4204
-- id: s_pattern_lin_7
-  skill: linear_pattern
-  args:
-    face_selector: *id001
-    profile_diameter_mm: 5.0
-    operation: hole
-    feature_depth_mm: 9.0
-    count: 3
-    spacing_mm: 6.7
-    direction: X
-    start_offset_x_mm: 5.4204
-    start_offset_y_mm: -3.9382
-- id: s_pattern_lin_8
-  skill: linear_pattern
-  args:
-    face_selector: *id001
-    profile_diameter_mm: 5.0
-    operation: hole
-    feature_depth_mm: 9.0
-    count: 3
-    spacing_mm: 6.7
-    direction: X
-    start_offset_x_mm: 6.3721
-    start_offset_y_mm: -2.0704
-- id: s_pattern_lin_9
-  skill: linear_pattern
-  args:
-    face_selector: *id001
-    profile_diameter_mm: 5.0
-    operation: hole
-    feature_depth_mm: 9.0
-    count: 3
-    spacing_mm: 6.7
-    direction: X
-    start_offset_x_mm: 6.7
-    start_offset_y_mm: 0.0
+    position_xy:
+    - 4.350950051193851
+    - 2.0605739337042905e-13
+    thread_spec: M5
+    depth_mm: 8.0
 continue_on_step_failure: true

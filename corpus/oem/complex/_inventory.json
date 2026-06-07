@@ -1,0 +1,20 @@
+[
+  {
+    "filename": "pythonocc__Ventilator.stp",
+    "url": "https://raw.githubusercontent.com/tpaviot/pythonocc-demos/master/assets/models/Ventilator.stp",
+    "size": 2257591,
+    "sha256_12": "19a11c6949af"
+  },
+  {
+    "filename": "pythonocc__as1-oc-214.stp",
+    "url": "https://raw.githubusercontent.com/tpaviot/pythonocc-demos/master/assets/models/as1-oc-214.stp",
+    "size": 441968,
+    "sha256_12": "038be659c54b"
+  },
+  {
+    "filename": "pythonocc__11752.stp",
+    "url": "https://raw.githubusercontent.com/tpaviot/pythonocc-demos/master/assets/models/11752.stp",
+    "size": 1579363,
+    "sha256_12": "c2748324a360"
+  }
+]

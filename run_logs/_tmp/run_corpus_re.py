@@ -280,8 +280,12 @@ def main() -> int:
                 sz = 0
             candidates.append((sz, p))
     candidates.sort(key=lambda t: (t[0], t[1].name))
+    # Include complex/ files first regardless of size cap. They're the
+    # real test cases — we WANT them in even if they're large.
+    complex_files = [p for _sz, p in candidates if "complex" in str(p).lower()]
+    other_files = [p for _sz, p in candidates if "complex" not in str(p).lower()]
     MAX_FILES = 100
-    step_files = [p for _sz, p in candidates[:MAX_FILES]]
+    step_files = complex_files + other_files[: max(0, MAX_FILES - len(complex_files))]
     print(
         f"[corpus_re] discovered {len(candidates)} STEP file(s) under {CORPUS}; "
         f"running first {len(step_files)} (capped at {MAX_FILES}, smallest first)",
