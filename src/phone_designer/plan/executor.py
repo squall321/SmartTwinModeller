@@ -112,7 +112,18 @@ class PlanExecutor:
                                     ),
                                 )
                                 result.error_count += 1
-                                previous_pass = False
+                                # COMPLEX-CAD fix (2026-06-07): the STRICT
+                                # branch used to hard-set previous_pass=False
+                                # regardless of plan.continue_on_step_failure,
+                                # which tore down 42 of 47 downstream steps
+                                # on a 1018-face industrial part where one
+                                # selector signature drifted. Mirror the
+                                # generic-exception branch (line 189-192)
+                                # so opt-in plans survive freeze drift.
+                                if getattr(self.plan, "continue_on_step_failure", False):
+                                    previous_pass = True
+                                else:
+                                    previous_pass = False
                                 continue
                             else:
                                 result.freeze_mismatches.append({

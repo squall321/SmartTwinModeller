@@ -16,5 +16,30 @@
     "url": "https://raw.githubusercontent.com/tpaviot/pythonocc-demos/master/assets/models/11752.stp",
     "size": 1579363,
     "sha256_12": "c2748324a360"
+  },
+  {
+    "filename": "pythonocc__RC_Buggy_2_front_suspension.stp",
+    "url": "https://raw.githubusercontent.com/tpaviot/pythonocc-demos/master/assets/models/RC_Buggy_2_front_suspension.stp",
+    "size": 15257496
+  },
+  {
+    "filename": "pythonocc__KR600_R2830-4.stp",
+    "url": "https://raw.githubusercontent.com/tpaviot/pythonocc-demos/master/assets/models/KR600_R2830-4.stp",
+    "size": 12587505
+  },
+  {
+    "filename": "occt__linkrods.step",
+    "url": "https://raw.githubusercontent.com/Open-Cascade-SAS/OCCT/master/data/step/linkrods.step",
+    "size": 1793282
+  },
+  {
+    "filename": "pythonocc__as1_pe_203.stp",
+    "url": "https://raw.githubusercontent.com/tpaviot/pythonocc-demos/master/assets/models/as1_pe_203.stp",
+    "size": 139752
+  },
+  {
+    "filename": "occt__screw.step",
+    "url": "https://raw.githubusercontent.com/Open-Cascade-SAS/OCCT/master/data/step/screw.step",
+    "size": 88552
   }
 ]

@@ -507,6 +507,22 @@ class ClassifyPockets(SkillBase):
                         "pocket usually has ≥3 faces (opening, bottom, sides); "
                         "raise this to 3 on mesh shells to drop 2-face creases.",
         )
+        min_top_d_frac: float = Field(
+            default=0.0, ge=0.0,
+            description="COMPLEX-CAD fix (2026-06-07): reject pockets whose "
+                        "top opening diameter < frac × bbox diagonal. Scales "
+                        "with part size so iPhone-tuned absolute mm thresholds "
+                        "don't underfire on 200-1000 mm industrial parts. "
+                        "Final threshold is max(min_top_d_mm, min_top_d_frac "
+                        "× bbox_diag). Default 0.0 = backward-compatible.",
+        )
+        min_depth_frac: float = Field(
+            default=0.0, ge=0.0,
+            description="COMPLEX-CAD fix (2026-06-07): reject pockets whose "
+                        "depth < frac × bbox diagonal. Final threshold is "
+                        "max(min_depth_mm, min_depth_frac × bbox_diag). "
+                        "Default 0.0 = backward-compatible.",
+        )
         max_face_count: int | None = Field(
             default=_DEFAULT_MAX_FACE_COUNT,
             description="If the body has more than this many faces, skip "
@@ -557,6 +573,17 @@ class ClassifyPockets(SkillBase):
         seeds = _seed_pocket_faces(faces, body_bbox)
         comps = _components(seeds, pairs)
 
+        # COMPLEX-CAD fix (2026-06-07): bbox-relative filter thresholds.
+        # The fixed-mm filters (min_top_d_mm=2.0 etc) were iPhone-tuned and
+        # underfire on 200-1000 mm industrial parts whose noise floor is
+        # proportionally larger. Final threshold = max(absolute, frac × diag).
+        (_mn, _mx) = body_bbox
+        _diag = math.sqrt(
+            (_mx[0] - _mn[0]) ** 2 + (_mx[1] - _mn[1]) ** 2 + (_mx[2] - _mn[2]) ** 2
+        )
+        _eff_top_d_min = max(float(args.min_top_d_mm), float(args.min_top_d_frac) * _diag)
+        _eff_depth_min = max(float(args.min_depth_mm), float(args.min_depth_frac) * _diag)
+
         pockets: list[dict[str, Any]] = []
         filtered = 0
         for comp in comps:
@@ -565,9 +592,9 @@ class ClassifyPockets(SkillBase):
             top_d = float(desc.get("top_d_mm") or 0.0)
             depth = float(desc.get("depth_mm") or 0.0)
             fc = len(desc.get("face_indices") or [])
-            if depth < args.min_depth_mm:
+            if depth < _eff_depth_min:
                 filtered += 1; continue
-            if top_d < args.min_top_d_mm:
+            if top_d < _eff_top_d_min:
                 filtered += 1; continue
             if fc < args.min_face_count_per_pocket:
                 filtered += 1; continue

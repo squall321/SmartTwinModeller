@@ -115,7 +115,30 @@ def _surface_kind_int(face) -> int:
     return int(BRepAdaptor_Surface(face).GetType())
 
 
-def _detect_swept_loft_revolve(body, bosses, base_z_max):
+def _cone_in_any_hole(cx: float, cy: float, holes: list) -> bool:
+    """COMPLEX-CAD fix (2026-06-07): True if a cone's XY centroid lies inside
+    the radius of any detected hole. Used to suppress countersink cones from
+    being mis-labelled as loft bosses.
+    """
+    for h in holes or []:
+        if not isinstance(h, dict):
+            continue
+        origin = h.get("axis_origin") or [0.0, 0.0, 0.0]
+        diams = h.get("diameters_mm") or []
+        try:
+            ox = float(origin[0]); oy = float(origin[1])
+            r = (float(max(diams)) * 0.5) if diams else float(h.get("diameter_mm") or 0.0) * 0.5
+        except Exception:
+            continue
+        if r <= 0.0:
+            continue
+        dx = cx - ox; dy = cy - oy
+        if (dx * dx + dy * dy) ** 0.5 <= r + 0.5:  # 0.5 mm slop
+            return True
+    return False
+
+
+def _detect_swept_loft_revolve(body, bosses, base_z_max, holes=None):
     """Heuristic detection of sweep / loft / revolve features by surface type.
 
     Returns (sweep_features, loft_features, revolve_features). Each entry::
@@ -286,6 +309,12 @@ def _detect_swept_loft_revolve(body, bosses, base_z_max):
             if _loft_h / body_z_extent >= 0.5:
                 continue
         cx, cy = 0.5 * (xmin + xmax), 0.5 * (ymin + ymax)
+        # COMPLEX-CAD fix (2026-06-07): countersink cones sit inside a hole's
+        # radius — appending them as kind:"boss" produces phantom bosses in
+        # the regen catalog. Skip when the cone centroid lies inside any
+        # detected hole on the body.
+        if _cone_in_any_hole(cx, cy, holes):
+            continue
         loft_features.append({
             "id": ci,
             "bbox": [round(c, 4) for c in bb],
@@ -688,7 +717,7 @@ class ExtractFeatureCatalog(SkillBase):
 
         swr = _timed(
             "detect_swept_loft_revolve",
-            _detect_swept_loft_revolve, body, bosses, base_z_max,
+            _detect_swept_loft_revolve, body, bosses, base_z_max, holes,
         )
         if swr is not None:
             sweep_features, loft_features, revolve_features = swr

@@ -1,15 +1,19 @@
 """feature_fidelity_diff — compare two feature_catalog dicts (orig vs regen).
 
 Read-only. Returns extras["feature_fidelity"] = {
-    "by_kind": {<kind>: {"a": Na, "b": Nb, "diff": Nb-Na}, ...},
+    "by_kind": {<kind>: {"a": Na, "b": Nb, "diff": Nb-Na, "matched": M}, ...},
     "missing_in_b": [list of (kind, idx_in_a)],
     "extra_in_b":   [list of (kind, idx_in_b)],
     "avg_dim_drift_pct": float | None,
     "overall_match_ratio": float in [0, 1],
 }
 
-Symmetric on counts; greedy nearest-match by depth/radius/centroid for the
-"missing"/"extra" lists when both sides have entries.
+Geometry-aware greedy nearest-match per kind: for each entry on side A,
+pick the closest unused B by centroid distance + primary-dim drift. The
+"matched" count rewards true correspondence, and ``max(len_a, len_b)`` as
+the denominator means both MISSING and INVENTED entries penalize equally.
+``avg_dim_drift_pct`` is computed over the resulting pairings, not over a
+meaningless ``zip(a_list, b_list)``.
 """
 from __future__ import annotations
 
@@ -29,6 +33,9 @@ _KINDS = (
     "symmetries", "patterns",
 )
 
+_TOL_XYZ_MM = 5.0   # spatial pairing tolerance — gen large to catch drift
+_TOL_DIM_FRAC = 0.15  # +/- 15% primary-dim drift considered "same feature"
+
 
 def _counts(catalog: dict) -> dict[str, int]:
     out: dict[str, int] = {}
@@ -38,20 +45,133 @@ def _counts(catalog: dict) -> dict[str, int]:
     return out
 
 
-def _avg_dim_drift_pct(cat_a: dict, cat_b: dict) -> float | None:
-    """Mean |%diff| across dimensional fields of pockets/holes/bosses.
+def _xyz_of(entry: dict) -> tuple[float, float, float] | None:
+    """First available 3-tuple position from common catalog keys."""
+    for key in ("axis_origin", "centroid", "center", "position", "origin"):
+        v = entry.get(key)
+        if isinstance(v, (list, tuple)) and len(v) >= 3:
+            try:
+                return (float(v[0]), float(v[1]), float(v[2]))
+            except Exception:
+                continue
+    return None
 
-    For each matched-by-index pair we average across all numeric "_mm"
-    fields they share. Returns None if no pairs.
+
+def _primary_dim(entry: dict, kind: str) -> float | None:
+    """Most-distinguishing scalar dim per kind."""
+    def _coerce(v) -> float | None:
+        try:
+            return float(v)
+        except Exception:
+            return None
+
+    if kind == "holes":
+        diams = entry.get("diameters_mm") or []
+        if diams:
+            d0 = _coerce(min(diams))
+            if d0 is not None:
+                return d0
+        for key in ("diameter_mm", "depth_mm"):
+            v = _coerce(entry.get(key))
+            if v is not None:
+                return v
+        return None
+    if kind == "pockets":
+        for key in ("top_d_mm", "depth_mm", "width_mm", "length_mm"):
+            v = _coerce(entry.get(key))
+            if v is not None:
+                return v
+        return None
+    if kind == "bosses":
+        for key in ("diameter_mm", "height_mm", "radius_mm"):
+            v = _coerce(entry.get(key))
+            if v is not None:
+                return v
+        return None
+    if kind in ("revolve_features", "sweep_features", "loft_features"):
+        for key in ("radius_mm", "diameter_mm", "depth_mm", "height_mm", "length_mm"):
+            v = _coerce(entry.get(key))
+            if v is not None:
+                return v
+    return None
+
+
+def _greedy_pair(
+    a_list: list,
+    b_list: list,
+    kind: str,
+    tol_xyz_mm: float = _TOL_XYZ_MM,
+    tol_dim_frac: float = _TOL_DIM_FRAC,
+) -> tuple[list[tuple[int, int, float]], list[int], list[int]]:
+    """For each a, find closest unused b within tolerance. Greedy.
+
+    Returns (pairs, unmatched_a_idxs, unmatched_b_idxs). When no xyz/dim
+    info is available on either side, the gates are no-ops and the pairing
+    collapses to first-fit (count-overlap), preserving prior behavior on
+    symmetry/pattern catalogs.
     """
-    pairs: list[tuple[float, float]] = []
+    used_b: set[int] = set()
+    pairs: list[tuple[int, int, float]] = []
+    unmatched_a: list[int] = []
+    for ai, a in enumerate(a_list):
+        if not isinstance(a, dict):
+            unmatched_a.append(ai)
+            continue
+        axyz = _xyz_of(a)
+        adim = _primary_dim(a, kind)
+        best_bi = -1
+        best_cost = float("inf")
+        for bi, b in enumerate(b_list):
+            if bi in used_b or not isinstance(b, dict):
+                continue
+            cost = 0.0
+            if axyz is not None:
+                bxyz = _xyz_of(b)
+                if bxyz is not None:
+                    d = (
+                        (axyz[0] - bxyz[0]) ** 2
+                        + (axyz[1] - bxyz[1]) ** 2
+                        + (axyz[2] - bxyz[2]) ** 2
+                    ) ** 0.5
+                    if d > tol_xyz_mm:
+                        continue
+                    cost += d
+            if adim is not None and adim > 1e-9:
+                bdim = _primary_dim(b, kind)
+                if bdim is not None:
+                    drift = abs(bdim - adim) / abs(adim)
+                    if drift > tol_dim_frac:
+                        continue
+                    cost += drift * 10.0
+            if cost < best_cost:
+                best_cost = cost
+                best_bi = bi
+        if best_bi >= 0:
+            used_b.add(best_bi)
+            pairs.append((ai, best_bi, best_cost))
+        else:
+            unmatched_a.append(ai)
+    unmatched_b = [bi for bi in range(len(b_list)) if bi not in used_b]
+    return pairs, unmatched_a, unmatched_b
+
+
+def _avg_dim_drift_pct_from_pairs(
+    cat_a: dict,
+    cat_b: dict,
+    all_pairs: dict[str, list[tuple[int, int, float]]],
+) -> float | None:
+    drifts: list[float] = []
     for k in ("pockets", "holes", "bosses", "revolve_features"):
+        pairs = all_pairs.get(k) or []
         a_list = cat_a.get(k) or []
         b_list = cat_b.get(k) or []
-        n = min(len(a_list), len(b_list))
-        for i in range(n):
-            a = a_list[i] if isinstance(a_list[i], dict) else {}
-            b = b_list[i] if isinstance(b_list[i], dict) else {}
+        for ai, bi, _cost in pairs:
+            if ai >= len(a_list) or bi >= len(b_list):
+                continue
+            a = a_list[ai] if isinstance(a_list[ai], dict) else None
+            b = b_list[bi] if isinstance(b_list[bi], dict) else None
+            if not (a and b):
+                continue
             for key in a:
                 if not key.endswith("_mm"):
                     continue
@@ -63,28 +183,10 @@ def _avg_dim_drift_pct(cat_a: dict, cat_b: dict) -> float | None:
                     continue
                 if abs(av) < 1e-9:
                     continue
-                pairs.append((av, bv))
-    if not pairs:
+                drifts.append(abs(bv - av) / abs(av) * 100.0)
+    if not drifts:
         return None
-    drifts = [abs(b - a) / abs(a) * 100.0 for a, b in pairs]
     return round(sum(drifts) / len(drifts), 4)
-
-
-def _overall_match_ratio(by_kind: dict[str, dict]) -> float:
-    """Aggregate ratio of matched (kind-wise minimum) to total (kind-wise max).
-
-    Generic + symmetric — encodes "how much of the smaller catalog is
-    accounted for by the larger one, kind by kind". 1.0 = identical counts
-    in every kind.
-    """
-    matched = 0
-    total = 0
-    for v in by_kind.values():
-        matched += min(v["a"], v["b"])
-        total += max(v["a"], v["b"])
-    if total == 0:
-        return 1.0
-    return round(matched / total, 4)
 
 
 @skill(
@@ -92,8 +194,9 @@ def _overall_match_ratio(by_kind: dict[str, dict]) -> float:
     category="reverse_engineer",
     level="atomic",
     summary="Compare two feature_catalog dicts (original vs regen) — per-kind "
-            "count diff + nearest-match for missing/extra entries + average "
-            "dimensional drift across matched pairs + overall match ratio.",
+            "count diff + geometry-aware greedy nearest-match for "
+            "missing/extra entries + average dimensional drift across matched "
+            "pairs + overall match ratio penalizing both missing and invented.",
     selector_kinds=[],
     history_rules={},
     produces_features=["feature_fidelity_report"],
@@ -113,26 +216,36 @@ class FeatureFidelityDiff(SkillBase):
         cb = args.catalog_b or {}
         counts_a = _counts(ca)
         counts_b = _counts(cb)
+
         by_kind: dict[str, dict] = {}
+        all_pairs: dict[str, list[tuple[int, int, float]]] = {}
         missing_in_b: list[tuple[str, int]] = []
         extra_in_b: list[tuple[str, int]] = []
+        matched_total = 0
+        union_total = 0
+
         for k in _KINDS:
             a = counts_a[k]
             b = counts_b[k]
-            by_kind[k] = {"a": a, "b": b, "diff": b - a}
-            # nearest-match by index — for a > b, mark the leftover a's as missing.
-            if a > b:
-                for i in range(b, a):
-                    missing_in_b.append((k, i))
-            elif b > a:
-                for i in range(a, b):
-                    extra_in_b.append((k, i))
+            a_list = ca.get(k) or []
+            b_list = cb.get(k) or []
+            pairs, unmatched_a, unmatched_b = _greedy_pair(a_list, b_list, k)
+            all_pairs[k] = pairs
+            by_kind[k] = {"a": a, "b": b, "diff": b - a, "matched": len(pairs)}
+            matched_total += len(pairs)
+            union_total += max(a, b)
+            for ai in unmatched_a:
+                missing_in_b.append((k, ai))
+            for bi in unmatched_b:
+                extra_in_b.append((k, bi))
+
+        overall = 1.0 if union_total == 0 else round(matched_total / union_total, 4)
         report = {
             "by_kind": by_kind,
             "missing_in_b": missing_in_b,
             "extra_in_b": extra_in_b,
-            "avg_dim_drift_pct": _avg_dim_drift_pct(ca, cb),
-            "overall_match_ratio": _overall_match_ratio(by_kind),
+            "avg_dim_drift_pct": _avg_dim_drift_pct_from_pairs(ca, cb, all_pairs),
+            "overall_match_ratio": overall,
         }
         return SkillResult(
             body=body,

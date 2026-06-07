@@ -368,15 +368,29 @@ def _hole_step(
         _az = abs(float(axis_dir[2]))
     except Exception:
         _az = 0.0
-    if _az > 0.5 and bbox is not None and shift != (0.0, 0.0, 0.0):
-        # Box-mode: after shift the slab spans z=0 .. (zmax-zmin).
-        slab_top_z = float(bbox[5]) - float(bbox[2])
-        if face_sel is _BOTTOM_FACE_SELECTOR:
-            dir_str = "+Z"
-            oz = 0.0  # entry at slab bottom
+    if _az > 0.5 and bbox is not None:
+        zmin_w = float(bbox[2])
+        zmax_w = float(bbox[5])
+        if shift != (0.0, 0.0, 0.0):
+            # Box-mode: after shift the slab spans z=0 .. (zmax-zmin).
+            slab_top_z = zmax_w - zmin_w
+            if face_sel is _BOTTOM_FACE_SELECTOR:
+                dir_str = "+Z"
+                oz = 0.0
+            else:
+                dir_str = "-Z"
+                oz = slab_top_z
         else:
-            dir_str = "-Z"
-            oz = slab_top_z  # entry at slab top
+            # COMPLEX-CAD fix (2026-06-07): preserve_brep / import_step
+            # modes used to leave oz at the catalog's axis_origin Z (often
+            # the deep cap) which started cuts mid-body. Clamp to the
+            # entry-face Z so the cylinder fully penetrates.
+            if face_sel is _BOTTOM_FACE_SELECTOR:
+                dir_str = "+Z"
+                oz = zmin_w
+            else:
+                dir_str = "-Z"
+                oz = zmax_w
     return _new_step(sid, "hole", {
         "position": [ox, oy, oz],
         "diameter_mm": primary_d,
@@ -420,11 +434,39 @@ def _pocket_step(
 
     # Circular pockets whose depth dominates → treat as a raw hole.
     if top_d > 0 and depth / max(top_d, 1e-3) >= 1.5:
+        # COMPLEX-CAD fix (2026-06-07): mirror the entry-Z / direction
+        # correction from ``_hole_step``. Without it, pocket-as-hole
+        # branches emit cuts at the catalog's axis_origin Z (often the
+        # deep cap) which leaves cylindrical residue that the regen
+        # detector reclassifies as bosses.
+        dir_str = _axis_dir_to_str(axis_dir)
+        try:
+            _az = abs(float(axis_dir[2]))
+        except Exception:
+            _az = 0.0
+        if _az > 0.5 and bbox is not None:
+            zmin_w = float(bbox[2])
+            zmax_w = float(bbox[5])
+            if shift != (0.0, 0.0, 0.0):
+                slab_top_z = zmax_w - zmin_w
+                if face_sel is _BOTTOM_FACE_SELECTOR:
+                    dir_str = "+Z"
+                    oz = 0.0
+                else:
+                    dir_str = "-Z"
+                    oz = slab_top_z
+            else:
+                if face_sel is _BOTTOM_FACE_SELECTOR:
+                    dir_str = "+Z"
+                    oz = zmin_w
+                else:
+                    dir_str = "-Z"
+                    oz = zmax_w
         return _new_step(sid, "hole", {
             "position": [ox, oy, oz],
             "diameter_mm": top_d,
             "depth_mm": depth,
-            "direction": _axis_dir_to_str(axis_dir),
+            "direction": dir_str,
         })
 
     # Default — extrude_pocket with placeholder rectangular sketch sized to
@@ -2397,7 +2439,12 @@ def _build_plan(
         # FAILing the entire plan on roundoff-scale deltas.
         _diams = h.get("diameters_mm") or []
         _d = float(min(_diams)) if _diams else 0.0
-        _dp = float(h.get("depth_mm") or 0.0)
+        # COMPLEX-CAD fix (2026-06-07): match the _hole_step default depth
+        # fallback (line 284: ``depth = float(hole.get("depth_mm") or 5.0)``).
+        # Earlier ``or 0.0`` silently dropped any catalog hole whose
+        # depth_mm was unset — on a 1018-face industrial part this caused
+        # 74 of 143 holes to vanish before plan emission.
+        _dp = float(h.get("depth_mm") or 5.0)
         if _predicted_cylinder_volume_mm3(_d, _dp) < _MIN_EMITTED_CUT_MM3:
             continue
         # Round-body guard: skip ±Z holes whose XY position falls outside
