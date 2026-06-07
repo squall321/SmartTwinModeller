@@ -55,6 +55,51 @@ def _load(family, name):
 
 _DEFAULT_FACE_SELECTOR: dict[str, Any] = {"kind": "face_named", "name": "top"}
 _BOTTOM_FACE_SELECTOR: dict[str, Any] = {"kind": "face_named", "name": "bottom"}
+_RIGHT_FACE_SELECTOR: dict[str, Any] = {"kind": "face_named", "name": "right"}
+_LEFT_FACE_SELECTOR:  dict[str, Any] = {"kind": "face_named", "name": "left"}
+_BACK_FACE_SELECTOR:  dict[str, Any] = {"kind": "face_named", "name": "back"}
+_FRONT_FACE_SELECTOR: dict[str, Any] = {"kind": "face_named", "name": "front"}
+
+# COMPLEX-CAD fix (2026-06-08): map (axis_idx, sign) → entry face selector
+# so non-Z features get the correct face. axis_idx: 0=X, 1=Y, 2=Z.
+# Sign: +1 if axis_dir points TOWARD the entry-face exterior normal
+# (i.e. the cut drills INTO the body opposite to the dir). Convention
+# matches the catalog's axis_dir (points outward through the open face).
+_AXIS_TO_FACE_SELECTOR: dict[tuple[int, int], dict[str, Any]] = {
+    (2, +1): _DEFAULT_FACE_SELECTOR,  # +Z → top
+    (2, -1): _BOTTOM_FACE_SELECTOR,
+    (0, +1): _RIGHT_FACE_SELECTOR,
+    (0, -1): _LEFT_FACE_SELECTOR,
+    (1, +1): _BACK_FACE_SELECTOR,
+    (1, -1): _FRONT_FACE_SELECTOR,
+}
+
+
+def _dominant_axis_sign(axis_dir: Any) -> tuple[int, int] | None:
+    """Return (axis_idx, sign) for the dominant component of ``axis_dir``,
+    or None if no component crosses the 0.5 threshold."""
+    try:
+        comps = [abs(float(axis_dir[i])) for i in range(3)]
+    except Exception:
+        return None
+    if not comps or max(comps) < 0.5:
+        return None
+    axis_idx = comps.index(max(comps))
+    try:
+        sgn = 1 if float(axis_dir[axis_idx]) > 0 else -1
+    except Exception:
+        sgn = 1
+    return (axis_idx, sgn)
+
+
+def _direction_str_from_axis(axis_idx: int, into_sign: int) -> str:
+    """COMPLEX-CAD fix (2026-06-08): direction string pointing INTO the body
+    from the entry face. into_sign = -1 if the catalog's axis_dir points
+    outward (so drilling direction is opposite); +1 if it already points
+    inward.
+    """
+    char = "XYZ"[axis_idx]
+    return f"{'+' if into_sign > 0 else '-'}{char}"
 
 # Minimum predicted cut volume (mm³) for an emitted hole/pocket. Below this
 # the executor's volume_decreased PostCondition (default 0.01 mm³) trips on
@@ -203,37 +248,31 @@ def _pick_face_selector(
     axis_dir: Any,
     bbox: tuple[float, float, float, float, float, float] | None,
 ) -> dict[str, Any]:
-    """Choose top vs bottom face selector based on feature axis & body bbox.
+    """Choose entry-face selector based on the feature's axis & body bbox.
 
-    Top-face features have axis_origin.z near zmax (or axis pointing -Z from
-    above). Bottom-face features have axis_origin.z near zmin (or axis +Z
-    from below). Falls back to top when ambiguous or bbox unavailable.
+    COMPLEX-CAD fix (2026-06-08): generalized to all 6 axis-aligned faces.
+    The catalog's ``axis_dir`` points outward through the feature's open
+    face, so the entry face has the matching outward normal.
+
+    Falls back to top when the axis is ambiguous (all components < 0.5),
+    matching prior behavior.
     """
-    if bbox is None:
+    if bbox is None and axis_dir is None:
         return _DEFAULT_FACE_SELECTOR
-    try:
-        # Primary signal: axis_dir points outward through the OPEN face of
-        # the hole/pocket (extract_feature_catalog convention). +Z ⇒ open
-        # face is the body's top; -Z ⇒ bottom.
-        if axis_dir is not None:
-            try:
-                az = float(axis_dir[2])
-                if abs(az) > 0.5:
-                    return (
-                        _DEFAULT_FACE_SELECTOR if az > 0
-                        else _BOTTOM_FACE_SELECTOR
-                    )
-            except Exception:
-                pass
-        # Fallback: distance from axis_origin.z to the nearer Z face.
-        if axis_origin is not None:
+    if axis_dir is not None:
+        sel = _dominant_axis_sign(axis_dir)
+        if sel is not None:
+            return _AXIS_TO_FACE_SELECTOR.get(sel, _DEFAULT_FACE_SELECTOR)
+    # Fallback: distance from axis_origin to nearest Z face (legacy path).
+    if bbox is not None and axis_origin is not None:
+        try:
             z = float(axis_origin[2])
             zmin, zmax = float(bbox[2]), float(bbox[5])
             if abs(z - zmin) < abs(z - zmax):
                 return _BOTTOM_FACE_SELECTOR
-        return _DEFAULT_FACE_SELECTOR
-    except Exception:
-        return _DEFAULT_FACE_SELECTOR
+        except Exception:
+            pass
+    return _DEFAULT_FACE_SELECTOR
 
 
 def _world_to_box_shift(
@@ -353,44 +392,26 @@ def _hole_step(
 
     # Direction inferred from dominant axis component.
     dir_str = _axis_dir_to_str(axis_dir)
-    # Face-aware direction + position correction. The catalog stores
-    # axis_origin at the cylindrical face's anchor (which can be either
-    # cap), and axis_dir as the cylinder's parametric axis (which is NOT
-    # necessarily the drilling direction). The hole skill expects the
-    # ``position`` to be the entry point and ``direction`` to point INTO
-    # the body. For ±Z holes we pick that direction from the face selector
-    # — bottom face ⇒ drill +Z (upward into slab); top face ⇒ drill -Z
-    # (downward into slab) — and clamp the entry Z to the matching bbox
-    # face so the cylinder always overlaps the placeholder slab regardless
-    # of the catalog's axis_origin Z (which may sit at the deep cap, not
-    # the entry).
-    try:
-        _az = abs(float(axis_dir[2]))
-    except Exception:
-        _az = 0.0
-    if _az > 0.5 and bbox is not None:
-        zmin_w = float(bbox[2])
-        zmax_w = float(bbox[5])
-        if shift != (0.0, 0.0, 0.0):
-            # Box-mode: after shift the slab spans z=0 .. (zmax-zmin).
-            slab_top_z = zmax_w - zmin_w
-            if face_sel is _BOTTOM_FACE_SELECTOR:
-                dir_str = "+Z"
-                oz = 0.0
-            else:
-                dir_str = "-Z"
-                oz = slab_top_z
-        else:
-            # COMPLEX-CAD fix (2026-06-07): preserve_brep / import_step
-            # modes used to leave oz at the catalog's axis_origin Z (often
-            # the deep cap) which started cuts mid-body. Clamp to the
-            # entry-face Z so the cylinder fully penetrates.
-            if face_sel is _BOTTOM_FACE_SELECTOR:
-                dir_str = "+Z"
-                oz = zmin_w
-            else:
-                dir_str = "-Z"
-                oz = zmax_w
+    # COMPLEX-CAD fix (2026-06-08): generalized 6-axis entry correction.
+    # The catalog stores axis_origin at the cylindrical face's anchor
+    # (often the deep cap, not the entry) and axis_dir as the OUTWARD
+    # normal of the open face. The generic ``hole`` skill expects the
+    # ``position`` to be at the entry face and ``direction`` to point
+    # INTO the body. Clamp the position's dominant axis component to the
+    # bbox face matching ``axis_dir``'s sign, and set direction opposite
+    # of axis_dir so the drill goes into the body.
+    axis_sel = _dominant_axis_sign(axis_dir)
+    if axis_sel is not None and bbox is not None:
+        axis_idx, sgn = axis_sel
+        bmin_w = float(bbox[axis_idx])
+        bmax_w = float(bbox[axis_idx + 3])
+        entry_w = bmax_w if sgn > 0 else bmin_w
+        # shift converts world → local; identity for preserve_brep / import_step.
+        entry_local = entry_w + float(shift[axis_idx])
+        pos = [ox, oy, oz]
+        pos[axis_idx] = entry_local
+        ox, oy, oz = pos[0], pos[1], pos[2]
+        dir_str = _direction_str_from_axis(axis_idx, -sgn)
     return _new_step(sid, "hole", {
         "position": [ox, oy, oz],
         "diameter_mm": primary_d,
@@ -434,34 +455,22 @@ def _pocket_step(
 
     # Circular pockets whose depth dominates → treat as a raw hole.
     if top_d > 0 and depth / max(top_d, 1e-3) >= 1.5:
-        # COMPLEX-CAD fix (2026-06-07): mirror the entry-Z / direction
-        # correction from ``_hole_step``. Without it, pocket-as-hole
-        # branches emit cuts at the catalog's axis_origin Z (often the
-        # deep cap) which leaves cylindrical residue that the regen
-        # detector reclassifies as bosses.
+        # COMPLEX-CAD fix (2026-06-08): generalized 6-axis entry correction
+        # mirrors _hole_step. Without it, pocket-as-hole branches emit cuts
+        # at the catalog's axis_origin (often the deep cap) which leave
+        # cylindrical residue that the regen detector reclassifies as bosses.
         dir_str = _axis_dir_to_str(axis_dir)
-        try:
-            _az = abs(float(axis_dir[2]))
-        except Exception:
-            _az = 0.0
-        if _az > 0.5 and bbox is not None:
-            zmin_w = float(bbox[2])
-            zmax_w = float(bbox[5])
-            if shift != (0.0, 0.0, 0.0):
-                slab_top_z = zmax_w - zmin_w
-                if face_sel is _BOTTOM_FACE_SELECTOR:
-                    dir_str = "+Z"
-                    oz = 0.0
-                else:
-                    dir_str = "-Z"
-                    oz = slab_top_z
-            else:
-                if face_sel is _BOTTOM_FACE_SELECTOR:
-                    dir_str = "+Z"
-                    oz = zmin_w
-                else:
-                    dir_str = "-Z"
-                    oz = zmax_w
+        axis_sel = _dominant_axis_sign(axis_dir)
+        if axis_sel is not None and bbox is not None:
+            axis_idx, sgn = axis_sel
+            bmin_w = float(bbox[axis_idx])
+            bmax_w = float(bbox[axis_idx + 3])
+            entry_w = bmax_w if sgn > 0 else bmin_w
+            entry_local = entry_w + float(shift[axis_idx])
+            pos = [ox, oy, oz]
+            pos[axis_idx] = entry_local
+            ox, oy, oz = pos[0], pos[1], pos[2]
+            dir_str = _direction_str_from_axis(axis_idx, -sgn)
         return _new_step(sid, "hole", {
             "position": [ox, oy, oz],
             "diameter_mm": top_d,
@@ -513,14 +522,26 @@ def _pocket_step(
     else:
         length_mm = size
         width_mm = size
+    # COMPLEX-CAD fix (2026-06-08): for non-Z faces emit the TWO in-plane
+    # world coords as (center_x_mm, center_y_mm). The 3rd coord (the face's
+    # normal axis) gets filled in by the resolver from the face centroid.
+    # Without this, world Z is dropped on side-face pockets and every cut
+    # stacks at the face centroid → zero-delta SKIP.
+    face_name = face_sel.get("name") if isinstance(face_sel, dict) else None
+    if face_name in ("left", "right"):
+        cx_emit, cy_emit = oy, oz
+    elif face_name in ("front", "back"):
+        cx_emit, cy_emit = ox, oz
+    else:
+        cx_emit, cy_emit = ox, oy
     return _new_step(sid, "extrude_pocket", {
         "face_selector": face_sel,
         "sketch": {
             "kind": "rectangle",
             "length_mm": float(length_mm),
             "width_mm": float(width_mm),
-            "center_x_mm": ox,
-            "center_y_mm": oy,
+            "center_x_mm": float(cx_emit),
+            "center_y_mm": float(cy_emit),
         },
         "depth_mm": depth,
     })
@@ -1993,15 +2014,13 @@ def _build_plan(
     #    specialized matchers (magnet disc → magnet_pocket_axial, bearing
     #    seat → bearing_bore). Both gated by confidence >= 0.6 so noisy
     #    pockets fall through to the generic path.
-    # PACK B — drop non-Z-axis pockets when primary axis is X or Y. The
-    # placeholder box plan can only cut from ±Z faces via face_named, so
-    # side-drilled cylinders (e.g. terminal pads on SMD packages) would
-    # produce zero-delta cuts and trip volume_decreased.
-    _pockets_axis_filtered = [
-        p for p in pockets
-        if _pocket_is_axis_aligned(p)
-        and (primary_axis == "Z" or _feature_axis_is_z(p))
-    ]
+    # COMPLEX-CAD fix (2026-06-08): used to drop non-Z pockets when primary
+    # axis was X or Y (PACK B comment). Now that _heuristic_named_face
+    # supports front/back/left/right and _pick_face_selector picks the
+    # correct face from axis_dir, side-drilled pockets can be emitted
+    # against their natural entry face. Keep _pocket_is_axis_aligned to
+    # filter genuine diagonals.
+    _pockets_axis_filtered = [p for p in pockets if _pocket_is_axis_aligned(p)]
     pockets_sorted = sorted(
         _pockets_axis_filtered,
         key=lambda p: -float(p.get("top_d_mm") or 0.0),
@@ -2403,14 +2422,11 @@ def _build_plan(
                 handled_holes_geom.append(h)
 
     # 7. Holes, largest diameter first ─────────────────────────────────────
-    # PACK B — drop non-Z holes when primary axis is X or Y (see pocket
-    # filter above for rationale).
-    _holes_axis_filtered = [
-        h for h in holes
-        if primary_axis == "Z" or _feature_axis_is_z(h)
-    ]
+    # COMPLEX-CAD fix (2026-06-08): primary_axis != "Z" guard removed.
+    # Side-drilled holes now emit against their natural entry face via the
+    # generalized _pick_face_selector + _hole_step 6-axis correction.
     holes_sorted = sorted(
-        _holes_axis_filtered,
+        holes,
         key=lambda h: -float(max(h.get("diameters_mm") or [0.0])),
     )
     # When the body's bbox XY aspect ratio is near square (likely a cap or

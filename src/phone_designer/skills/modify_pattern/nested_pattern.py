@@ -128,10 +128,10 @@ class NestedPattern(SkillBase):
     class Args(BaseModel):
         face_selector: SelectorRef
         # Feature template
-        profile_diameter_mm: float = Field(gt=0, le=100)
+        profile_diameter_mm: float = Field(gt=0, le=10000)
         operation: Literal["pocket", "hole", "boss"]
-        feature_depth_mm: float | None = Field(default=None, gt=0, le=200)
-        feature_height_mm: float | None = Field(default=None, gt=0, le=200)
+        feature_depth_mm: float | None = Field(default=None, gt=0, le=10000)
+        feature_height_mm: float | None = Field(default=None, gt=0, le=10000)
         # Outer/inner sub-pattern selection
         outer_pattern_kind: Literal["linear", "circular"]
         outer_params: dict[str, Any]

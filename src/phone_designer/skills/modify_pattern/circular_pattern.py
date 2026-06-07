@@ -50,13 +50,13 @@ class CircularPattern(SkillBase):
     class Args(BaseModel):
         face_selector: SelectorRef
         # Feature template
-        profile_diameter_mm: float = Field(gt=0, le=100)
+        profile_diameter_mm: float = Field(gt=0, le=10000)
         operation: Literal["pocket", "hole", "boss"]
-        feature_depth_mm: float | None = Field(default=None, gt=0, le=200)
-        feature_height_mm: float | None = Field(default=None, gt=0, le=200)
+        feature_depth_mm: float | None = Field(default=None, gt=0, le=10000)
+        feature_height_mm: float | None = Field(default=None, gt=0, le=10000)
         # Pattern
-        count: int = Field(ge=2, le=200)
-        pitch_radius_mm: float = Field(gt=0, le=500)
+        count: int = Field(ge=2, le=10000)
+        pitch_radius_mm: float = Field(gt=0, le=10000)
         center_x_mm: float = 0.0
         center_y_mm: float = 0.0
         start_angle_deg: float = 0.0

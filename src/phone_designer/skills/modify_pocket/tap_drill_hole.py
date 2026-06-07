@@ -75,7 +75,7 @@ class TapDrillHole(SkillBase):
             description="face-local (x, y) of hole axis (anchored at face center)",
         )
         thread_spec: str = Field(description="e.g. 'M3', 'M4', ... — key in threads_metric.yaml")
-        depth_mm: float = Field(gt=0, le=200,
+        depth_mm: float = Field(gt=0, le=10000,
                                  description="blind tap-drill depth into body")
 
     def _apply(self, body: Any, args: Args) -> SkillResult:

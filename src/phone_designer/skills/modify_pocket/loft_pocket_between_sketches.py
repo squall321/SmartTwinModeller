@@ -58,7 +58,7 @@ class LoftPocketBetweenSketches(SkillBase):
         face_selector: SelectorRef
         upper_sketch: SketchSpec
         lower_sketch: SketchSpec
-        depth_mm: float = Field(gt=0, le=200)
+        depth_mm: float = Field(gt=0, le=10000)
         floor_blend_r_mm: float = Field(default=0.0, ge=0.0, le=10.0)
 
     def _apply(self, body: Any, args: Args) -> SkillResult:

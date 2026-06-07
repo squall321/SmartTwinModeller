@@ -39,8 +39,8 @@ from phone_designer.skills._spec import SkillBase, SkillResult
 class HoleArray(SkillBase):
     class Args(BaseModel):
         points: list[tuple[float, float, float]] = Field(min_length=1)
-        diameter_mm: float = Field(gt=0, le=100)
-        depth_mm: float | None = Field(default=None, gt=0, le=200,
+        diameter_mm: float = Field(gt=0, le=10000)
+        depth_mm: float | None = Field(default=None, gt=0, le=10000,
                                         description="None = through")
         direction: Literal["+X", "-X", "+Y", "-Y", "+Z", "-Z"] = "-Z"
 

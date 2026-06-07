@@ -48,7 +48,7 @@ class GrillePattern(SkillBase):
         hole_diameter_mm: float = Field(default=1.0, gt=0, le=10)
         spacing_mm: float = Field(default=2.5, gt=0, le=20,
                                    description="이웃 hole 의 중심 간 거리")
-        depth_mm: float | None = Field(default=None, gt=0, le=200,
+        depth_mm: float | None = Field(default=None, gt=0, le=10000,
                                          description="None = through")
         direction: Literal["+X", "-X", "+Y", "-Y", "+Z", "-Z"] = "-Z"
 

@@ -63,13 +63,13 @@ class VariablePattern(SkillBase):
     class Args(BaseModel):
         face_selector: SelectorRef
         # Feature template (base diameter — scaled per instance)
-        profile_diameter_mm: float = Field(gt=0, le=100)
+        profile_diameter_mm: float = Field(gt=0, le=10000)
         operation: Literal["pocket", "hole", "boss"]
-        feature_depth_mm: float | None = Field(default=None, gt=0, le=200)
-        feature_height_mm: float | None = Field(default=None, gt=0, le=200)
+        feature_depth_mm: float | None = Field(default=None, gt=0, le=10000)
+        feature_height_mm: float | None = Field(default=None, gt=0, le=10000)
         # Pattern (linear backbone)
-        count: int = Field(ge=2, le=200)
-        spacing_mm: float = Field(gt=0, le=500)
+        count: int = Field(ge=2, le=10000)
+        spacing_mm: float = Field(gt=0, le=10000)
         direction: Literal["X", "Y"] = "X"
         start_offset_x_mm: float = 0.0
         start_offset_y_mm: float = 0.0

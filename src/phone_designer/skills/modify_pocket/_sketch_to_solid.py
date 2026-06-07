@@ -6,7 +6,11 @@ using raw OCCT, optionally apply 2D vertex fillets, then `BRepPrimAPI_MakePrism`
 to extrude it. Finally, transform the prism so the face base lies on the
 target face and the prism axis points along the face normal (into/out).
 
-Non-Z faces still raise NotImplementedError (consistent with Phase 1 scope).
+COMPLEX-CAD fix (2026-06-08): arbitrary planar faces (±X / ±Y / ±Z / tilted)
+are supported via a local→world rigid placement built on gp_Ax3 +
+gp_Trsf.SetTransformation. The world XY coordinates the planner emits in
+sketch.center_x_mm/y_mm are projected onto the face's local (u, v) frame
+before the planar face is built.
 """
 from __future__ import annotations
 
@@ -46,20 +50,77 @@ from phone_designer.skills.modify_pocket._sketch import (
 # ───────────────────────────────────────────────────────────────────────────
 
 
-def _face_plane_normal(face) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
-    """planar face 의 (center, outward_normal) 반환."""
+def _face_local_frame(face) -> tuple[
+    tuple[float, float, float],  # origin (face centroid)
+    tuple[float, float, float],  # u_axis (unit, in plane)
+    tuple[float, float, float],  # v_axis = n x u
+    tuple[float, float, float],  # outward normal n
+]:
+    """COMPLEX-CAD fix (2026-06-08): return the planar face's right-handed
+    local frame so the planner's world (x, y) can be projected into the
+    face's (u, v) before the planar sketch is built.
+
+    - origin = face centroid (CentreOfMass of the planar face)
+    - n      = outward normal (face orientation taken into account)
+    - u      = in-plane axis derived from gp_Pln's XAxis, re-orthogonalized
+               against n so (u, v, n) is right-handed.
+    - v      = n x u
+    """
     surf = BRepAdaptor_Surface(face)
     if surf.GetType() != GeomAbs_Plane:
         raise NotImplementedError("non-planar face 위의 sketch 는 Phase 2 이후")
     pl = surf.Plane()
-    n = pl.Axis().Direction()
-    nx, ny, nz = n.X(), n.Y(), n.Z()
+    n_dir = pl.Axis().Direction()
+    nx, ny, nz = n_dir.X(), n_dir.Y(), n_dir.Z()
+    ux, uy, uz = pl.XAxis().Direction().X(), pl.XAxis().Direction().Y(), pl.XAxis().Direction().Z()
     if face.Orientation() == TopAbs_REVERSED:
         nx, ny, nz = -nx, -ny, -nz
+    # Re-orthogonalize u against n (Gram-Schmidt, defensive against gp_Pln drift).
+    dot = ux * nx + uy * ny + uz * nz
+    ux, uy, uz = ux - dot * nx, uy - dot * ny, uz - dot * nz
+    ul = math.sqrt(ux * ux + uy * uy + uz * uz)
+    if ul < 1e-12:
+        # Degenerate gp_Pln XAxis — pick a fresh axis not parallel to n.
+        if abs(nx) < 0.9:
+            ux, uy, uz = 1.0, 0.0, 0.0
+        else:
+            ux, uy, uz = 0.0, 1.0, 0.0
+        dot = ux * nx + uy * ny + uz * nz
+        ux, uy, uz = ux - dot * nx, uy - dot * ny, uz - dot * nz
+        ul = math.sqrt(ux * ux + uy * uy + uz * uz)
+    ux, uy, uz = ux / ul, uy / ul, uz / ul
+    vx = ny * uz - nz * uy
+    vy = nz * ux - nx * uz
+    vz = nx * uy - ny * ux
     props = GProp_GProps()
     BRepGProp.SurfaceProperties_s(face, props)
     c = props.CentreOfMass()
-    return ((c.X(), c.Y(), c.Z()), (nx, ny, nz))
+    return ((c.X(), c.Y(), c.Z()), (ux, uy, uz), (vx, vy, vz), (nx, ny, nz))
+
+
+def _face_plane_normal(face) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    """Back-compat shim — returns (centroid, outward_normal)."""
+    origin, _u, _v, n = _face_local_frame(face)
+    return (origin, n)
+
+
+def _project_world_to_face_local(
+    world_pt: tuple[float, float, float],
+    origin: tuple[float, float, float],
+    u: tuple[float, float, float],
+    v: tuple[float, float, float],
+) -> tuple[float, float]:
+    """COMPLEX-CAD fix (2026-06-08): project a world point onto the face's
+    (u, v) plane coordinates. Used to interpret sketch.center_x_mm/y_mm
+    (which the planner emits in WORLD XY) consistently regardless of the
+    face's orientation.
+    """
+    dx = world_pt[0] - origin[0]
+    dy = world_pt[1] - origin[1]
+    dz = world_pt[2] - origin[2]
+    lu = dx * u[0] + dy * u[1] + dz * u[2]
+    lv = dx * v[0] + dy * v[1] + dz * v[2]
+    return (lu, lv)
 
 
 # ───────────────────────────────────────────────────────────────────────────
@@ -611,45 +672,67 @@ def build_pocket_tool(
     direction = "into": face 의 normal 반대 (face 안쪽으로 파냄). pocket / hole 용.
     direction = "out":  face 의 normal 방향 (외부로 돌출). plateau / bump 용.
 
-    구현: 현재는 face normal 이 ±Z 인 경우만 지원. 다른 경우 NotImplementedError.
+    COMPLEX-CAD fix (2026-06-08): supports any planar face orientation
+    (±X / ±Y / ±Z / tilted). The planner emits sketch.center_x_mm/y_mm in
+    WORLD XY; we project them into the face's local (u, v) before building
+    the planar wire, then rigid-transform the extruded prism onto the face
+    via gp_Trsf.SetTransformation. Both the Z-only guard and the latent
+    double-translation bug on ±Z faces are eliminated.
     """
-    center, normal = _face_plane_normal(face)
-    nz = normal[2]
-    if abs(nz) <= 0.95:
-        raise NotImplementedError(
-            "non-Z face 위의 pocket/plateau 는 Phase 2 이후 (face-local coord 변환 필요)"
-        )
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+    from OCP.gp import gp_Ax3, gp_Dir, gp_Pnt, gp_Trsf
 
-    # 1. build the planar face in local XY (z=0, normal=+Z)
-    planar_face = _build_planar_face(sketch)
+    origin, u, v, n = _face_local_frame(face)
 
-    # 2. extrude along +Z by depth — prism sits in z ∈ [0, depth]
-    prism = _extrude_face_along_z(planar_face, depth_mm, direction_sign=+1)
+    # 1. Re-project sketch.center_x_mm/y_mm from world coords into face-local
+    #    (u, v). The planner emits center_x_mm/center_y_mm as the two
+    #    IN-PLANE world coords for whichever face is being targeted:
+    #    - ±Z face: (world_x, world_y)
+    #    - ±X face: (world_y, world_z)
+    #    - ±Y face: (world_x, world_z)
+    #    The resolver reconstructs the 3rd world coord from the face centroid
+    #    (it's the face's normal-axis value, constant on the face plane) before
+    #    projecting to face-local (u, v).
+    local_sketch = sketch
+    if hasattr(sketch, "center_x_mm") and hasattr(sketch, "center_y_mm"):
+        try:
+            cx = float(sketch.center_x_mm)
+            cy = float(sketch.center_y_mm)
+            anx, any_, anz = abs(n[0]), abs(n[1]), abs(n[2])
+            if anx > max(any_, anz):
+                # ±X face: emitted (cx, cy) = (world_y, world_z); fill world_x.
+                world_pt = (float(origin[0]), cx, cy)
+            elif any_ > anz:
+                # ±Y face: emitted (cx, cy) = (world_x, world_z); fill world_y.
+                world_pt = (cx, float(origin[1]), cy)
+            else:
+                # ±Z face: emitted (cx, cy) = (world_x, world_y); fill world_z.
+                world_pt = (cx, cy, float(origin[2]))
+            lu, lv = _project_world_to_face_local(world_pt, origin, u, v)
+            local_sketch = sketch.model_copy(update={
+                "center_x_mm": lu,
+                "center_y_mm": lv,
+            })
+        except Exception:
+            local_sketch = sketch
 
-    # 3. translate prism into world position.
-    #    base sketch lives at z=0 +Z extruded. We want the BASE of the extrusion to
-    #    coincide with `center` (the face center), and the prism to grow into/out.
-    #    - top face (nz > 0), direction=into  → prism grows -Z from face → translate by (cx, cy, cz - depth) and extrude was +Z, so we need to flip.
-    #
-    # Simpler: extrude in the right sign based on case so that the prism is already in correct world Z.
-    # We'll re-extrude:
-    if direction == "into" and nz > 0:
-        # face is +Z top, pocket grows -Z. Place prism base at z=center_z, top at center_z - depth
-        prism = _extrude_face_along_z(planar_face, depth_mm, direction_sign=-1)
-        dx, dy, dz = center[0], center[1], center[2]
-    elif direction == "into" and nz < 0:
-        # face is -Z bottom, pocket grows +Z. prism base at center_z, top at center_z + depth
-        prism = _extrude_face_along_z(planar_face, depth_mm, direction_sign=+1)
-        dx, dy, dz = center[0], center[1], center[2]
-    elif direction == "out" and nz > 0:
-        # face is +Z top, plateau grows +Z. prism base at center_z, top at center_z + depth
-        prism = _extrude_face_along_z(planar_face, depth_mm, direction_sign=+1)
-        dx, dy, dz = center[0], center[1], center[2]
-    elif direction == "out" and nz < 0:
-        # face is -Z bottom, plateau grows -Z. prism base at center_z, top at center_z - depth
-        prism = _extrude_face_along_z(planar_face, depth_mm, direction_sign=-1)
-        dx, dy, dz = center[0], center[1], center[2]
-    else:
-        raise NotImplementedError("unreachable")
+    # 2. Build the planar sketch in canonical local XY (face at z=0, +Z normal).
+    planar_face = _build_planar_face(local_sketch)
 
-    return _translate_shape(prism, dx, dy, dz)
+    # 3. Extrude along ±Z in local frame. "into" subtracts material →
+    #    opposite to face normal; "out" adds material → along face normal.
+    direction_sign = -1 if direction == "into" else +1
+    prism = _extrude_face_along_z(planar_face, depth_mm, direction_sign=direction_sign)
+
+    # 4. Rigid-transform local frame (origin, +Z, +X) → face frame (centroid, n, u).
+    local_ax3 = gp_Ax3(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1), gp_Dir(1, 0, 0))
+    face_ax3 = gp_Ax3(
+        gp_Pnt(origin[0], origin[1], origin[2]),
+        gp_Dir(n[0], n[1], n[2]),
+        gp_Dir(u[0], u[1], u[2]),
+    )
+    trsf = gp_Trsf()
+    trsf.SetTransformation(face_ax3, local_ax3)
+    xf = BRepBuilderAPI_Transform(prism, trsf, True)
+    xf.Build()
+    return xf.Shape()

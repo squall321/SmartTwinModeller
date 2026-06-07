@@ -71,7 +71,7 @@ class DowelPinHole(SkillBase):
             description="catalog key, e.g. '3' (ø3 nominal pin)",
         )
         fit: Literal["press", "slip"] = "press"
-        depth_mm: float = Field(gt=0, le=200)
+        depth_mm: float = Field(gt=0, le=10000)
         through: bool = False
 
     def _apply(self, body: Any, args: Args) -> SkillResult:

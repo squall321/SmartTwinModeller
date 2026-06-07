@@ -49,7 +49,7 @@ class ExtrudePocket(SkillBase):
     class Args(BaseModel):
         face_selector: SelectorRef
         sketch: SketchSpec
-        depth_mm: float = Field(gt=0, le=200)
+        depth_mm: float = Field(gt=0, le=10000)
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
         from build123d import Part

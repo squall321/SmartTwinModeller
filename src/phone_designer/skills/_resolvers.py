@@ -260,40 +260,48 @@ def _resolve_tagged_faces(shape, tag: str, *, body=None) -> list:
 
 
 def _heuristic_named_face(shape, name: str) -> list:
-    """face_named 의 stub — top/bottom/side 같은 일반 이름 휴리스틱 매칭.
+    """face_named 의 stub — top/bottom/front/back/left/right 휴리스틱 매칭.
 
-    Phase 2 에서 history map 의 tagged face 와 연동 + face-local 이름 보존.
-
-    Strategy (top 기준):
-        1. planar face 중 normal ≈ +Z, z 중심 최대인 것
-        2. (1) 없으면 단순히 z 중심 최대 face (곡면 dome 등) — Phase 1 의
-           pocket/plateau 는 planar 만 받으므로 후속 step 에서 NotImplemented 가 날 수도.
+    COMPLEX-CAD fix (2026-06-08): support all 6 axis-aligned face names so
+    non-Z features can be emitted by the planner. Convention:
+        top    = +Z normal, largest Z
+        bottom = -Z normal, smallest Z
+        right  = +X normal, largest X
+        left   = -X normal, smallest X
+        back   = +Y normal, largest Y
+        front  = -Y normal, smallest Y
     """
     faces = _all_faces(shape)
     if not faces:
         return []
-    if name == "top":
-        planar = [
-            (f, _face_center(f)[2]) for f in faces
-            if _face_normal_at_center(f)[2] > 0.9
-        ]
-        if planar:
-            planar.sort(key=lambda x: -x[1])
-            return [planar[0][0]]
-        # fallback: 곡면 포함 z 최대 face
-        ranked = sorted(((f, _face_center(f)[2]) for f in faces), key=lambda x: -x[1])
-        return [ranked[0][0]]
-    if name == "bottom":
-        planar = [
-            (f, _face_center(f)[2]) for f in faces
-            if _face_normal_at_center(f)[2] < -0.9
-        ]
-        if planar:
-            planar.sort(key=lambda x: x[1])
-            return [planar[0][0]]
-        ranked = sorted(((f, _face_center(f)[2]) for f in faces), key=lambda x: x[1])
-        return [ranked[0][0]]
-    return []
+
+    # axis index (0=X, 1=Y, 2=Z); sign (+1 / -1); coord-extreme (max/min)
+    _NAME_MAP = {
+        "top":    (2, +1, True),
+        "bottom": (2, -1, False),
+        "right":  (0, +1, True),
+        "left":   (0, -1, False),
+        "back":   (1, +1, True),
+        "front":  (1, -1, False),
+    }
+    if name not in _NAME_MAP:
+        return []
+    axis_idx, sign, want_max = _NAME_MAP[name]
+
+    def _signed_proj(face):
+        n = _face_normal_at_center(face)
+        return float(n[axis_idx])
+
+    def _coord(face):
+        return float(_face_center(face)[axis_idx])
+
+    planar = [(f, _coord(f)) for f in faces if sign * _signed_proj(f) > 0.9]
+    if planar:
+        planar.sort(key=lambda x: -x[1] if want_max else x[1])
+        return [planar[0][0]]
+    # Fallback for non-planar bodies — pick the face with the extreme centroid
+    ranked = sorted(((f, _coord(f)) for f in faces), key=lambda x: -x[1] if want_max else x[1])
+    return [ranked[0][0]]
 
 
 def _resolve_single_face(shape, selector: SelectorBase):

@@ -54,13 +54,13 @@ class PathPattern(SkillBase):
     class Args(BaseModel):
         face_selector: SelectorRef
         # Feature template
-        profile_diameter_mm: float = Field(gt=0, le=100)
+        profile_diameter_mm: float = Field(gt=0, le=10000)
         operation: Literal["pocket", "hole", "boss"]
-        feature_depth_mm: float | None = Field(default=None, gt=0, le=200)
-        feature_height_mm: float | None = Field(default=None, gt=0, le=200)
+        feature_depth_mm: float | None = Field(default=None, gt=0, le=10000)
+        feature_height_mm: float | None = Field(default=None, gt=0, le=10000)
         # Pattern
         path_points: list[tuple[float, float, float]] = Field(min_length=2)
-        count: int = Field(ge=2, le=500)
+        count: int = Field(ge=2, le=10000)
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
         from build123d import Part

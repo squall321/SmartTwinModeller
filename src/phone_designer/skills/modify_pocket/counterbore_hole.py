@@ -78,7 +78,7 @@ class CounterboreHole(SkillBase):
         )
         thread_spec: str = Field(description="e.g. 'M3', 'M4', ... — key in threads_metric.yaml")
         fit: Literal["close", "medium", "coarse"] = "medium"
-        depth_mm: float = Field(gt=0, le=200,
+        depth_mm: float = Field(gt=0, le=10000,
                                  description="clearance-shaft depth BELOW the counterbore floor")
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
