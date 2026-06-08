@@ -2078,13 +2078,35 @@ def _build_plan(
         # We treat top_d ≥ 0.90 × min(body_l, body_w) as a silhouette
         # detection and skip emission — the slab alone is a closer match
         # to the original than slab-minus-silhouette.
+        # COMPLEX-CAD fix (2026-06-08): silhouette guard now tests the
+        # pocket against the entry FACE's in-plane extents (perpendicular
+        # to axis_dir), not just XY. The previous test compared top_d to
+        # min(body_l, body_w), so a side-face pocket whose top_d spans
+        # the body's HEIGHT (not its XY width) — e.g. as1-oc-214's
+        # spurious 100×100 pockets on a 200×150×84 part with face_min=84
+        # — silently passed and produced large erroneous side cuts that
+        # ate adjacent real pockets via zero-delta SKIP.
         if bbox is not None and _td > 0.0:
             try:
                 _bl = float(bbox[3]) - float(bbox[0])
                 _bw = float(bbox[4]) - float(bbox[1])
-                _b_min_xy = min(_bl, _bw)
-                if _b_min_xy > 0.0 and _td >= 0.90 * _b_min_xy:
+                _bh = float(bbox[5]) - float(bbox[2])
+                _extents = [_bl, _bw, _bh]
+                _sel = _dominant_axis_sign(p.get("axis_dir") or [0, 0, 1])
+                if _sel is not None:
+                    _axis_idx, _ = _sel
+                    _in_plane = [_extents[k] for k in range(3) if k != _axis_idx]
+                    _face_min = min(_in_plane)
+                else:
+                    _face_min = min(_bl, _bw)
+                if _face_min > 0.0 and _td >= 0.90 * _face_min:
                     continue
+                # Also drop pockets whose depth eats most of the body
+                # along the drill axis — face-spanning artefact.
+                if _sel is not None:
+                    _axis_extent = _extents[_sel[0]]
+                    if _axis_extent > 0.0 and float(p.get("depth_mm") or 0) >= 0.90 * _axis_extent:
+                        continue
             except Exception:
                 pass
         bearing_match = _match_bearing_bore(p)

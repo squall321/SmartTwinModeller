@@ -279,11 +279,33 @@ def _seed_pocket_faces(faces, body_bbox) -> set[int]:
     return seeds
 
 
-def _components(seeds, pairs):
-    """Connected components of `seeds` linked via shared edges."""
+def _components(seeds, pairs, faces=None, area_ratio_floor=0.0):
+    """Connected components of `seeds` linked via shared edges.
+
+    COMPLEX-CAD fix (2026-06-08): when ``faces`` is supplied AND
+    ``area_ratio_floor`` > 0, skip adjacencies where the two faces' areas
+    differ by more than 1/``area_ratio_floor``. Intended to prevent the
+    connected-component pass from glueing tiny pockets onto adjacent
+    huge pockets.
+
+    Default is 0.0 (no split, backward-compatible). Verified that on
+    as1-oc-214 the silhouette-guard fix in plan_from_feature_catalog
+    already prevents the spurious big cuts that caused the coalescence,
+    so this defensive backstop is opt-in only. Tests on linkrods showed
+    the floor=0.05/0.01 variants over-fragmented small-body pockets.
+    """
+    areas: dict[int, float] | None = None
+    if faces is not None:
+        from phone_designer.skills._resolvers import _face_area
+        areas = {s: max(_face_area(faces[s]), 1e-9) for s in seeds}
+
     adj: dict[int, set[int]] = {s: set() for s in seeds}
     for a, b in pairs:
         if a in seeds and b in seeds:
+            if areas is not None:
+                aa, ab = areas[a], areas[b]
+                if min(aa, ab) / max(aa, ab) < area_ratio_floor:
+                    continue
             adj[a].add(b)
             adj[b].add(a)
 
@@ -575,7 +597,10 @@ class ClassifyPockets(SkillBase):
 
         pairs = _shared_face_pairs(shape, faces)
         seeds = _seed_pocket_faces(faces, body_bbox)
-        comps = _components(seeds, pairs)
+        # COMPLEX-CAD fix (2026-06-08): pass faces so _components can split
+        # heterogeneous-scale neighbours (prevents small pockets glueing
+        # onto adjacent huge pocket walls — see as1-oc-214 analysis).
+        comps = _components(seeds, pairs, faces=faces)
 
         # COMPLEX-CAD fix (2026-06-07): bbox-relative filter thresholds.
         # The fixed-mm filters (min_top_d_mm=2.0 etc) were iPhone-tuned and

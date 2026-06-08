@@ -115,6 +115,54 @@ def _surface_kind_int(face) -> int:
     return int(BRepAdaptor_Surface(face).GetType())
 
 
+def _boss_face_indices_in_pocket(boss: dict, pockets: list) -> bool:
+    """COMPLEX-CAD fix (2026-06-08): True if the boss shares ANY face_index
+    with any pocket. Both detectors index into the same _all_faces(shape)
+    list so indices are directly comparable. Catches the common case
+    where a cylindrical pocket wall is also tagged as a cylindrical-boss
+    cluster — on as1_pe_203 this removes 3 phantom bosses.
+    """
+    bf = set(boss.get("face_indices") or [])
+    if not bf:
+        return False
+    for p in pockets or []:
+        if not isinstance(p, dict):
+            continue
+        pf = p.get("face_indices") or []
+        if bf.intersection(pf):
+            return True
+    return False
+
+
+def _boss_xy_in_any_pocket(boss: dict, pockets: list) -> bool:
+    """COMPLEX-CAD fix (2026-06-08): True if the boss centre XY lies inside
+    any pocket's circular footprint (axis_origin XY + top_d_mm/2 radius).
+    Mirrors _cone_in_any_hole so cylindrical residue inside a pocket cap
+    is filtered even when face indexing diverges between detector runs.
+    """
+    c = boss.get("center") or [0.0, 0.0, 0.0]
+    try:
+        bx, by = float(c[0]), float(c[1])
+    except Exception:
+        return False
+    for p in pockets or []:
+        if not isinstance(p, dict):
+            continue
+        origin = p.get("axis_origin") or [0.0, 0.0, 0.0]
+        td = float(p.get("top_d_mm") or 0.0)
+        if td <= 0.0:
+            continue
+        try:
+            ox, oy = float(origin[0]), float(origin[1])
+        except Exception:
+            continue
+        r = 0.5 * td + 0.5
+        dx, dy = bx - ox, by - oy
+        if (dx * dx + dy * dy) ** 0.5 <= r:
+            return True
+    return False
+
+
 def _cone_in_any_hole(cx: float, cy: float, holes: list) -> bool:
     """COMPLEX-CAD fix (2026-06-07): True if a cone's XY centroid lies inside
     the radius of any detected hole. Used to suppress countersink cones from
@@ -616,6 +664,22 @@ class ExtractFeatureCatalog(SkillBase):
         ribs       = ribs_res.extras.get("ribs", [])             if ribs_res    else []
         lugs       = lugs_res.extras.get("lugs", [])             if lugs_res    else []
         symmetries = sym_res.extras.get("mirror_planes", [])     if sym_res     else []
+
+        # COMPLEX-CAD fix (2026-06-08): drop bosses whose face_indices
+        # overlap any pocket, or whose XY centroid lies inside any pocket's
+        # circular footprint. detect_bosses' "above base plane" heuristic
+        # picks up cylindrical POCKET walls as cylindrical-boss candidates,
+        # and the cluster classifier weighs cylinder area enough to commit.
+        # Mirrors the existing _cone_in_any_hole pattern (loft features).
+        if isinstance(pockets, list) and pockets and isinstance(bosses, list):
+            _bosses_filtered: list[dict] = []
+            for _b in bosses:
+                if _boss_face_indices_in_pocket(_b, pockets):
+                    continue
+                if _boss_xy_in_any_pocket(_b, pockets):
+                    continue
+                _bosses_filtered.append(_b)
+            bosses = _bosses_filtered
 
         # ── detect_*_array (linear + circular) ─────────────────────────────
         patterns: list[dict] = []

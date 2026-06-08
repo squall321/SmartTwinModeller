@@ -33,8 +33,42 @@ _KINDS = (
     "symmetries", "patterns",
 )
 
-_TOL_XYZ_MM = 5.0   # spatial pairing tolerance — gen large to catch drift
+_TOL_XYZ_MM_FLOOR = 5.0   # minimum spatial tolerance (phone-scale)
+_TOL_XYZ_BBOX_FRAC = 0.005  # 0.5% of bbox diagonal (industrial-scale)
 _TOL_DIM_FRAC = 0.15  # +/- 15% primary-dim drift considered "same feature"
+
+# COMPLEX-CAD fix (2026-06-08): scale-aware xyz tolerance. The fixed 5 mm
+# floor is 7% of bbox on a 75 mm phone but only 0.07% on a 6.7 m
+# industrial assembly; legitimate planner-side bbox-clamp + face-projection
+# routinely drift centroids 0.1-0.5% of bbox. With the old fixed gate,
+# real pairs failed the spatial test and overall_match_ratio collapsed.
+_TOL_XYZ_MM = _TOL_XYZ_MM_FLOOR  # back-compat alias; never used in new code
+
+
+def _bbox_diag_mm(catalog: dict | None) -> float | None:
+    """Return the bbox diagonal length from a catalog's initial_bbox_mm
+    (populated by extract_feature_catalog). None if missing/malformed.
+    """
+    if not isinstance(catalog, dict):
+        return None
+    bb = catalog.get("initial_bbox_mm")
+    if not isinstance(bb, (list, tuple)) or len(bb) < 6:
+        return None
+    try:
+        return (
+            (float(bb[3]) - float(bb[0])) ** 2
+            + (float(bb[4]) - float(bb[1])) ** 2
+            + (float(bb[5]) - float(bb[2])) ** 2
+        ) ** 0.5
+    except Exception:
+        return None
+
+
+def _adaptive_xyz_tol(ca: dict, cb: dict) -> float:
+    """Effective spatial tolerance = max(floor, frac × max(bbox_a, bbox_b))."""
+    da = _bbox_diag_mm(ca) or 0.0
+    db = _bbox_diag_mm(cb) or 0.0
+    return max(_TOL_XYZ_MM_FLOOR, max(da, db) * _TOL_XYZ_BBOX_FRAC)
 
 
 def _counts(catalog: dict) -> dict[str, int]:
@@ -224,12 +258,19 @@ class FeatureFidelityDiff(SkillBase):
         matched_total = 0
         union_total = 0
 
+        # COMPLEX-CAD fix (2026-06-08): compute adaptive xyz tolerance once
+        # before the loop so industrial-scale parts (bbox > 1 m) get a
+        # bbox-relative gate instead of the 5 mm floor.
+        tol_xyz = _adaptive_xyz_tol(ca, cb)
+
         for k in _KINDS:
             a = counts_a[k]
             b = counts_b[k]
             a_list = ca.get(k) or []
             b_list = cb.get(k) or []
-            pairs, unmatched_a, unmatched_b = _greedy_pair(a_list, b_list, k)
+            pairs, unmatched_a, unmatched_b = _greedy_pair(
+                a_list, b_list, k, tol_xyz_mm=tol_xyz,
+            )
             all_pairs[k] = pairs
             by_kind[k] = {"a": a, "b": b, "diff": b - a, "matched": len(pairs)}
             matched_total += len(pairs)
@@ -246,6 +287,7 @@ class FeatureFidelityDiff(SkillBase):
             "extra_in_b": extra_in_b,
             "avg_dim_drift_pct": _avg_dim_drift_pct_from_pairs(ca, cb, all_pairs),
             "overall_match_ratio": overall,
+            "xyz_tol_mm": round(tol_xyz, 4),
         }
         return SkillResult(
             body=body,
