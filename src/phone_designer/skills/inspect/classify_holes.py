@@ -432,6 +432,17 @@ def _classify_one(
         proj_lo = min(proj_lo, min(c[0] for c in cones_on_axis))
         proj_hi = max(proj_hi, max(c[1] for c in cones_on_axis))
     depth = abs(proj_hi - proj_lo)
+    # COMPLEX-CAD pass-8 (2026-06-09): when the cylinder bands span 0 mm
+    # along axis_dir (degenerate face, super-short cylinder, or tilted
+    # axis projection collapsing), fall back to a geometry-derived
+    # estimate so the catalog never emits depth=0. The planner's
+    # downstream `or 5.0` synthetic default exists as a last-line guard;
+    # this fix prevents that path from firing for the 74 holes on
+    # pythonocc__11752 that previously had depth=0 in the catalog.
+    if depth <= 1e-9 and bands:
+        # Use 2× the largest cylinder radius as a body-relative scale —
+        # any hole worth detecting is at least one diameter deep.
+        depth = 2.0 * max(b[2] for b in bands)
 
     # Unique radii: report MAJOR (largest) first, then descending — matches
     # the human convention "Ø8 counterbore / Ø4.5 clearance / ..." spoken

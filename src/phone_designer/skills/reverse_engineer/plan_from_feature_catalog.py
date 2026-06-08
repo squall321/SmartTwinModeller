@@ -120,6 +120,23 @@ _MIN_EMITTED_CUT_MM3 = 0.02
 # fragments mis-classified by detect_bosses.
 _BOSS_TOP_ANCHOR_RATIO = 0.10
 
+# COMPLEX-CAD pass-8 (2026-06-09): silhouette guard threshold. A pocket
+# whose top_d ≥ this fraction × the entry FACE's smaller in-plane extent
+# (or whose depth ≥ this fraction × the perpendicular bbox extent) is
+# treated as a "silhouette" — the detector accidentally walked the
+# whole body outline rather than a real cavity. Empirical 0.90 catches
+# detector errors on PinHeader / as1-oc-214; loosening to 0.95 would
+# leak silhouettes back in, tightening to 0.80 starts dropping real
+# pockets that span the body intentionally. Overridable via
+# PHONE_DESIGNER_POCKET_SILHOUETTE_FRAC env var.
+import os as _os
+try:
+    _POCKET_SILHOUETTE_FRAC = float(
+        _os.environ.get("PHONE_DESIGNER_POCKET_SILHOUETTE_FRAC", "0.90")
+    )
+except ValueError:
+    _POCKET_SILHOUETTE_FRAC = 0.90
+
 
 def _predicted_cylinder_volume_mm3(diameter_mm: float, depth_mm: float) -> float:
     """Predicted cylinder volume for a hole/pocket cut. Used to drop catalog
@@ -2154,13 +2171,13 @@ def _build_plan(
                     _face_min = min(_in_plane)
                 else:
                     _face_min = min(_bl, _bw)
-                if _face_min > 0.0 and _td >= 0.90 * _face_min:
+                if _face_min > 0.0 and _td >= _POCKET_SILHOUETTE_FRAC * _face_min:
                     continue
                 # Also drop pockets whose depth eats most of the body
                 # along the drill axis — face-spanning artefact.
                 if _sel is not None:
                     _axis_extent = _extents[_sel[0]]
-                    if _axis_extent > 0.0 and float(p.get("depth_mm") or 0) >= 0.90 * _axis_extent:
+                    if _axis_extent > 0.0 and float(p.get("depth_mm") or 0) >= _POCKET_SILHOUETTE_FRAC * _axis_extent:
                         continue
             except Exception:
                 pass
