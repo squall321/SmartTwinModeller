@@ -1765,6 +1765,21 @@ def _build_plan(
     sweep_features = catalog.get("sweep_features") or []
     loft_features = catalog.get("loft_features") or []
     revolve_features = catalog.get("revolve_features") or []
+
+    # COMPLEX-CAD fix (2026-06-08): in preserve_brep mode the executor
+    # starts from the ORIGINAL body, so any ADDITIVE step (boss / rib /
+    # lug / sweep-boss / loft-boss) DUPLICATES topology the body already
+    # has. On 11752 this inflated regen volume by 320 %. Drop all
+    # additive feature lists here so only SUBTRACTIVE steps
+    # (pockets / holes / sweep-pocket / loft-pocket / revolve-pocket)
+    # remain. The result is a no-op-or-shrink chain that converges to
+    # the original body, not an inflated version of it.
+    if base_step_kind == "preserve_brep":
+        bosses = []
+        ribs = []
+        lugs = []
+        sweep_features = [f for f in sweep_features if (f.get("kind") or "pocket") != "boss"]
+        loft_features = [f for f in loft_features if (f.get("kind") or "pocket") != "boss"]
     # ``text_features`` is forward-compatible: extract_feature_catalog does
     # not currently emit it, but if a future detector adds engraved/embossed
     # text entries we map them here. Accept either ``text_features`` or

@@ -95,21 +95,23 @@ def _measure(body: Any) -> dict[str, float] | None:
     if shape is None:
         return None
 
-    # COMPLEX-CAD fix (2026-06-08): keep the SIGNED volume from
-    # VolumeProperties — abs() erased the orientation-flip signal that this
-    # gate exists to catch (a boolean cut that fails by re-orienting a
-    # shell flips the sign of the integral; only the sign reveals it).
-    # On measurement failure return None so _check_one can distinguish
-    # "could not measure" from "measured as zero". The previous bare-except
-    # to 0.0 could synthesize a phantom -pre_v delta strong enough to
-    # falsely satisfy volume_decreased.
+    # COMPLEX-CAD fix (2026-06-08, v2): use abs() of signed VolumeProperties.
+    # Earlier attempt kept the signed value (to surface orientation-flip
+    # bugs), but real imported industrial parts (e.g. pythonocc__11752 has
+    # signed volume -732 mm³ from consistently REVERSED face orientation)
+    # produce sign-flipped comparisons that make EVERY cut's delta positive
+    # → volume_decreased always fails. Magnitude is what the gate cares
+    # about: any cut that REMOVES material reduces |Mass|. On measurement
+    # failure return None so _check_one can distinguish "could not measure"
+    # from "measured as zero" (the previous bare-except-to-0.0 could
+    # synthesize a phantom -pre_v delta).
     volume: float | None = None
     try:
         from OCP.BRepGProp import BRepGProp
         from OCP.GProp import GProp_GProps
         props = GProp_GProps()
         BRepGProp.VolumeProperties_s(shape, props)
-        volume = float(props.Mass())
+        volume = abs(float(props.Mass()))
     except Exception:
         volume = None
 

@@ -256,21 +256,26 @@ def _freeze_to_meta(f: SelectorFreeze) -> FreezeMeta:
 
 def _is_zero_delta_volume_failure(msg: str) -> bool:
     """True iff ``msg`` is a PostConditionError message for a volume_decreased
-    / volume_increased check that failed with a near-zero delta (i.e. the
-    step ran without raising an OCCT error but didn't actually change the
-    body volume).
+    / volume_increased check that failed with a delta that is small relative
+    to the expected floor (i.e. the cut produced no MEANINGFUL change vs the
+    body scale).
 
-    The post_conditions module formats such messages as e.g.::
+    COMPLEX-CAD fix (2026-06-08): the post_conditions module now formats
+    messages with a body-scale-relative floor, e.g.
 
-        extrude_pocket: post_condition 'volume_decreased' failed —
-        pre=60099.5301 mm³, post=60099.5301 mm³, delta=0.0000 mm³
-        (expected ≤ -0.01)
+        clearance_hole: post_condition 'volume_decreased' failed —
+        pre=12500000000.0000 mm³, post=12499999996.1000 mm³,
+        delta=-3.9000 mm³ (expected ≤ -12500.0000)
 
-    We match on the post_condition name + the literal ``delta=`` token + a
-    near-zero value (|delta| < 0.05 mm³). That keeps the fast-path for real
-    geometric failures (e.g. a pocket that ate the entire body and so
-    decreased volume more than expected) while still skipping the wasted-
-    cut case that PLAN-DEPTH-CEILING surfaces.
+    A 1 mm hole on a 12 G mm³ assembly removes only 4 mm³, well below the
+    relative floor — but it is not a "zero-delta" cut, it's a real cut
+    below the gate's noise resolution. Treating it as SKIP (cut happened,
+    body unchanged in scale-relative terms) rather than FAIL keeps the
+    plan progressing on industrial-scale bodies.
+
+    Heuristic: extract both the delta and the expected floor, and treat
+    "delta magnitude < 1% of expected floor magnitude" OR "delta < 0.05"
+    as zero-delta-SKIP. Either condition routes the step to SKIP.
     """
     if not msg:
         return False
@@ -278,12 +283,22 @@ def _is_zero_delta_volume_failure(msg: str) -> bool:
         return False
     import re
     m = re.search(r"delta=(-?\d+(?:\.\d+)?)", msg)
+    floor_m = re.search(r"expected\s*[≤≥<>]\s*[-+]?(\d+(?:\.\d+)?)", msg)
     if m is None:
-        # Defensive: if the message format changes, prefer skipping over
-        # tearing the plan down — the body was preserved either way.
         return True
     try:
         delta = abs(float(m.group(1)))
     except (TypeError, ValueError):
         return True
-    return delta < 0.05
+    if delta < 0.05:
+        return True
+    if floor_m is not None:
+        try:
+            floor = abs(float(floor_m.group(1)))
+            # COMPLEX-CAD: real cut whose volume is well below the
+            # relative noise floor — treat as SKIP, not FAIL.
+            if floor > 0.0 and delta <= floor:
+                return True
+        except (TypeError, ValueError):
+            pass
+    return False
