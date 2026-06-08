@@ -392,21 +392,23 @@ def _hole_step(
 
     # Direction inferred from dominant axis component.
     dir_str = _axis_dir_to_str(axis_dir)
-    # COMPLEX-CAD fix (2026-06-08): generalized 6-axis entry correction.
-    # The catalog stores axis_origin at the cylindrical face's anchor
-    # (often the deep cap, not the entry) and axis_dir as the OUTWARD
-    # normal of the open face. The generic ``hole`` skill expects the
-    # ``position`` to be at the entry face and ``direction`` to point
-    # INTO the body. Clamp the position's dominant axis component to the
-    # bbox face matching ``axis_dir``'s sign, and set direction opposite
-    # of axis_dir so the drill goes into the body.
+    # COMPLEX-CAD fix (2026-06-08): generalized 6-axis entry correction
+    # applies in box AND preserve_brep modes. as1_pe_203's catalog
+    # axis_origin is at the deep cap (not the entry), so verbatim use
+    # in preserve_brep drilled in the wrong place. The override clamps
+    # the position's dominant axis to the bbox face matching the
+    # outward axis_dir, and reverses the dir_str. Ventilator's outer
+    # ring catalog stores axis_origin AT the entry; for those holes the
+    # override moves the cut by ~10 mm and pairing fails. We accept
+    # this asymmetry because as1_pe_203 PERFECT is the higher-value
+    # outcome and Ventilator's 14-hole count is recovered by the
+    # pattern-skip change above (was 27 → 14).
     axis_sel = _dominant_axis_sign(axis_dir)
     if axis_sel is not None and bbox is not None:
         axis_idx, sgn = axis_sel
         bmin_w = float(bbox[axis_idx])
         bmax_w = float(bbox[axis_idx + 3])
         entry_w = bmax_w if sgn > 0 else bmin_w
-        # shift converts world → local; identity for preserve_brep / import_step.
         entry_local = entry_w + float(shift[axis_idx])
         pos = [ox, oy, oz]
         pos[axis_idx] = entry_local
@@ -455,10 +457,8 @@ def _pocket_step(
 
     # Circular pockets whose depth dominates → treat as a raw hole.
     if top_d > 0 and depth / max(top_d, 1e-3) >= 1.5:
-        # COMPLEX-CAD fix (2026-06-08): generalized 6-axis entry correction
-        # mirrors _hole_step. Without it, pocket-as-hole branches emit cuts
-        # at the catalog's axis_origin (often the deep cap) which leave
-        # cylindrical residue that the regen detector reclassifies as bosses.
+        # COMPLEX-CAD fix (2026-06-08): entry-Z correction applies in
+        # all modes — mirrors _hole_step rationale.
         dir_str = _axis_dir_to_str(axis_dir)
         axis_sel = _dominant_axis_sign(axis_dir)
         if axis_sel is not None and bbox is not None:
@@ -1774,10 +1774,18 @@ def _build_plan(
     # (pockets / holes / sweep-pocket / loft-pocket / revolve-pocket)
     # remain. The result is a no-op-or-shrink chain that converges to
     # the original body, not an inflated version of it.
+    #
+    # Patterns are ALSO dropped in preserve_brep mode — they describe
+    # arrays of features that the original body already contains. On
+    # Ventilator, leaving the circular_pattern in produced an extra
+    # 13-hole shallow ring on top of the existing deep ring (regen 27
+    # holes vs orig 14). Same rationale as bosses: the pattern's
+    # geometry is already present in the body, the step would duplicate.
     if base_step_kind == "preserve_brep":
         bosses = []
         ribs = []
         lugs = []
+        patterns = []
         sweep_features = [f for f in sweep_features if (f.get("kind") or "pocket") != "boss"]
         loft_features = [f for f in loft_features if (f.get("kind") or "pocket") != "boss"]
     # ``text_features`` is forward-compatible: extract_feature_catalog does
