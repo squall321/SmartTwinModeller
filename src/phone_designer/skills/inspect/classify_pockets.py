@@ -85,7 +85,11 @@ from phone_designer.skills._spec import SkillBase, SkillResult
 # fine; it's the per-face surface-type / centre / area probing that explodes).
 # Mirror the extract_feature_catalog guard: bail with skipped=True so callers
 # decimate the mesh first.
-_DEFAULT_MAX_FACE_COUNT = 8000
+# COMPLEX-CAD fix (2026-06-08): raised 8000 → 16000 so multi-component
+# assemblies (RC_Buggy 10665 face, KR600 4123 face) get catalog'd instead
+# of force-skipped. The per-face probing is O(N) so 16k face shells still
+# complete in ~60 s on commodity laptops.
+_DEFAULT_MAX_FACE_COUNT = 16000
 
 
 # ──────────────────────────────────────────────────────────────────────────────

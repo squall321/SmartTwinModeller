@@ -448,14 +448,14 @@ def _estimate_base_thickness(body) -> float | None:
 class ExtractFeatureCatalog(SkillBase):
     class Args(BaseModel):
         max_face_count: int | None = Field(
-            default=8000,
+            default=16000,
             description="If the body has more than this many faces, skip the "
                         "feature catalog (returns extras['feature_catalog']="
                         "{'skipped': True, 'face_count': N, 'reason': 'too_big'})"
-                        ". Set to None to disable the guard. Default 8000 matches "
-                        "the per-detector internal caps (Pack 1A/1B) and keeps "
-                        "the analysis bounded on raw-mesh inputs. Do not raise "
-                        "further — 8000 is the macro-level limit.",
+                        ". Set to None to disable the guard. COMPLEX-CAD fix "
+                        "(2026-06-08): raised 8000 → 16000 so multi-component "
+                        "industrial assemblies (RC_Buggy 10665, KR600 4123) "
+                        "get a catalog. Matches the inspect/classify_pockets cap.",
         )
         per_component: bool = Field(
             default=False,
