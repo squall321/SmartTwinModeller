@@ -223,6 +223,66 @@ def _avg_dim_drift_pct_from_pairs(
     return round(sum(drifts) / len(drifts), 4)
 
 
+def _drift_breakdown_from_pairs(
+    cat_a: dict,
+    cat_b: dict,
+    all_pairs: dict[str, list[tuple[int, int, float]]],
+) -> dict[str, dict[str, dict]]:
+    """COMPLEX-CAD fix (2026-06-09): per-kind, per-dim breakdown of drift.
+
+    Returns:
+        {
+            "holes": {
+                "diameter_mm": {"pair_count": N, "mean_pct": x, "max_pct": y, "worst_pair_idx": (a_idx, b_idx)},
+                ...
+            },
+            ...
+        }
+
+    Lets callers see WHICH dimension drifts most (diameter? depth?
+    centroid?) on which feature kind, instead of one rolled-up scalar.
+    """
+    out: dict[str, dict[str, dict]] = {}
+    for k in ("pockets", "holes", "bosses", "revolve_features",
+              "sweep_features", "loft_features"):
+        pairs = all_pairs.get(k) or []
+        a_list = cat_a.get(k) or []
+        b_list = cat_b.get(k) or []
+        per_dim: dict[str, dict] = {}
+        for ai, bi, _cost in pairs:
+            if ai >= len(a_list) or bi >= len(b_list):
+                continue
+            a = a_list[ai] if isinstance(a_list[ai], dict) else None
+            b = b_list[bi] if isinstance(b_list[bi], dict) else None
+            if not (a and b):
+                continue
+            for key in a:
+                if not key.endswith("_mm") or key not in b:
+                    continue
+                try:
+                    av = float(a[key]); bv = float(b[key])
+                except Exception:
+                    continue
+                if abs(av) < 1e-9:
+                    continue
+                pct = abs(bv - av) / abs(av) * 100.0
+                d = per_dim.setdefault(
+                    key, {"drifts": [], "max_pct": 0.0, "worst_pair_idx": None}
+                )
+                d["drifts"].append(pct)
+                if pct > d["max_pct"]:
+                    d["max_pct"] = round(pct, 4)
+                    d["worst_pair_idx"] = (ai, bi)
+        # Reduce drifts list to mean + count
+        for key, d in per_dim.items():
+            drifts = d.pop("drifts")
+            d["pair_count"] = len(drifts)
+            d["mean_pct"] = round(sum(drifts) / len(drifts), 4) if drifts else 0.0
+        if per_dim:
+            out[k] = per_dim
+    return out
+
+
 @skill(
     name="feature_fidelity_diff",
     category="reverse_engineer",
@@ -288,6 +348,10 @@ class FeatureFidelityDiff(SkillBase):
             "avg_dim_drift_pct": _avg_dim_drift_pct_from_pairs(ca, cb, all_pairs),
             "overall_match_ratio": overall,
             "xyz_tol_mm": round(tol_xyz, 4),
+            # COMPLEX-CAD fix (2026-06-09): per-kind/per-dim drift breakdown
+            # so callers can see WHICH dimension drifts most (diameter vs
+            # depth vs centroid) on which feature kind.
+            "drift_breakdown": _drift_breakdown_from_pairs(ca, cb, all_pairs),
         }
         return SkillResult(
             body=body,
