@@ -2050,12 +2050,33 @@ def _build_plan(
     # poorly-resolved features, producing many "pockets" that all collapse
     # to the same face-centroid prism. Without this, only the first cut
     # removes material and the rest become zero-delta SKIPs.
-    _DEDUP_XY_MM = 1.0
-    _DEDUP_DIM_FRAC = 0.05
+    # COMPLEX-CAD pass-6 dehardcode (2026-06-09):
+    # XY tolerance derived from bbox diagonal (0.2 % matches the
+    # adaptive xyz tolerance in feature_fidelity_diff); dim bucket uses
+    # FIXED reference bucket sizes so the quotient is bounded — the old
+    # code's `top_d / max(top_d * 0.05, 1.0)` collapsed every pocket with
+    # top_d > 20 mm to bucket ~20 (since the divisor grew with top_d).
+    try:
+        _bbox_diag_for_dedup = (
+            (float(bbox[3]) - float(bbox[0])) ** 2
+            + (float(bbox[4]) - float(bbox[1])) ** 2
+            + (float(bbox[5]) - float(bbox[2])) ** 2
+        ) ** 0.5 if bbox is not None else 0.0
+    except Exception:
+        _bbox_diag_for_dedup = 0.0
+    _DEDUP_XY_MM = max(1.0, _bbox_diag_for_dedup * 0.002)
 
     def _pocket_key(p: dict) -> tuple:
         ao = p.get("axis_origin") or [0, 0, 0]
         ad = p.get("axis_dir") or [0, 0, 1]
+        # Round each scalar to the nearest _DEDUP_XY_MM bucket; for dims
+        # use 5 % of the dim ITSELF (no division-by-self). Two pockets
+        # cluster only if their top_d values are within 5 % of each other,
+        # which holds across all scales.
+        td = float(p.get("top_d_mm") or 0)
+        dp = float(p.get("depth_mm") or 0)
+        td_bucket = round(td * 20.0) if td > 0 else 0  # 5 % buckets ↔ ×20
+        dp_bucket = round(dp * 20.0) if dp > 0 else 0
         return (
             round(float(ao[0]) / _DEDUP_XY_MM),
             round(float(ao[1]) / _DEDUP_XY_MM),
@@ -2063,8 +2084,8 @@ def _build_plan(
             round(float(ad[0])),
             round(float(ad[1])),
             round(float(ad[2])),
-            round(float(p.get("top_d_mm") or 0) / max(float(p.get("top_d_mm") or 1) * _DEDUP_DIM_FRAC, 1.0)),
-            round(float(p.get("depth_mm") or 0) / max(float(p.get("depth_mm") or 1) * _DEDUP_DIM_FRAC, 1.0)),
+            td_bucket,
+            dp_bucket,
         )
 
     _seen_pocket_keys: set = set()

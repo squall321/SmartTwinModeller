@@ -35,7 +35,21 @@ _KINDS = (
 
 _TOL_XYZ_MM_FLOOR = 5.0   # minimum spatial tolerance (phone-scale)
 _TOL_XYZ_BBOX_FRAC = 0.005  # 0.5% of bbox diagonal (industrial-scale)
-_TOL_DIM_FRAC = 0.15  # +/- 15% primary-dim drift considered "same feature"
+
+# COMPLEX-CAD pass-6 dehardcode (2026-06-09): kind-specific primary-dim
+# tolerance. A single 15 % fraction is too loose for ISO metric holes:
+# M3 (3.0 mm) and M4 (3.45 mm) differ by 0.45 mm = 15 % so they would
+# pair under the old uniform gate. Holes need a tighter band; revolve /
+# sweep / loft can stay loose because their primary dim is composite.
+_TOL_DIM_FRAC_BY_KIND: dict[str, float] = {
+    "holes": 0.08,             # ~ 0.24 mm on M3 — keeps M3↔M4 distinct
+    "pockets": 0.10,
+    "bosses": 0.10,
+    "revolve_features": 0.15,  # composite radius+depth dims — loose
+    "sweep_features": 0.15,
+    "loft_features": 0.15,
+}
+_TOL_DIM_FRAC_DEFAULT = 0.15
 
 # COMPLEX-CAD fix (2026-06-08): scale-aware xyz tolerance. The fixed 5 mm
 # floor is 7% of bbox on a 75 mm phone but only 0.07% on a 6.7 m
@@ -135,8 +149,11 @@ def _greedy_pair(
     b_list: list,
     kind: str,
     tol_xyz_mm: float = _TOL_XYZ_MM,
-    tol_dim_frac: float = _TOL_DIM_FRAC,
+    tol_dim_frac: float | None = None,
 ) -> tuple[list[tuple[int, int, float]], list[int], list[int]]:
+    # COMPLEX-CAD pass-6: kind-specific dim tolerance (overridable).
+    if tol_dim_frac is None:
+        tol_dim_frac = _TOL_DIM_FRAC_BY_KIND.get(kind, _TOL_DIM_FRAC_DEFAULT)
     """For each a, find closest unused b within tolerance. Greedy.
 
     Returns (pairs, unmatched_a_idxs, unmatched_b_idxs). When no xyz/dim

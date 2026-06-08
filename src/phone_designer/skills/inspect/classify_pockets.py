@@ -83,13 +83,10 @@ from phone_designer.skills._spec import SkillBase, SkillResult
 # Above this raw face count the O(F·E) adjacency walk becomes the dominant
 # cost (>30s on 16 k-face shells even with the OCCT indexed-map fast path is
 # fine; it's the per-face surface-type / centre / area probing that explodes).
-# Mirror the extract_feature_catalog guard: bail with skipped=True so callers
-# decimate the mesh first.
-# COMPLEX-CAD fix (2026-06-08): raised 8000 → 16000 so multi-component
-# assemblies (RC_Buggy 10665 face, KR600 4123 face) get catalog'd instead
-# of force-skipped. The per-face probing is O(N) so 16k face shells still
-# complete in ~60 s on commodity laptops.
-_DEFAULT_MAX_FACE_COUNT = 16000
+# COMPLEX-CAD pass-6 dehardcode (2026-06-09): single source of truth in
+# _face_count_guard so the cap doesn't drift between modules; override
+# with PHONE_DESIGNER_MAX_FACE_COUNT.
+from phone_designer.skills._face_count_guard import DEFAULT_MAX_FACE_COUNT as _DEFAULT_MAX_FACE_COUNT
 
 
 # ──────────────────────────────────────────────────────────────────────────────

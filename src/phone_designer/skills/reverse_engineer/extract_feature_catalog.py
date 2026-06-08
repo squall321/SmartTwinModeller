@@ -496,14 +496,17 @@ def _estimate_base_thickness(body) -> float | None:
 class ExtractFeatureCatalog(SkillBase):
     class Args(BaseModel):
         max_face_count: int | None = Field(
-            default=16000,
+            default_factory=lambda: __import__(
+                "phone_designer.skills._face_count_guard",
+                fromlist=["DEFAULT_MAX_FACE_COUNT"],
+            ).DEFAULT_MAX_FACE_COUNT,
             description="If the body has more than this many faces, skip the "
                         "feature catalog (returns extras['feature_catalog']="
                         "{'skipped': True, 'face_count': N, 'reason': 'too_big'})"
-                        ". Set to None to disable the guard. COMPLEX-CAD fix "
-                        "(2026-06-08): raised 8000 → 16000 so multi-component "
-                        "industrial assemblies (RC_Buggy 10665, KR600 4123) "
-                        "get a catalog. Matches the inspect/classify_pockets cap.",
+                        ". Set to None to disable the guard. Default comes from "
+                        "phone_designer.skills._face_count_guard so the cap "
+                        "stays in sync with classify_pockets. Override at "
+                        "host level with PHONE_DESIGNER_MAX_FACE_COUNT.",
         )
         per_component: bool = Field(
             default=False,

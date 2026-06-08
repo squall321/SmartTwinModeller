@@ -80,6 +80,40 @@ def _occt_shape(body: Any):
     return getattr(body, "wrapped", body)
 
 
+def measured_volume_roundoff_mm3(body: Any) -> float | None:
+    """COMPLEX-CAD pass-6 dehardcode (2026-06-09): empirical BRepGProp
+    roundoff floor for THIS body.
+
+    The volume_decreased gate's relative floor (default 1e-6 × |V|) is a
+    constant asserted to be above OCCT integration roundoff. In reality the
+    roundoff varies by ~5 orders of magnitude:
+        clean parametric body → ~1e-9 × |V|
+        mesh-derived body     → ~1e-4 × |V|
+    Use this helper to PROBE the actual roundoff and set min_delta_rel on
+    a per-body basis (callers stash the result in the plan / executor
+    context). Computes |Mass(eps=1e-3) - Mass(eps=1e-7)|: the difference
+    between two integrations with very different tolerances bounds the
+    body-specific roundoff.
+
+    Returns None if the body is missing or both passes fail.
+    """
+    if body is None:
+        return None
+    shape = _occt_shape(body)
+    if shape is None:
+        return None
+    try:
+        from OCP.BRepGProp import BRepGProp
+        from OCP.GProp import GProp_GProps
+        p1 = GProp_GProps()
+        BRepGProp.VolumeProperties_s(shape, p1, 1e-3)  # loose tol
+        p2 = GProp_GProps()
+        BRepGProp.VolumeProperties_s(shape, p2, 1e-7)  # tight tol
+        return abs(float(p1.Mass()) - float(p2.Mass()))
+    except Exception:
+        return None
+
+
 def _measure(body: Any) -> dict[str, float] | None:
     """Compute (volume_mm3, face_count, edge_count) for a body.
 
