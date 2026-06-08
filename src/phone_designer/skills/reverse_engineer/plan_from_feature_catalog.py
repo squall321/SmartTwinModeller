@@ -1400,10 +1400,18 @@ def _hole_signature_key(hole: dict) -> tuple[float, float]:
 
 def _find_mirrored_hole_pairs(
     holes: list, plane: dict,
+    bbox: tuple[float, float, float, float, float, float] | None = None,
 ) -> list[tuple[int, int]]:
     """Return list of (i, j) index pairs of holes that mirror each other
     across ``plane``. Each hole is matched at most once. Holes lying on the
     plane (self-symmetric) are skipped.
+
+    COMPLEX-CAD pass-8 (2026-06-09): pair-matching tolerances now scale
+    with the body's bbox diagonal so industrial assemblies (5 m chassis)
+    don't lose mirror-pair detection to a 0.5 mm fixed gate that is
+    0.01 % of bbox at that scale. On phone-scale bodies the
+    floor (_PAIR_*_TOL) wins; on industrial bodies the bbox-relative
+    component (0.05 % of diag) wins.
     """
     if not plane or not holes:
         return []
@@ -1411,6 +1419,22 @@ def _find_mirrored_hole_pairs(
     origin = plane["origin"]
     pairs: list[tuple[int, int]] = []
     used: set[int] = set()
+
+    # Adaptive tolerances: floor + bbox-fraction.
+    bbox_diag = 0.0
+    if bbox is not None:
+        try:
+            bbox_diag = (
+                (float(bbox[3]) - float(bbox[0])) ** 2
+                + (float(bbox[4]) - float(bbox[1])) ** 2
+                + (float(bbox[5]) - float(bbox[2])) ** 2
+            ) ** 0.5
+        except Exception:
+            bbox_diag = 0.0
+    tol_xy = max(_PAIR_XY_TOL, bbox_diag * 0.0005)
+    tol_z = max(_PAIR_Z_TOL, bbox_diag * 0.0005)
+    tol_diam = max(_PAIR_DIAM_TOL, bbox_diag * 0.0002)
+    tol_depth = max(_PAIR_DEPTH_TOL, bbox_diag * 0.0005)
 
     centers: list[tuple[float, float, float] | None] = []
     sigs: list[tuple[float, float]] = []
@@ -1433,7 +1457,7 @@ def _find_mirrored_hole_pairs(
             continue
         rx, ry = _reflect_xy_across_plane(ci[0], ci[1], label, origin)
         # Self-symmetric hole (on the mirror plane) -- skip.
-        if abs(rx - ci[0]) < _PAIR_XY_TOL and abs(ry - ci[1]) < _PAIR_XY_TOL:
+        if abs(rx - ci[0]) < tol_xy and abs(ry - ci[1]) < tol_xy:
             continue
         for j in range(i + 1, len(holes)):
             if j in used:
@@ -1441,17 +1465,17 @@ def _find_mirrored_hole_pairs(
             cj = centers[j]
             if cj is None:
                 continue
-            if abs(cj[0] - rx) > _PAIR_XY_TOL:
+            if abs(cj[0] - rx) > tol_xy:
                 continue
-            if abs(cj[1] - ry) > _PAIR_XY_TOL:
+            if abs(cj[1] - ry) > tol_xy:
                 continue
-            if abs(cj[2] - ci[2]) > _PAIR_Z_TOL:
+            if abs(cj[2] - ci[2]) > tol_z:
                 continue
             di, depi = sigs[i]
             dj, depj = sigs[j]
-            if abs(di - dj) > _PAIR_DIAM_TOL:
+            if abs(di - dj) > tol_diam:
                 continue
-            if abs(depi - depj) > _PAIR_DEPTH_TOL:
+            if abs(depi - depj) > tol_depth:
                 continue
             pairs.append((i, j))
             used.add(i)
@@ -2507,7 +2531,7 @@ def _build_plan(
     best_plane: dict | None = None
     best_pairs: list[tuple[int, int]] = []
     for plane in _qualifying_mirror_planes(symmetries):
-        pairs_here = _find_mirrored_hole_pairs(unhandled_holes, plane)
+        pairs_here = _find_mirrored_hole_pairs(unhandled_holes, plane, bbox=bbox)
         if len(pairs_here) > len(best_pairs):
             best_plane = plane
             best_pairs = pairs_here
