@@ -419,17 +419,12 @@ def _hole_step(
 
     # Direction inferred from dominant axis component.
     dir_str = _axis_dir_to_str(axis_dir)
-    # COMPLEX-CAD fix (2026-06-08): generalized 6-axis entry correction
-    # applies in box AND preserve_brep modes. as1_pe_203's catalog
-    # axis_origin is at the deep cap (not the entry), so verbatim use
-    # in preserve_brep drilled in the wrong place. The override clamps
-    # the position's dominant axis to the bbox face matching the
-    # outward axis_dir, and reverses the dir_str. Ventilator's outer
-    # ring catalog stores axis_origin AT the entry; for those holes the
-    # override moves the cut by ~10 mm and pairing fails. We accept
-    # this asymmetry because as1_pe_203 PERFECT is the higher-value
-    # outcome and Ventilator's 14-hole count is recovered by the
-    # pattern-skip change above (was 27 → 14).
+    # COMPLEX-CAD pass-8 (2026-06-09 REVERT): override stays all-modes.
+    # The pass-7c BRepClass3d axis_origin standardiser got the entry side
+    # right for Ventilator but DRIFTED ~1 mm on as1_pe_203 holes
+    # (1.0 → 0.903 in preserve_brep). Until the probe is exact, the
+    # bbox-face override preserves as1_pe_203 PERFECT; Ventilator's
+    # 0.36 stays a known limitation tied to the override convention.
     axis_sel = _dominant_axis_sign(axis_dir)
     if axis_sel is not None and bbox is not None:
         axis_idx, sgn = axis_sel
