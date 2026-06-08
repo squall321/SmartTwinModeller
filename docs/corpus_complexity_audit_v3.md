@@ -183,6 +183,28 @@ Aggregate volume-weighted match = **0.913**. All 10 components above
 0.5. The duplicate volumes are mirrored left/right components,
 confirming the suspension's symmetric structure.
 
+## Root corpus 55-file regression (2026-06-09)
+
+After all 5 passes + the A/B/C/D follow-ups, the FULL root-level corpus
+under `corpus/oem/` (excluding the per-subdir COMPLEX runs):
+
+  55 files: 54 match ≥ 0.5 (98 %), 35 match ≥ 0.99 (64 %)
+  0 catalog SKIPs, 0 pipeline errors
+
+Notable wins on the bigger end:
+
+  pythonocc__11752.step        face=1018  match=0.906
+  kicad__LQFP-128              face=1955  match=1.000
+  kicad__LQFP-100              face=1535  match=1.000
+  kicad__LQFP-64               face=995   match=1.000
+  kicad__USB_C_Receptacle      face=515   match=0.865
+  kicad__USB_A_Molex           face=559   match=0.875
+  pythonocc__as1_pe_203        face=160   match=1.000
+  pythonocc__as1-oc-214        face=160   match=1.000
+
+The only sub-0.5 file is Ventilator (0.36) due to the known
+axis_origin-convention asymmetry described above.
+
 ## Headlines
 
 - **4 of 7 measured COMPLEX-CAD files at match ≥ 0.86** (linkrods,
