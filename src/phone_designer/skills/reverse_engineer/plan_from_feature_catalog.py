@@ -110,6 +110,16 @@ def _direction_str_from_axis(axis_idx: int, into_sign: int) -> str:
 # magnitude above this.
 _MIN_EMITTED_CUT_MM3 = 0.02
 
+# COMPLEX-CAD pass-7 dehardcode (2026-06-09): single source for the
+# "centre.z within X% of bbox.zmax → top-anchored boss" gate. Was
+# duplicated at lines 1875 (_BOSS_TOP_ANCHOR_RATIO_GATE) and 2254
+# (_BOSS_TOP_ANCHOR_RATIO); the two could drift on the next refactor.
+# Empirical value — real top-face bosses have centre.z very close to
+# bbox.zmax because the cylinder anchor sits on the top face. Conservative
+# 10 % default keeps thin protrusions in while dropping internal cylinder
+# fragments mis-classified by detect_bosses.
+_BOSS_TOP_ANCHOR_RATIO = 0.10
+
 
 def _predicted_cylinder_volume_mm3(diameter_mm: float, depth_mm: float) -> float:
     """Predicted cylinder volume for a hole/pocket cut. Used to drop catalog
@@ -1872,7 +1882,8 @@ def _build_plan(
         # way to match the orig bbox. When such features ARE present
         # (synth fixtures, demo plans) the slab + feature combination
         # already gives correct Z so the slab stays.
-        _BOSS_TOP_ANCHOR_RATIO_GATE = 0.10
+        # COMPLEX-CAD pass-7: use the module-level _BOSS_TOP_ANCHOR_RATIO
+        _BOSS_TOP_ANCHOR_RATIO_GATE = _BOSS_TOP_ANCHOR_RATIO
         zspan_for_gate = max(bbox_h, 1e-3)
         top_face_bosses = []
         for _b in (catalog.get("bosses") or []):
@@ -2251,7 +2262,7 @@ def _build_plan(
     # centre is more than ~10% of bbox.zmax below zmax as internal and
     # skip it. This is conservative — top-anchored bosses with measurable
     # height still have center.z within a small fraction of zmax.
-    _BOSS_TOP_ANCHOR_RATIO = 0.10
+    # COMPLEX-CAD pass-7: use module-level _BOSS_TOP_ANCHOR_RATIO (line ~66)
     def _boss_is_internal(b: dict) -> bool:
         if bbox is None:
             return False

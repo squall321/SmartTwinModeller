@@ -54,6 +54,62 @@ def _occt_shape(body: Any):
     return body.wrapped if hasattr(body, "wrapped") else body
 
 
+def _point_inside_solid(shape, x: float, y: float, z: float, tol: float = 1e-6) -> bool:
+    """COMPLEX-CAD pass-7 (2026-06-09): True if (x, y, z) is INSIDE the
+    solid body. Uses BRepClass3d_SolidClassifier — same API the OCCT
+    documentation lists for the IN/OUT/ON predicate. Used by the catalog
+    axis_origin standardiser below.
+    """
+    try:
+        from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+        from OCP.gp import gp_Pnt
+        from OCP.TopAbs import TopAbs_State
+        clf = BRepClass3d_SolidClassifier(shape)
+        clf.Perform(gp_Pnt(x, y, z), tol)
+        return clf.State() == TopAbs_State.TopAbs_IN
+    except Exception:
+        return False
+
+
+def _standardize_entry(shape, axis_origin, axis_dir, depth_mm: float):
+    """COMPLEX-CAD pass-7 (2026-06-09): rewrite axis_origin/axis_dir so
+    that axis_origin sits at the EXIT (open) face and axis_dir points
+    INTO the body for a depth of ``depth_mm``.
+
+    Different cylinder detectors (gp_Cyl.Location() in classify_holes,
+    cone apex in detect_bosses, cap centroids in classify_pockets) place
+    axis_origin at inconsistent ends of the cylinder. The planner cannot
+    know which end is the entry without probing the body. This helper
+    does the probe and standardises so downstream RE steps can use
+    axis_origin verbatim as the drill entry.
+
+    Strategy: probe two test points slightly INSIDE the body from each
+    endpoint of the cylinder (origin + axis_dir × small_step and
+    origin - axis_dir × small_step). Whichever sample is INSIDE the
+    solid identifies the body interior, so the OPPOSITE endpoint is the
+    entry. Returns (new_origin, new_dir) tuples.
+    """
+    if depth_mm <= 0.0:
+        return axis_origin, axis_dir
+    ox, oy, oz = float(axis_origin[0]), float(axis_origin[1]), float(axis_origin[2])
+    dx, dy, dz = float(axis_dir[0]), float(axis_dir[1]), float(axis_dir[2])
+    step = min(0.5, 0.1 * depth_mm)
+    in_plus = _point_inside_solid(shape, ox + step * dx, oy + step * dy, oz + step * dz)
+    in_minus = _point_inside_solid(shape, ox - step * dx, oy - step * dy, oz - step * dz)
+    if in_plus and not in_minus:
+        # +dir lands inside — axis_origin IS at the entry, axis_dir points INTO body.
+        return axis_origin, axis_dir
+    if in_minus and not in_plus:
+        # -dir lands inside — axis_origin is at the OPPOSITE end; flip.
+        # New origin is the far cap (origin - axis_dir × depth), new dir is reversed.
+        new_origin = (ox - dx * depth_mm, oy - dy * depth_mm, oz - dz * depth_mm)
+        return new_origin, (-dx, -dy, -dz)
+    # Both samples on same side (through-hole, both ends outside) — choose the
+    # endpoint whose +dir sample is further from any body bbox face as the entry.
+    # For simplicity we keep the original convention in this edge case.
+    return axis_origin, axis_dir
+
+
 def _surface_kind(face) -> str:
     from OCP.BRepAdaptor import BRepAdaptor_Surface
     from OCP.GeomAbs import (
@@ -529,6 +585,21 @@ class ClassifyHoles(SkillBase):
                 o, d,
                 match_standards=args.match_standards,
             )
+            # COMPLEX-CAD pass-7 (2026-06-09): standardise axis_origin so
+            # downstream RE always sees the entry point + the inward
+            # axis_dir. Different cylinder detectors place axis_origin
+            # at inconsistent ends (Ventilator stores entry, as1_pe_203
+            # stores deep cap) which made the planner's entry-Z override
+            # work for one and break the other. This probe picks the
+            # entry endpoint by testing which side is INSIDE the solid.
+            try:
+                new_o, new_d = _standardize_entry(
+                    shape, desc["axis_origin"], desc["axis_dir"], desc["depth_mm"]
+                )
+                desc["axis_origin"] = [round(float(v), 4) for v in new_o]
+                desc["axis_dir"] = [round(float(v), 4) for v in new_d]
+            except Exception:
+                pass
             desc["id"] = len(holes)
             holes.append({
                 "id": desc["id"],
