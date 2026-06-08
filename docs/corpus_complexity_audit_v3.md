@@ -30,7 +30,7 @@ otherwise-correct code).
 | pythonocc__Ventilator.stp | 305 | 0.611 | 0 % | regen 27 holes vs orig 14 (detect_holes over-fragments) |
 | pythonocc__11752.stp | 1018 | **0.858** | 100 % | 132/143 holes matched, all 67 patterns matched |
 | pythonocc__KR600_R2830-4.stp | 4123 | 0.886 | 0.03 % | First-ever pass on this body |
-| pythonocc__RC_Buggy_2_front_suspension.stp | 10665 | n/a | n/a | catalog SKIPPED (>16 k face cap; intentional) |
+| pythonocc__RC_Buggy_2_front_suspension.stp | 10665 | **0.913** | n/a | assembly: 148 components, top 10 aggregate weighted match |
 
 (KR600 takes ~1.8 hours of wall-clock; the others under 30 s except
 11752 at ~6 minutes.)
@@ -164,10 +164,24 @@ boolean cuts on a topology-heavy body. Honest reflection of OCCT
 performance, not a pipeline issue. Caching / batched cuts would
 shorten it.
 
-### RC_Buggy 10665 face — catalog SKIPPED
-Above the 16 k cap but only because the assembly has a single
-catalog detector per inspector; assembly decomposition (per-component
-catalog) would unblock it. Worth a follow-up but architectural.
+### RC_Buggy 10665 face — assembly decomposition added
+`run_logs/_tmp/run_assembly_re.py` decomposes the 10665-face part into
+148 components via `split_into_components(min_volume_mm3=100)`, runs
+the standard preserve_brep RE on the top 10 by volume, and aggregates
+a volume-weighted match. First run:
+  comp0 vol=42544  match=0.983
+  comp1 vol=42544  match=1.000  PERFECT
+  comp2 vol=17786  match=0.939
+  comp3 vol=17786  match=0.939
+  comp4 vol=15453  match=0.827
+  comp5 vol=14399  match=0.609
+  comp6 vol=14399  match=0.875
+  comp7 vol=12029  match=0.713
+  comp8 vol=9323   match=0.943
+  comp9 vol=9323   match=1.000  PERFECT
+Aggregate volume-weighted match = **0.913**. All 10 components above
+0.5. The duplicate volumes are mirrored left/right components,
+confirming the suspension's symmetric structure.
 
 ## Headlines
 
