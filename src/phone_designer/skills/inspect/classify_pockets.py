@@ -664,6 +664,16 @@ class ClassifyPockets(SkillBase):
                 width = max(top_d, 1e-9)
                 if (depth / width) < args.min_depth_to_width_ratio:
                     filtered += 1; continue
+            # COMPLEX-CAD pass-18 REVERTED (2026-06-09): tried importing
+            # classify_holes._standardize_entry and applying it to
+            # pockets to align the axis_origin convention. Result mixed:
+            # linkrods +0.08 (good) but as1_pe_203 preserve_brep 1.0 →
+            # 0.97 (regression). The pocket's natural axis_origin (floor
+            # centroid) is what downstream consumers EXPECT for the
+            # round-trip identity case; standardising it to the entry
+            # breaks that. Holes are different because the planner
+            # emits cylinder cuts FROM the entry; pockets get an
+            # extrude_pocket whose sketch references the floor centroid.
             desc["id"] = len(pockets)
             pockets.append({
                 "id": desc["id"],
