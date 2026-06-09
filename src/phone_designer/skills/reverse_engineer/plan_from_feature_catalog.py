@@ -348,13 +348,12 @@ def _hole_step(
     diams = hole.get("diameters_mm") or []
     primary_d = float(min(diams)) if diams else 3.4
     depth = float(hole.get("depth_mm") or 5.0)
-    # COMPLEX-CAD pass-13 REVERT (2026-06-09): the 200 mm clamp turned
-    # out to be load-bearing — removing it or relaxing it to the body
-    # axis extent caused preserve_brep regression on as1_pe_203 (1.0 →
-    # 0.87) and no improvement on box mode (the 1016 mm catalog depth
-    # exceeds the 8 % hole tolerance regardless of whether the cut
-    # itself is 200 or 1016). Fixing this needs a kind-aware drift
-    # tolerance for industrial holes, not a depth-clamp tweak.
+    # COMPLEX-CAD pass-14 REVERTED: keep the 200 mm clamp in BOTH modes.
+    # Removing it in box mode let 1016 mm cuts overlap with adjacent
+    # pocket regions (pockets matched 14 → 10) without recovering any
+    # holes (still 0 matched — the depth drift exceeds the 8 % hole
+    # tolerance regardless). The remaining as1_pe_203 holes 0/7 issue
+    # needs a depth-aware OR catalog-shrink fix, not a clamp tweak.
     if depth > 200.0:
         depth = 200.0
     axis_dir = hole.get("axis_dir") or [0.0, 0.0, -1.0]
@@ -506,11 +505,14 @@ def _pocket_step(
 
     # Circular pockets whose depth dominates → treat as a raw hole.
     if top_d > 0 and depth / max(top_d, 1e-3) >= 1.5:
-        # COMPLEX-CAD fix (2026-06-08): entry-Z correction applies in
-        # all modes — mirrors _hole_step rationale.
+        # COMPLEX-CAD pass-15 (2026-06-09): entry-Z correction is
+        # preserve_brep-only (mirrors the _hole_step pass-12 fix). In
+        # box mode the override moves interior cuts onto the slab's
+        # outer face and the cut lands hundreds of mm from where the
+        # catalog says it should.
         dir_str = _axis_dir_to_str(axis_dir)
         axis_sel = _dominant_axis_sign(axis_dir)
-        if axis_sel is not None and bbox is not None:
+        if axis_sel is not None and bbox is not None and shift == (0.0, 0.0, 0.0):
             axis_idx, sgn = axis_sel
             bmin_w = float(bbox[axis_idx])
             bmax_w = float(bbox[axis_idx + 3])
