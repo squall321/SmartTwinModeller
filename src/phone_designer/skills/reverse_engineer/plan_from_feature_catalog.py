@@ -2512,6 +2512,18 @@ def _build_plan(
         # OCCT roundoff (e.g. 0402 capacitor terminal arrays).
         if _predicted_cylinder_volume_mm3(seed_diam, seed_depth) * count < _MIN_EMITTED_CUT_MM3:
             continue
+        # COMPLEX-CAD pass-16 (2026-06-09): in box mode (shift != identity)
+        # the circular_pattern / linear_pattern skills use face_named, so
+        # they put the ring of holes on the placeholder slab's outer face
+        # (not the actual catalog feature plane). Ventilator's 13-hole
+        # ring at world z=6.93 ended up at the box top face z=18, off
+        # by 11 mm. Skip pattern emission in box mode and let the
+        # per-hole loop emit individual hole cuts at world coords.
+        if feat_shift != (0.0, 0.0, 0.0):
+            # Box mode: do not pre-handle pattern holes; per-hole loop
+            # will emit each one via the generic 'hole' skill at world
+            # coords (pass 12 fix).
+            continue
         if pat.get("pattern_kind") == "circular" and count >= 4:
             steps.append(
                 _circular_pattern_step(

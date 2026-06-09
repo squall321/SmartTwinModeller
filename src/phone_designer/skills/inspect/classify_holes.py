@@ -72,22 +72,26 @@ def _point_inside_solid(shape, x: float, y: float, z: float, tol: float = 1e-6) 
 
 
 def _standardize_entry(shape, axis_origin, axis_dir, depth_mm: float):
-    """COMPLEX-CAD pass-7 (2026-06-09): rewrite axis_origin/axis_dir so
-    that axis_origin sits at the EXIT (open) face and axis_dir points
-    INTO the body for a depth of ``depth_mm``.
+    """COMPLEX-CAD pass-17 (2026-06-09): rewrite axis_origin/axis_dir so
+    axis_origin sits at the EXIT (open) face of the cylinder — the body
+    surface where you would put the drill bit — and axis_dir points
+    INTO the body.
 
-    Different cylinder detectors (gp_Cyl.Location() in classify_holes,
-    cone apex in detect_bosses, cap centroids in classify_pockets) place
-    axis_origin at inconsistent ends of the cylinder. The planner cannot
-    know which end is the entry without probing the body. This helper
-    does the probe and standardises so downstream RE steps can use
-    axis_origin verbatim as the drill entry.
+    Two-stage probe:
+      1. BRepClass3d sample on each side. If exactly one is inside the
+         SOLID material, the OPPOSITE end is the entry.
+      2. Fallback for through-holes (both ends in void): pick the
+         endpoint whose distance to the nearest body bbox face is the
+         SMALLEST — that endpoint sits on a body outer surface, which
+         is the entry. This catches the convention mismatch where orig
+         classify_holes stored the closed cap (inside the body) while
+         regen classify_holes stored the open end (on the body surface)
+         — different ends of the same cylinder.
 
-    Strategy: probe two test points slightly INSIDE the body from each
-    endpoint of the cylinder (origin + axis_dir × small_step and
-    origin - axis_dir × small_step). Whichever sample is INSIDE the
-    solid identifies the body interior, so the OPPOSITE endpoint is the
-    entry. Returns (new_origin, new_dir) tuples.
+    Without stage 2, Ventilator's regen holes paired 0/14 because orig
+    had axis_origin at the closed cap (z=6.93) and regen at the open
+    end (z=-0.91) — a depth-sized offset the fidelity diff couldn't
+    bridge.
     """
     if depth_mm <= 0.0:
         return axis_origin, axis_dir
@@ -97,17 +101,43 @@ def _standardize_entry(shape, axis_origin, axis_dir, depth_mm: float):
     in_plus = _point_inside_solid(shape, ox + step * dx, oy + step * dy, oz + step * dz)
     in_minus = _point_inside_solid(shape, ox - step * dx, oy - step * dy, oz - step * dz)
     if in_plus and not in_minus:
-        # +dir lands inside — axis_origin IS at the entry, axis_dir points INTO body.
         return axis_origin, axis_dir
     if in_minus and not in_plus:
-        # -dir lands inside — axis_origin is at the OPPOSITE end; flip.
-        # New origin is the far cap (origin - axis_dir × depth), new dir is reversed.
         new_origin = (ox - dx * depth_mm, oy - dy * depth_mm, oz - dz * depth_mm)
         return new_origin, (-dx, -dy, -dz)
-    # Both samples on same side (through-hole, both ends outside) — choose the
-    # endpoint whose +dir sample is further from any body bbox face as the entry.
-    # For simplicity we keep the original convention in this edge case.
-    return axis_origin, axis_dir
+
+    # Stage 2 — bbox-face proximity. Both endpoints are in the void or
+    # both on the surface; the ENTRY is the endpoint closer to a bbox
+    # face (it sits ON a body outer surface). Compute distances of both
+    # endpoints to the nearest face along their dominant axis.
+    try:
+        from OCP.Bnd import Bnd_Box
+        from OCP.BRepBndLib import BRepBndLib
+        bb = Bnd_Box()
+        BRepBndLib.AddOptimal_s(shape, bb)
+        if bb.IsVoid():
+            return axis_origin, axis_dir
+        xmin, ymin, zmin, xmax, ymax, zmax = bb.Get()
+
+        def _dist_to_nearest_face(x, y, z) -> float:
+            return min(
+                abs(x - xmin), abs(x - xmax),
+                abs(y - ymin), abs(y - ymax),
+                abs(z - zmin), abs(z - zmax),
+            )
+
+        far_x = ox + dx * depth_mm
+        far_y = oy + dy * depth_mm
+        far_z = oz + dz * depth_mm
+        d_origin = _dist_to_nearest_face(ox, oy, oz)
+        d_far = _dist_to_nearest_face(far_x, far_y, far_z)
+        if d_origin <= d_far:
+            # axis_origin already on (or closer to) a body face → it's the entry.
+            return axis_origin, axis_dir
+        # Far endpoint is closer to a face → it's the entry; flip.
+        return (far_x, far_y, far_z), (-dx, -dy, -dz)
+    except Exception:
+        return axis_origin, axis_dir
 
 
 def _surface_kind(face) -> str:
