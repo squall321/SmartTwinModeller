@@ -85,6 +85,27 @@ def _adaptive_xyz_tol(ca: dict, cb: dict) -> float:
     return max(_TOL_XYZ_MM_FLOOR, max(da, db) * _TOL_XYZ_BBOX_FRAC)
 
 
+def _read_frame_offset(catalog: dict | None) -> tuple[float, float, float]:
+    """COMPLEX-CAD pass-9 (2026-06-09): read a stashed frame_translation_mm
+    from the catalog. When the planner runs in box mode the runner stashes
+    ``catalog['frame_translation_mm'] = list(world_to_box_shift)`` on the
+    regen catalog BEFORE calling FeatureFidelityDiff, so the diff knows
+    to map box-local coords back into world before pairing.
+
+    Returns (0, 0, 0) when missing — backward compatible with all
+    preserve_brep / import_step flows where no remap is needed.
+    """
+    if not isinstance(catalog, dict):
+        return (0.0, 0.0, 0.0)
+    v = catalog.get("frame_translation_mm")
+    if not isinstance(v, (list, tuple)) or len(v) < 3:
+        return (0.0, 0.0, 0.0)
+    try:
+        return (float(v[0]), float(v[1]), float(v[2]))
+    except Exception:
+        return (0.0, 0.0, 0.0)
+
+
 def _counts(catalog: dict) -> dict[str, int]:
     out: dict[str, int] = {}
     for k in _KINDS:
@@ -93,13 +114,28 @@ def _counts(catalog: dict) -> dict[str, int]:
     return out
 
 
-def _xyz_of(entry: dict) -> tuple[float, float, float] | None:
-    """First available 3-tuple position from common catalog keys."""
+def _xyz_of(entry: dict, frame_offset: tuple[float, float, float] = (0.0, 0.0, 0.0)) -> tuple[float, float, float] | None:
+    """First available 3-tuple position from common catalog keys.
+
+    COMPLEX-CAD pass-9 (2026-06-09): add ``frame_offset`` so callers can
+    align two catalogs that live in DIFFERENT coordinate frames. In box
+    mode the regen body's catalog is in BOX-LOCAL coords (XY-centered,
+    Z floor at 0) while the original catalog is in WORLD coords; before
+    this, every pair failed the spatial gate by ~|shift| mm because the
+    fidelity diff compared frames directly. The caller passes
+    frame_offset = world-to-box shift (i.e. -bbox_center for XY,
+    -bbox.zmin for Z) so the regen-side xyz is mapped INTO the original
+    world frame before distance comparison.
+    """
     for key in ("axis_origin", "centroid", "center", "position", "origin"):
         v = entry.get(key)
         if isinstance(v, (list, tuple)) and len(v) >= 3:
             try:
-                return (float(v[0]), float(v[1]), float(v[2]))
+                return (
+                    float(v[0]) + frame_offset[0],
+                    float(v[1]) + frame_offset[1],
+                    float(v[2]) + frame_offset[2],
+                )
             except Exception:
                 continue
     return None
@@ -150,6 +186,7 @@ def _greedy_pair(
     kind: str,
     tol_xyz_mm: float = _TOL_XYZ_MM,
     tol_dim_frac: float | None = None,
+    b_frame_offset: tuple[float, float, float] = (0.0, 0.0, 0.0),
 ) -> tuple[list[tuple[int, int, float]], list[int], list[int]]:
     # COMPLEX-CAD pass-6: kind-specific dim tolerance (overridable).
     if tol_dim_frac is None:
@@ -160,6 +197,12 @@ def _greedy_pair(
     info is available on either side, the gates are no-ops and the pairing
     collapses to first-fit (count-overlap), preserving prior behavior on
     symmetry/pattern catalogs.
+
+    COMPLEX-CAD pass-9 (2026-06-09): ``b_frame_offset`` is the translation
+    that maps the b-side catalog INTO the a-side frame (subtracted from
+    the b xyz before distance). In box-mode RE the regen catalog is in
+    box-local coords; the caller sets b_frame_offset = world-to-box
+    inverse so the diff compares both sides in WORLD coords.
     """
     used_b: set[int] = set()
     pairs: list[tuple[int, int, float]] = []
@@ -177,7 +220,7 @@ def _greedy_pair(
                 continue
             cost = 0.0
             if axyz is not None:
-                bxyz = _xyz_of(b)
+                bxyz = _xyz_of(b, frame_offset=b_frame_offset)
                 if bxyz is not None:
                     d = (
                         (axyz[0] - bxyz[0]) ** 2
@@ -339,6 +382,14 @@ class FeatureFidelityDiff(SkillBase):
         # before the loop so industrial-scale parts (bbox > 1 m) get a
         # bbox-relative gate instead of the 5 mm floor.
         tol_xyz = _adaptive_xyz_tol(ca, cb)
+        # COMPLEX-CAD pass-9: when the regen catalog (b) is in a different
+        # coordinate frame (e.g. box-local on a placeholder-box build),
+        # apply the stashed frame_translation_mm so both catalogs are
+        # compared in world coords. Subtracted because the planner stored
+        # the world→box shift (b_world = b_local - shift means
+        # b_world_xyz = _xyz_of(b) + (-shift_x, -shift_y, -shift_z)).
+        b_offset_raw = _read_frame_offset(cb)
+        b_offset = (-b_offset_raw[0], -b_offset_raw[1], -b_offset_raw[2])
 
         for k in _KINDS:
             a = counts_a[k]
@@ -346,7 +397,7 @@ class FeatureFidelityDiff(SkillBase):
             a_list = ca.get(k) or []
             b_list = cb.get(k) or []
             pairs, unmatched_a, unmatched_b = _greedy_pair(
-                a_list, b_list, k, tol_xyz_mm=tol_xyz,
+                a_list, b_list, k, tol_xyz_mm=tol_xyz, b_frame_offset=b_offset,
             )
             all_pairs[k] = pairs
             by_kind[k] = {"a": a, "b": b, "diff": b - a, "matched": len(pairs)}

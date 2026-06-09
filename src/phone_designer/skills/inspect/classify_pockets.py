@@ -435,6 +435,27 @@ def _classify_one(faces, comp, body_bbox):
             proj = (p[0] - axis_origin[0]) * ax + (p[1] - axis_origin[1]) * ay + (p[2] - axis_origin[2]) * az
             cyl_endpoints.append((proj, r))
 
+    # ── Side wall axial spans (for rectangular extrude_pocket) ─────────────
+    # COMPLEX-CAD pass-9 (2026-06-09): pure-rectangular pockets (cut by
+    # extrude_pocket, no cylindrical surface) have 4 side walls whose
+    # normals are PERPENDICULAR to the pocket axis (dot < 0.85). The
+    # original depth pipeline skipped them and fell through to depth=0
+    # when there was only 1 floor level — so every box-mode extrude_pocket
+    # regen-detected pocket had depth=0 and got filtered out, even though
+    # the geometry was perfect. Collect each side-wall's axis-span as a
+    # fallback depth signal.
+    side_wall_axis_spans: list[tuple[float, float]] = []
+    for fi in plane_idx:
+        n = _face_normal_at_center(faces[fi])
+        dot = n[0] * ax + n[1] * ay + n[2] * az
+        if abs(dot) >= 0.85:
+            continue  # already counted as floor
+        bb = _face_bbox(faces[fi])
+        mn, mx = bb
+        lo = (mn[0] - axis_origin[0]) * ax + (mn[1] - axis_origin[1]) * ay + (mn[2] - axis_origin[2]) * az
+        hi = (mx[0] - axis_origin[0]) * ax + (mx[1] - axis_origin[1]) * ay + (mx[2] - axis_origin[2]) * az
+        side_wall_axis_spans.append((min(lo, hi), max(lo, hi)))
+
     # ── Diameter / depth ───────────────────────────────────────────────────
     if cyl_endpoints:
         cyl_endpoints.sort(key=lambda t: t[0])
@@ -442,6 +463,21 @@ def _classify_one(faces, comp, body_bbox):
         depth = abs(cyl_endpoints[-1][0] - cyl_endpoints[0][0])
         top_r = cyl_endpoints[-1][1]
         bot_r = cyl_endpoints[0][1]
+        top_d = 2.0 * top_r
+        bot_d = 2.0 * bot_r
+    elif side_wall_axis_spans:
+        # COMPLEX-CAD pass-9: rectangular pocket — use the side wall axial
+        # extent as depth. The opening and floor are on the same XY footprint
+        # so the side-wall span captures the pocket depth.
+        wall_lows = [s[0] for s in side_wall_axis_spans]
+        wall_highs = [s[1] for s in side_wall_axis_spans]
+        depth = abs(max(wall_highs) - min(wall_lows))
+        # Use the floor level's in-plane radius if available, else 0.
+        if distinct_radii:
+            top_r = max(distinct_radii)
+            bot_r = max(distinct_radii)
+        else:
+            top_r = bot_r = 0.0
         top_d = 2.0 * top_r
         bot_d = 2.0 * bot_r
     elif distinct_levels:
