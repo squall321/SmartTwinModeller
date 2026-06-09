@@ -110,6 +110,10 @@ def _standardize_entry(shape, axis_origin, axis_dir, depth_mm: float):
     # both on the surface; the ENTRY is the endpoint closer to a bbox
     # face (it sits ON a body outer surface). Compute distances of both
     # endpoints to the nearest face along their dominant axis.
+    # (Pass-22 tried to advance outside-bbox endpoints to body face
+    # along axis_dir — regressed preserve_brep on as1_pe_203 because
+    # the orig catalog's stored axis_origin changed too, breaking the
+    # round-trip identity. Reverted.)
     try:
         from OCP.Bnd import Bnd_Box
         from OCP.BRepBndLib import BRepBndLib
