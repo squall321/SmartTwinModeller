@@ -348,12 +348,10 @@ def _hole_step(
     diams = hole.get("diameters_mm") or []
     primary_d = float(min(diams)) if diams else 3.4
     depth = float(hole.get("depth_mm") or 5.0)
-    # COMPLEX-CAD pass-14 REVERTED: keep the 200 mm clamp in BOTH modes.
-    # Removing it in box mode let 1016 mm cuts overlap with adjacent
-    # pocket regions (pockets matched 14 → 10) without recovering any
-    # holes (still 0 matched — the depth drift exceeds the 8 % hole
-    # tolerance regardless). The remaining as1_pe_203 holes 0/7 issue
-    # needs a depth-aware OR catalog-shrink fix, not a clamp tweak.
+    # COMPLEX-CAD pass-19 REVERTED: box-mode no-clamp test still
+    # regressed pockets 14 → 10 even after pass-17 entry standardiser.
+    # The issue is geometric overlap (deep cylinders carve pocket
+    # regions), not detection. Keep 200 mm clamp in both modes.
     if depth > 200.0:
         depth = 200.0
     axis_dir = hole.get("axis_dir") or [0.0, 0.0, -1.0]
