@@ -348,10 +348,13 @@ def _hole_step(
     diams = hole.get("diameters_mm") or []
     primary_d = float(min(diams)) if diams else 3.4
     depth = float(hole.get("depth_mm") or 5.0)
-    # COMPLEX-CAD pass-19 REVERTED: box-mode no-clamp test still
-    # regressed pockets 14 → 10 even after pass-17 entry standardiser.
-    # The issue is geometric overlap (deep cylinders carve pocket
-    # regions), not detection. Keep 200 mm clamp in both modes.
+    # COMPLEX-CAD pass-21 REVERTED. Even with pass-20 reorder (holes
+    # before pockets) AND no clamp, as1_pe_203 box drops 0.625 → 0.516
+    # because the deep 1016 mm holes still overlap with where 4 of the
+    # 18 pockets sit on the chassis topology — whichever cut runs
+    # second, BRepAlgoAPI_Cut no-ops on already-removed material.
+    # Reorder doesn't fix geometric overlap; only a CSG-aware planner
+    # or a depth-vs-position constraint solver would.
     if depth > 200.0:
         depth = 200.0
     axis_dir = hole.get("axis_dir") or [0.0, 0.0, -1.0]
@@ -2726,6 +2729,33 @@ def _build_plan(
         )
     if description_parts:
         plan["description"] = " | ".join(description_parts)
+
+    # COMPLEX-CAD pass-20 (2026-06-10): in box mode, reorder so HOLES
+    # are emitted BEFORE pockets. Deep cylinder cuts then carve their
+    # full depth first; subsequent pocket cuts hit the post-hole body
+    # and naturally produce zero-delta SKIPs only where they ACTUALLY
+    # overlap (instead of all pocket cuts running BEFORE the holes and
+    # then deep holes carving over them). Same set of cuts, different
+    # order — yields the same union in CSG terms but produces a regen
+    # body whose pocket geometry the detector can still classify.
+    if feat_shift != (0.0, 0.0, 0.0):
+        steps_list = plan.get("steps") or []
+        base_steps = [s for s in steps_list if s.get("id", "").startswith("s_base")]
+        hole_skills = {
+            "hole", "clearance_hole", "counterbore_hole",
+            "countersink_hole", "tap_drill_hole", "dowel_pin_hole",
+            "hole_array",
+        }
+        hole_steps = [
+            s for s in steps_list
+            if s not in base_steps and s.get("skill") in hole_skills
+        ]
+        other_steps = [
+            s for s in steps_list
+            if s not in base_steps and s.get("skill") not in hole_skills
+        ]
+        plan["steps"] = base_steps + hole_steps + other_steps
+
     return plan
 
 
