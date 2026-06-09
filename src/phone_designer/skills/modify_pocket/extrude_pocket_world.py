@@ -181,3 +181,31 @@ class ExtrudePocketWorld(SkillBase):
             },
         )
         return SkillResult(body=Part(new_shape), history=history)
+
+
+def _largest_solid(shape):
+    """Return the largest TopoDS_Solid inside ``shape`` by volume. If the
+    input is already a Solid, return it unchanged. If no Solids are
+    found, return the input as-is (caller may still get a Compound but
+    at least the chain doesn't crash silently)."""
+    try:
+        from OCP.BRepGProp import BRepGProp
+        from OCP.GProp import GProp_GProps
+        from OCP.TopAbs import TopAbs_SOLID
+        from OCP.TopExp import TopExp_Explorer
+        from OCP.TopoDS import TopoDS
+        it = TopExp_Explorer(shape, TopAbs_SOLID)
+        best = None
+        best_vol = -1.0
+        while it.More():
+            s = TopoDS.Solid_s(it.Current())
+            p = GProp_GProps()
+            BRepGProp.VolumeProperties_s(s, p)
+            v = abs(float(p.Mass()))
+            if v > best_vol:
+                best_vol = v
+                best = s
+            it.Next()
+        return best if best is not None else shape
+    except Exception:
+        return shape

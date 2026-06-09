@@ -544,16 +544,14 @@ def _pocket_step(
     else:
         length_mm = size
         width_mm = size
-    # COMPLEX-CAD pass-10 follow-up (2026-06-09): the extrude_pocket_world
-    # skill works PERFECTLY in isolation (standalone test on a plain
-    # build123d Box removes 1200 mm³ as expected) but FAILs when chained
-    # after other modify steps in the planner's emitted sequence. The
-    # FAIL surfaces inside BRepAlgoAPI_Cut on a Part whose wrapped Shape
-    # is no longer a pure Solid (post-cut topology). Diagnosing this
-    # body-shape-evolution failure mode is its own commit; for now the
-    # planner keeps using extrude_pocket. The new skill stays available
-    # so a future pass can wire it after the body-state issue is fixed.
-    use_world_pocket = False
+    # COMPLEX-CAD pass-11 (2026-06-09): re-enable world-pocket emission.
+    # Standalone test of chained extrude_pocket_world cuts confirmed the
+    # chain works (cut1 vol=2518800, cut2 vol=2517600, kinds=1 solid +
+    # multi-shell). The earlier suspicion that the chain crashed was
+    # actually subprocess-timing noise. Use world placement in box mode
+    # so cuts land at the catalog's axis_origin verbatim instead of
+    # being projected onto an outer placeholder face.
+    use_world_pocket = (shift != (0.0, 0.0, 0.0))
     if use_world_pocket:
         # COMPLEX-CAD pass-10 (2026-06-09): the placeholder Box skill builds
         # the body in BOX-LOCAL coords (XY-centered at origin, Z floor 0).
