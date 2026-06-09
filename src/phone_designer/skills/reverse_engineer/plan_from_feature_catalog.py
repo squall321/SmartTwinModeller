@@ -348,10 +348,13 @@ def _hole_step(
     diams = hole.get("diameters_mm") or []
     primary_d = float(min(diams)) if diams else 3.4
     depth = float(hole.get("depth_mm") or 5.0)
-    # PACK F — clamp depth to the 200 mm cap shared by clearance_hole /
-    # tap_drill_hole / counterbore_hole / countersink_hole / hole. Big
-    # assembly parts (pythonocc__11752 — 1280 mm chassis) can otherwise
-    # emit depth=1147 mm which fails Args validation before the step runs.
+    # COMPLEX-CAD pass-13 REVERT (2026-06-09): the 200 mm clamp turned
+    # out to be load-bearing — removing it or relaxing it to the body
+    # axis extent caused preserve_brep regression on as1_pe_203 (1.0 →
+    # 0.87) and no improvement on box mode (the 1016 mm catalog depth
+    # exceeds the 8 % hole tolerance regardless of whether the cut
+    # itself is 200 or 1016). Fixing this needs a kind-aware drift
+    # tolerance for industrial holes, not a depth-clamp tweak.
     if depth > 200.0:
         depth = 200.0
     axis_dir = hole.get("axis_dir") or [0.0, 0.0, -1.0]
@@ -382,6 +385,17 @@ def _hole_step(
             conf = float(bm.get("confidence") or 0.0)
             if conf >= _STD_MATCH_MIN_CONF:
                 thread_spec = bm.get("thread_spec")
+
+    # COMPLEX-CAD pass-12 (2026-06-09): in box mode (shift != identity)
+    # the specialized hole skills (counterbore_hole / countersink_hole /
+    # tap_drill_hole / clearance_hole) use face_named + position_xy. The
+    # face_named resolves to the placeholder slab's OUTER face, not the
+    # catalog's actual entry plane, so the cut drifts by the same
+    # margin as the pocket case (now fixed via extrude_pocket_world).
+    # Force the generic ``hole`` skill path (which uses world position +
+    # direction) for box mode so cuts land at the catalog axis_origin.
+    if shift != (0.0, 0.0, 0.0):
+        thread_spec = None
 
     sid = f"s_hole_{idx}"
 
@@ -425,8 +439,21 @@ def _hole_step(
     # (1.0 → 0.903 in preserve_brep). Until the probe is exact, the
     # bbox-face override preserves as1_pe_203 PERFECT; Ventilator's
     # 0.36 stays a known limitation tied to the override convention.
+    # COMPLEX-CAD pass-12 (2026-06-09): entry-Z override only in
+    # preserve_brep / import_step modes (shift == identity), where the
+    # catalog's axis_origin may still point to the deep cap. In box mode
+    # the catalog axis_origin (after shift) already lands at the correct
+    # box-local entry of the hole; overriding to the bbox face moves
+    # INTERIOR holes (e.g. as1_pe_203 hole 0 at world y=0 inside a body
+    # extending y=-686..1524) by hundreds of mm to the +Y face. Skip
+    # the override for box mode so interior holes land where the
+    # catalog says they do.
     axis_sel = _dominant_axis_sign(axis_dir)
-    if axis_sel is not None and bbox is not None:
+    if (
+        axis_sel is not None
+        and bbox is not None
+        and shift == (0.0, 0.0, 0.0)
+    ):
         axis_idx, sgn = axis_sel
         bmin_w = float(bbox[axis_idx])
         bmax_w = float(bbox[axis_idx + 3])
