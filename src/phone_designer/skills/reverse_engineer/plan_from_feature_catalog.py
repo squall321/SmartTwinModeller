@@ -544,6 +544,59 @@ def _pocket_step(
     else:
         length_mm = size
         width_mm = size
+    # COMPLEX-CAD pass-10 (2026-06-09): for INTERIOR pockets (axis_origin
+    # not near any bbox face) the face_named selector misses by ~the
+    # body's extent. Detect interior pockets by checking whether the
+    # pocket's normal-axis coord sits well INSIDE the bbox; if so, emit
+    # extrude_pocket_world which places the prism by WORLD coords +
+    # axis_dir directly. Surface pockets keep extrude_pocket so history
+    # tracking + face_selector resolution stays intact.
+    is_interior = False
+    if bbox is not None:
+        try:
+            axis_sel_g = _dominant_axis_sign(axis_dir)
+            if axis_sel_g is not None:
+                ai, sgn = axis_sel_g
+                bmin_w = float(bbox[ai])
+                bmax_w = float(bbox[ai + 3])
+                extent = bmax_w - bmin_w
+                cur = [ox, oy, oz][ai]
+                # treat as interior when the catalog axis_origin is farther
+                # than 15 % of the body extent from the matching bbox face.
+                # COMPLEX-CAD pass-10: this is the empirical threshold that
+                # caught as1-oc-214 pocket 2 (axis_origin z=-3 on a body z
+                # range -4..80 → 7 mm from -4, 83 mm from 80; outside 15 %
+                # margin of either face = 12.6 mm, so the pocket would
+                # otherwise drift to the top face by 83 mm).
+                near_face = (
+                    abs(cur - bmin_w) < 0.15 * extent
+                    or abs(cur - bmax_w) < 0.15 * extent
+                )
+                is_interior = not near_face
+        except Exception:
+            is_interior = False
+    if is_interior:
+        # COMPLEX-CAD pass-10 (2026-06-09): the placeholder Box skill builds
+        # the body in BOX-LOCAL coords (XY-centered at origin, Z floor 0).
+        # ``ox/oy/oz`` are already in that frame (catalog axis_origin +
+        # feat_shift). For preserve_brep mode shift is identity so the
+        # values match the original body's world coords.
+        #
+        # Direction convention: classify_pockets stores ``axis_dir`` as
+        # the INWARD direction (line 361: ``axis_dir = -plane_normal``),
+        # so the tool needs to extend in +axis_dir for the cavity to
+        # land inside the body. extrude_pocket_world's ``direction="out"``
+        # extends along +axis_dir; "into" extends opposite. The "out"
+        # branch here is the correct one for catalog-emitted pockets.
+        return _new_step(sid, "extrude_pocket_world", {
+            "world_origin": [ox, oy, oz],
+            "axis_dir": [float(axis_dir[0]), float(axis_dir[1]), float(axis_dir[2])],
+            "length_mm": float(length_mm),
+            "width_mm": float(width_mm),
+            "depth_mm": depth,
+            "direction": "out",
+        })
+
     # COMPLEX-CAD fix (2026-06-08): for non-Z faces emit the TWO in-plane
     # world coords as (center_x_mm, center_y_mm). The 3rd coord (the face's
     # normal axis) gets filled in by the resolver from the face centroid.
