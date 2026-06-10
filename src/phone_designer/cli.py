@@ -695,6 +695,107 @@ def corpus_test(
     raise typer.Exit(code=0)
 
 
+@app.command("corpus-regress")
+def corpus_regress(
+    mode: str = typer.Option(
+        "preserve_brep", "--mode",
+        help="preserve_brep | box | both",
+    ),
+    subset: str = typer.Option(
+        "root", "--subset",
+        help="root | complex | industrial | revolved | all",
+    ),
+    update_baseline: bool = typer.Option(
+        False, "--update-baseline",
+        help="corpus/baselines/<mode>_<subset>.json 재작성 (비교 생략)",
+    ),
+    json_out: Path = typer.Option(
+        None, "--json-out", help="(선택) sweep 결과 + 비교 JSON 출력 경로"
+    ),
+    timeout_s: int = typer.Option(
+        None, "--timeout-s",
+        help="파일당 subprocess 타임아웃 (기본 300s)",
+    ),
+):
+    """Tracked corpus regression — RE round-trip 을 baseline 과 비교.
+
+    각 파일을 격리된 subprocess (300s watchdog) 에서 실행:
+      ImportStep → ExtractFeatureCatalog → PlanFromFeatureCatalog
+      → PlanExecutor → ExtractFeatureCatalog(regen) → FeatureFidelityDiff
+
+    exit 0 = baseline 대비 회귀 없음
+    exit 1 = match_ratio 0.005 초과 하락 또는 신규 error 발생 파일 존재
+    exit 2 = 사용법 오류 / baseline 없음
+    """
+    import json
+
+    from phone_designer.corpus import regress
+
+    if mode not in (*regress.MODES, "both"):
+        typer.echo(f"[error] unknown --mode: {mode}", err=True)
+        raise typer.Exit(code=2)
+    if subset not in regress.SUBSETS:
+        typer.echo(f"[error] unknown --subset: {subset}", err=True)
+        raise typer.Exit(code=2)
+
+    modes = list(regress.MODES) if mode == "both" else [mode]
+    eff_timeout = timeout_s or regress.PER_FILE_TIMEOUT_S
+    payloads: list[dict[str, Any]] = []
+    any_regression = False
+
+    for m in modes:
+        records = regress.run_sweep(
+            m, subset, timeout_s=eff_timeout, log=typer.echo
+        )
+        payload: dict[str, Any] = {
+            "mode": m, "subset": subset, "records": records,
+        }
+        if update_baseline:
+            path = regress.save_baseline(m, subset, records)
+            typer.echo(f">>> baseline written: {path}")
+        else:
+            baseline = regress.load_baseline(m, subset)
+            if baseline is None:
+                typer.echo(
+                    f"[error] no baseline at "
+                    f"{regress.baseline_path(m, subset)} — run with "
+                    f"--update-baseline first",
+                    err=True,
+                )
+                raise typer.Exit(code=2)
+            cmp = regress.compare_to_baseline(records, baseline)
+            payload["comparison"] = cmp
+            for r in cmp["regressions"]:
+                typer.echo(f"REGRESSION {r['file']}: {r['reason']}", err=True)
+            for r in cmp["improvements"]:
+                typer.echo(
+                    f"improved   {r['file']}: "
+                    f"{r['baseline_match']} -> {r['current_match']}"
+                )
+            for f in cmp["new_files"]:
+                typer.echo(f"info: new file (not in baseline): {f}")
+            for f in cmp["missing_files"]:
+                typer.echo(f"info: in baseline but not on disk: {f}")
+            typer.echo(
+                f">>> [{m}/{subset}] {len(records)} file(s): "
+                f"{len(cmp['regressions'])} regression(s), "
+                f"{len(cmp['improvements'])} improvement(s)"
+            )
+            if cmp["regressions"]:
+                any_regression = True
+        payloads.append(payload)
+
+    if json_out is not None:
+        json_out.parent.mkdir(parents=True, exist_ok=True)
+        json_out.write_text(
+            json.dumps({"runs": payloads}, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        typer.echo(f">>> json: {json_out}")
+
+    raise typer.Exit(code=1 if any_regression else 0)
+
+
 @app.command()
 def version():
     """버전 출력."""
