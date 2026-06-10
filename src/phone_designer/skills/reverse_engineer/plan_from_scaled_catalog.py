@@ -388,9 +388,20 @@ class PlanFromScaledCatalog(SkillBase):
         else:
             planner_catalog, variation_warnings = varied, []
 
+        # COMPLEX-CAD pass-25 (2026-06-10, plan item P5): this macro KNOWS
+        # the uniform scale of the catalog it hands the planner — thread it
+        # through so the planner's absolute-mm clamps (200 mm depth caps,
+        # 20 mm pad cap, _MIN_EMITTED_CUT_MM3 floor, …) and the
+        # live-body-measured base dims in _pick_base_shape scale with the
+        # variant. Per-feature-only / override-only edits keep 1.0 — they
+        # are local tweaks, not a uniform rescale of the part.
         plan_res = PlanFromFeatureCatalog().apply(body, {
             "catalog": planner_catalog,
             "base_step_kind": args.base_step_kind,
+            "dimension_scale": (
+                float(args.scale_factor)
+                if args.scale_factor is not None else 1.0
+            ),
         })
         generated_plan = plan_res.extras.get("generated_plan")
         return SkillResult(

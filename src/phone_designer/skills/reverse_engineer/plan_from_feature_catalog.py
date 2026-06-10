@@ -108,6 +108,10 @@ def _direction_str_from_axis(axis_idx: int, into_sign: int) -> str:
 # capacitor terminal pads with d≈0.04 mm) drops out instead of poisoning the
 # plan. Real holes on consumer-electronics scale parts are orders of
 # magnitude above this.
+# COMPLEX-CAD pass-25 (2026-06-10, plan item P5): every USE site multiplies
+# this by dimension_scale³ so a 0.25× catalog variant's (legitimately tiny)
+# cuts survive the floor and a 4× variant doesn't leak 4³ more noise.
+# At dimension_scale=1.0 the product is bit-identical to the bare constant.
 _MIN_EMITTED_CUT_MM3 = 0.02
 
 # COMPLEX-CAD pass-7 dehardcode (2026-06-09): single source for the
@@ -334,6 +338,7 @@ def _hole_step(
     std_match: dict | None,
     bbox: tuple[float, float, float, float, float, float] | None = None,
     shift: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    dimension_scale: float = 1.0,
 ) -> dict:
     """Pick the most specific hole skill for this hole descriptor.
 
@@ -343,10 +348,15 @@ def _hole_step(
       - "threaded"     → tap_drill_hole + thread_spec
       - with standard_match → clearance_hole + thread_spec
       - fallback       → hole (raw diameter / depth / direction)
+
+    COMPLEX-CAD pass-25 (2026-06-10, plan item P5): ``dimension_scale``
+    multiplies every absolute-mm guard/default in this function so a
+    uniformly scaled catalog gets proportionally scaled clamps. At 1.0
+    the output is bit-identical to the pre-P5 behaviour (x*1.0 == x).
     """
     htype = hole.get("type", "simple")
     diams = hole.get("diameters_mm") or []
-    primary_d = float(min(diams)) if diams else 3.4
+    primary_d = float(min(diams)) if diams else 3.4 * dimension_scale
     # COMPLEX-CAD pass-23 (2026-06-10): for box-mode cuts prefer
     # ``entry_origin`` + ``entry_depth_mm`` if classify_holes populated
     # them. They are the BODY-RELATIVE entry — derived by intersecting
@@ -356,12 +366,17 @@ def _hole_step(
     # below body bottom y=-685.8). preserve_brep keeps using
     # axis_origin to maintain the round-trip identity.
     axis_dir = hole.get("axis_dir") or [0.0, 0.0, -1.0]
+    # COMPLEX-CAD pass-25 (2026-06-10, P5): missing-depth default scales.
     if shift != (0.0, 0.0, 0.0) and hole.get("entry_origin") is not None:
         axis_origin = hole.get("entry_origin")
-        depth = float(hole.get("entry_depth_mm") or hole.get("depth_mm") or 5.0)
+        depth = float(
+            hole.get("entry_depth_mm")
+            or hole.get("depth_mm")
+            or 5.0 * dimension_scale
+        )
     else:
         axis_origin = hole.get("axis_origin") or [0.0, 0.0, 0.0]
-        depth = float(hole.get("depth_mm") or 5.0)
+        depth = float(hole.get("depth_mm") or 5.0 * dimension_scale)
     # Keep the 200 mm clamp — pass-24c (2026-06-10) retried removing it
     # for entry-based emission only (entry_depth_mm is body-clipped by
     # construction, so depth overflow is impossible): as1_pe_203 box
@@ -371,8 +386,10 @@ def _hole_step(
     # planner emits footprint-true pockets (plan items A10/P9) or
     # CSG-aware emission ordering — same verdict as pass-19/21, now
     # with the position-correctness variable eliminated.
-    if depth > 200.0:
-        depth = 200.0
+    # COMPLEX-CAD pass-25 (2026-06-10, P5): the 200 mm cap scales with the
+    # catalog's uniform dimension_scale (200*1.0 == 200 → corpus-identical).
+    if depth > 200.0 * dimension_scale:
+        depth = 200.0 * dimension_scale
     face_sel = _pick_face_selector(axis_origin, axis_dir, bbox)
     # Re-anchor catalog world-frame coords into the placeholder box's frame
     # (shift = (-cx, -cy, -zmin)). Identity when shift is (0,0,0).
@@ -497,12 +514,16 @@ def _pocket_step(
     pocket: dict,
     bbox: tuple[float, float, float, float, float, float] | None = None,
     shift: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    dimension_scale: float = 1.0,
 ) -> dict:
+    # COMPLEX-CAD pass-25 (2026-06-10, P5): absolute-mm defaults/clamps in
+    # this function scale with dimension_scale (identity at 1.0).
     top_d = float(pocket.get("top_d_mm") or 0.0)
-    depth = float(pocket.get("depth_mm") or 1.0)
+    depth = float(pocket.get("depth_mm") or 1.0 * dimension_scale)
     # PACK F — clamp depth to extrude_pocket / hole ≤200 mm cap.
-    if depth > 200.0:
-        depth = 200.0
+    # COMPLEX-CAD pass-25 (2026-06-10, P5): cap scales.
+    if depth > 200.0 * dimension_scale:
+        depth = 200.0 * dimension_scale
     origin = pocket.get("axis_origin") or [0.0, 0.0, 0.0]
     axis_dir = pocket.get("axis_dir") or [0.0, 0.0, -1.0]
     # PACK-C debug: opt-in via env var to surface false-pass-drift cases.
@@ -547,7 +568,8 @@ def _pocket_step(
     # Default — extrude_pocket with placeholder rectangular sketch sized to
     # the measured top diameter. RectangleSketch fields: kind="rectangle"
     # + length_mm + width_mm + center_x_mm + center_y_mm.
-    size = top_d if top_d > 0 else 5.0
+    # COMPLEX-CAD pass-25 (2026-06-10, P5): missing-top_d default scales.
+    size = top_d if top_d > 0 else 5.0 * dimension_scale
     # PACK B drift fix — clamp sketch L/W so the pocket can't be larger than
     # the body's XY footprint. The catalog frequently reports top_d_mm at
     # the OUTER cap of a stepped/through pocket which can equal or exceed
@@ -564,8 +586,9 @@ def _pocket_step(
             body_l = float(xmax) - float(xmin)
             body_w = float(ymax) - float(ymin)
             # leave a 1% slab margin so the pocket is strictly interior.
-            max_l = max(body_l * 0.98, 0.1)
-            max_w = max(body_w * 0.98, 0.1)
+            # COMPLEX-CAD pass-25 (2026-06-10, P5): 0.1 mm floors scale.
+            max_l = max(body_l * 0.98, 0.1 * dimension_scale)
+            max_w = max(body_w * 0.98, 0.1 * dimension_scale)
             length_mm = min(size, max_l)
             width_mm = min(size, max_w)
             # Reject pockets whose XY centre is outside the body's bbox in
@@ -573,13 +596,16 @@ def _pocket_step(
             # centred at (0,0) so the body-local extents are
             # (-body_l/2, body_l/2) × (-body_w/2, body_w/2). If the centre
             # sits more than half-extent + margin away, it's spurious.
+            # COMPLEX-CAD pass-25 (2026-06-10, P5): 0.5 mm margin + 0.1 mm
+            # degenerate-pocket size scale with dimension_scale.
             if shift != (0.0, 0.0, 0.0):
-                if abs(ox) > body_l * 0.5 + 0.5 or abs(oy) > body_w * 0.5 + 0.5:
+                _margin = 0.5 * dimension_scale
+                if abs(ox) > body_l * 0.5 + _margin or abs(oy) > body_w * 0.5 + _margin:
                     # Degenerate: the pocket would cut outside the slab.
                     # Skip by emitting a near-zero pocket centred on origin
                     # (executor's zero-delta skip path catches it).
-                    length_mm = 0.1
-                    width_mm = 0.1
+                    length_mm = 0.1 * dimension_scale
+                    width_mm = 0.1 * dimension_scale
                     ox = 0.0
                     oy = 0.0
         except Exception:
@@ -648,10 +674,13 @@ def _boss_step(
     boss: dict,
     bbox: tuple[float, float, float, float, float, float] | None = None,
     shift: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    dimension_scale: float = 1.0,
 ) -> dict:
+    # COMPLEX-CAD pass-25 (2026-06-10, P5): absolute-mm defaults/caps in
+    # this function scale with dimension_scale (identity at 1.0).
     center = boss.get("center") or [0.0, 0.0, 0.0]
-    height = float(boss.get("height_mm") or 1.0)
-    size = float(boss.get("diameter_or_size_mm") or 4.0)
+    height = float(boss.get("height_mm") or 1.0 * dimension_scale)
+    size = float(boss.get("diameter_or_size_mm") or 4.0 * dimension_scale)
     # Bosses grow upward from their anchor face; choose the closer body face
     # based on the boss centre Z.
     face_sel = _pick_face_selector(center, [0.0, 0.0, 1.0], bbox)
@@ -679,7 +708,8 @@ def _boss_step(
             if allowed > 0.0:
                 height = min(height, allowed)
             else:
-                height = min(height, 1.0)
+                # COMPLEX-CAD pass-25 (2026-06-10, P5): 1 mm shoulder scales.
+                height = min(height, 1.0 * dimension_scale)
         except Exception:
             pass
 
@@ -690,10 +720,12 @@ def _boss_step(
     # bosses. Clamp to the skill's upper bound so the step at least validates
     # and runs; the zero-delta skip path catches it from there if the cut
     # lands in already-removed material.
-    if height > 20.0:
-        height = 20.0
+    # COMPLEX-CAD pass-25 (2026-06-10, P5): 20 mm cap + 1 mm floor scale
+    # with dimension_scale (identity at 1.0 — corpus output unchanged).
+    if height > 20.0 * dimension_scale:
+        height = 20.0 * dimension_scale
     elif height <= 0.0:
-        height = 1.0
+        height = 1.0 * dimension_scale
 
     # mounting_pad expects a SketchSpec (CircleSketch | RectangleSketch | …)
     # + height_mm. Both branches emit a circular pad at the projected XY.
@@ -709,11 +741,15 @@ def _boss_step(
     })
 
 
-def _rib_step(idx: int, rib: dict, base_top_z: float = 0.0) -> dict:
+def _rib_step(
+    idx: int, rib: dict, base_top_z: float = 0.0,
+    dimension_scale: float = 1.0,
+) -> dict:
     sid = f"s_rib_{idx}"
-    length = float(rib.get("length_mm") or 10.0)
-    thickness = float(rib.get("thickness_mm") or 1.0)
-    height = float(rib.get("height_mm") or 3.0)
+    # COMPLEX-CAD pass-25 (2026-06-10, P5): missing-field defaults scale.
+    length = float(rib.get("length_mm") or 10.0 * dimension_scale)
+    thickness = float(rib.get("thickness_mm") or 1.0 * dimension_scale)
+    height = float(rib.get("height_mm") or 3.0 * dimension_scale)
     # Rib needs start/end + width/height/up_axis. The detector reports only
     # length/thickness/height (no anchor), so we centre the rib on the top
     # face of the placeholder box (z = base_top_z). With up_axis="+Z" and
@@ -729,25 +765,29 @@ def _rib_step(idx: int, rib: dict, base_top_z: float = 0.0) -> dict:
     })
 
 
-def _lug_step(idx: int, lug: dict) -> dict:
+def _lug_step(idx: int, lug: dict, dimension_scale: float = 1.0) -> dict:
     sid = f"s_lug_{idx}"
     axis = lug.get("axis") or [1.0, 0.0, 0.0]
-    sep = float(lug.get("separation_mm") or 10.0)
+    # COMPLEX-CAD pass-25 (2026-06-10, P5): the fixed lug dims and the
+    # missing-separation default are absolute mm — scale them so a scaled
+    # catalog's lug pair stays proportional (identity at 1.0).
+    sep = float(lug.get("separation_mm") or 10.0 * dimension_scale)
     # Anchor centre of pair at origin, oriented along the pair axis.
     return _new_step(sid, "lug_pair", {
         "center": [0.0, 0.0, 0.0],
         "axis": [float(axis[0]), float(axis[1]), float(axis[2])],
         "separation_mm": sep,
-        "boss_diameter_mm": 6.0,
-        "hole_diameter_mm": 2.5,
-        "height_mm": 4.0,
+        "boss_diameter_mm": 6.0 * dimension_scale,
+        "hole_diameter_mm": 2.5 * dimension_scale,
+        "height_mm": 4.0 * dimension_scale,
     })
 
 
-def _sweep_boss_step(idx: int, feat: dict) -> dict:
+def _sweep_boss_step(idx: int, feat: dict, dimension_scale: float = 1.0) -> dict:
     """Emit a ``swept_boss_along_curve`` step from a sweep_features entry."""
     sid = f"s_sweep_boss_{idx}"
-    profile_d = float(feat.get("profile_diameter_mm") or 2.0)
+    # COMPLEX-CAD pass-25 (2026-06-10, P5): missing-field default scales.
+    profile_d = float(feat.get("profile_diameter_mm") or 2.0 * dimension_scale)
     path_points = feat.get("path_points") or []
     return _new_step(sid, "swept_boss_along_curve", {
         "face_selector": _DEFAULT_FACE_SELECTOR,
@@ -760,10 +800,11 @@ def _sweep_boss_step(idx: int, feat: dict) -> dict:
     })
 
 
-def _sweep_pocket_step(idx: int, feat: dict) -> dict:
+def _sweep_pocket_step(idx: int, feat: dict, dimension_scale: float = 1.0) -> dict:
     """Emit a ``swept_pocket_along_curve`` step from a sweep_features entry."""
     sid = f"s_sweep_pocket_{idx}"
-    profile_d = float(feat.get("profile_diameter_mm") or 2.0)
+    # COMPLEX-CAD pass-25 (2026-06-10, P5): missing-field default scales.
+    profile_d = float(feat.get("profile_diameter_mm") or 2.0 * dimension_scale)
     path_points = feat.get("path_points") or []
     return _new_step(sid, "swept_pocket_along_curve", {
         "face_selector": _DEFAULT_FACE_SELECTOR,
@@ -776,12 +817,13 @@ def _sweep_pocket_step(idx: int, feat: dict) -> dict:
     })
 
 
-def _loft_boss_step(idx: int, feat: dict) -> dict:
+def _loft_boss_step(idx: int, feat: dict, dimension_scale: float = 1.0) -> dict:
     """Emit a ``loft_boss_between_sketches`` step from a loft_features entry."""
     sid = f"s_loft_boss_{idx}"
-    lower_d = float(feat.get("lower_diameter_mm") or 6.0)
-    upper_d = float(feat.get("upper_diameter_mm") or 4.0)
-    height = float(feat.get("height_mm") or 4.0)
+    # COMPLEX-CAD pass-25 (2026-06-10, P5): missing-field defaults scale.
+    lower_d = float(feat.get("lower_diameter_mm") or 6.0 * dimension_scale)
+    upper_d = float(feat.get("upper_diameter_mm") or 4.0 * dimension_scale)
+    height = float(feat.get("height_mm") or 4.0 * dimension_scale)
     cx, cy = feat.get("center_xy") or [0.0, 0.0]
     return _new_step(sid, "loft_boss_between_sketches", {
         "face_selector": _DEFAULT_FACE_SELECTOR,
@@ -801,12 +843,13 @@ def _loft_boss_step(idx: int, feat: dict) -> dict:
     })
 
 
-def _loft_pocket_step(idx: int, feat: dict) -> dict:
+def _loft_pocket_step(idx: int, feat: dict, dimension_scale: float = 1.0) -> dict:
     """Emit a ``loft_pocket_between_sketches`` step from a loft_features entry."""
     sid = f"s_loft_pocket_{idx}"
-    upper_d = float(feat.get("upper_diameter_mm") or 6.0)
-    lower_d = float(feat.get("lower_diameter_mm") or 4.0)
-    depth = float(feat.get("height_mm") or 4.0)
+    # COMPLEX-CAD pass-25 (2026-06-10, P5): missing-field defaults scale.
+    upper_d = float(feat.get("upper_diameter_mm") or 6.0 * dimension_scale)
+    lower_d = float(feat.get("lower_diameter_mm") or 4.0 * dimension_scale)
+    depth = float(feat.get("height_mm") or 4.0 * dimension_scale)
     cx, cy = feat.get("center_xy") or [0.0, 0.0]
     return _new_step(sid, "loft_pocket_between_sketches", {
         "face_selector": _DEFAULT_FACE_SELECTOR,
@@ -1073,7 +1116,7 @@ def _o_ring_groove_step(
     })
 
 
-def _try_swept_relief(feat: dict) -> dict | None:
+def _try_swept_relief(feat: dict, dimension_scale: float = 1.0) -> dict | None:
     """If a swept pocket has a straight XY-plane path, emit a swept_relief
     step instead of swept_pocket_along_curve. Returns the step dict or None.
 
@@ -1092,9 +1135,12 @@ def _try_swept_relief(feat: dict) -> dict | None:
         z0, z1 = float(p0[2]), float(p1[2])
     except Exception:
         return None
-    if abs(z1 - z0) > 0.01:
+    # COMPLEX-CAD pass-25 (2026-06-10, P5): the 0.01 mm planarity tol, the
+    # 2 mm default profile and the 1 mm stub floor are absolute mm — scale
+    # them with dimension_scale (identity at 1.0).
+    if abs(z1 - z0) > 0.01 * dimension_scale:
         return None
-    profile_d = float(feat.get("profile_diameter_mm") or 2.0)
+    profile_d = float(feat.get("profile_diameter_mm") or 2.0 * dimension_scale)
     # confidence proxy from segment length / profile aspect — short stubs are
     # likely detector noise.
     import math as _math
@@ -1102,7 +1148,7 @@ def _try_swept_relief(feat: dict) -> dict | None:
         (float(p1[0]) - float(p0[0])) ** 2
         + (float(p1[1]) - float(p0[1])) ** 2
     )
-    if seg < max(2.0 * profile_d, 1.0):
+    if seg < max(2.0 * profile_d, 1.0 * dimension_scale):
         return None
     return {
         "start": [float(p0[0]), float(p0[1]), float(p0[2])],
@@ -1121,18 +1167,21 @@ def _revolve_pocket_step(
     idx: int,
     feat: dict,
     shift: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    dimension_scale: float = 1.0,
 ) -> dict:
     """Emit a ``revolve_pocket`` step from a revolve_features entry."""
     sid = f"s_revolve_pocket_{idx}"
     axis_origin = feat.get("axis_origin") or [0.0, 0.0, 0.0]
     axis_dir = feat.get("axis_direction") or [0.0, 0.0, 1.0]
     angle = float(feat.get("angle_deg") or 360.0)
+    # COMPLEX-CAD pass-25 (2026-06-10, P5): the placeholder profile dims
+    # are absolute mm — scale so the revolved cut stays proportional.
     return _new_step(sid, "revolve_pocket", {
         "profile_sketch": {
             "kind": "rectangle",
-            "length_mm": 1.0,
-            "width_mm": 1.0,
-            "center_x_mm": 4.0,
+            "length_mm": 1.0 * dimension_scale,
+            "width_mm": 1.0 * dimension_scale,
+            "center_x_mm": 4.0 * dimension_scale,
         },
         "axis_origin": [
             float(axis_origin[0]) + shift[0],
@@ -1182,7 +1231,7 @@ def _pocket_is_axis_aligned(pocket: dict) -> bool:
     return max(ax, ay, az) >= 0.95
 
 
-def _clamp_feature_depth_mm(depth: float) -> float:
+def _clamp_feature_depth_mm(depth: float, dimension_scale: float = 1.0) -> float:
     """Clamp depth to the pattern skills' ``feature_depth_mm`` bound (0,200].
 
     PACK F (PLAN-DEPTH-CEILING-PATTERN): linear_pattern / circular_pattern /
@@ -1193,12 +1242,18 @@ def _clamp_feature_depth_mm(depth: float) -> float:
     here so the step at least validates; if the cut lands in already-removed
     material the executor's zero-delta-volume skip path handles it from
     there.
+
+    COMPLEX-CAD pass-25 (2026-06-10, P5): both the 1 mm degenerate floor
+    and the 200 mm cap scale with ``dimension_scale`` (identity at 1.0).
+    Note the SKILL Args bound itself stays le=200 — a scaled-up plan may
+    intentionally exceed it; that is the executor's concern, not the
+    planner's (same stance as the scaled 200 mm hole-depth cap).
     """
     d = float(depth)
     if d <= 0.0:
-        return 1.0
-    if d > 200.0:
-        return 200.0
+        return 1.0 * dimension_scale
+    if d > 200.0 * dimension_scale:
+        return 200.0 * dimension_scale
     return d
 
 
@@ -1209,6 +1264,7 @@ def _circular_pattern_step(
     feature_depth_mm: float,
     bbox: tuple[float, float, float, float, float, float] | None = None,
     shift: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    dimension_scale: float = 1.0,
 ) -> dict:
     """Wrap a circular-array of holes into a ``circular_pattern`` step.
 
@@ -1220,13 +1276,16 @@ def _circular_pattern_step(
     center = ring.get("center") or [0.0, 0.0, 0.0]
     axis = ring.get("axis") or [0.0, 0.0, 1.0]
     count = int(ring.get("count") or 6)
-    radius = float(ring.get("radius_mm") or 5.0)
+    # COMPLEX-CAD pass-25 (2026-06-10, P5): missing-radius default scales.
+    radius = float(ring.get("radius_mm") or 5.0 * dimension_scale)
     face_sel = _pick_face_selector(center, axis, bbox)
     return _new_step(sid, "circular_pattern", {
         "face_selector": face_sel,
         "profile_diameter_mm": float(profile_diameter_mm),
         "operation": "hole",
-        "feature_depth_mm": _clamp_feature_depth_mm(feature_depth_mm),
+        "feature_depth_mm": _clamp_feature_depth_mm(
+            feature_depth_mm, dimension_scale,
+        ),
         "count": count,
         "pitch_radius_mm": radius,
         "center_x_mm": float(center[0]) + shift[0],
@@ -1243,6 +1302,7 @@ def _linear_pattern_step(
     feature_depth_mm: float,
     bbox: tuple[float, float, float, float, float, float] | None = None,
     shift: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    dimension_scale: float = 1.0,
 ) -> dict | None:
     """Wrap a linear-array of holes into a ``linear_pattern`` step.
 
@@ -1259,8 +1319,9 @@ def _linear_pattern_step(
     # PACK F — linear_pattern caps spacing_mm at 500 mm. On large assemblies
     # (e.g. pythonocc__11752) the detected hole-run spacing can exceed
     # 500 mm; clamp here so Args validates.
-    if spacing > 500.0:
-        spacing = 500.0
+    # COMPLEX-CAD pass-25 (2026-06-10, P5): cap scales (identity at 1.0).
+    if spacing > 500.0 * dimension_scale:
+        spacing = 500.0 * dimension_scale
     # linear_pattern caps count at 200.
     if count > 200:
         count = 200
@@ -1293,7 +1354,9 @@ def _linear_pattern_step(
         "face_selector": face_sel,
         "profile_diameter_mm": float(profile_diameter_mm),
         "operation": "hole",
-        "feature_depth_mm": _clamp_feature_depth_mm(feature_depth_mm),
+        "feature_depth_mm": _clamp_feature_depth_mm(
+            feature_depth_mm, dimension_scale,
+        ),
         "count": count,
         "spacing_mm": spacing,
         "direction": axis_letter,
@@ -1475,6 +1538,7 @@ def _hole_signature_key(hole: dict) -> tuple[float, float]:
 def _find_mirrored_hole_pairs(
     holes: list, plane: dict,
     bbox: tuple[float, float, float, float, float, float] | None = None,
+    dimension_scale: float = 1.0,
 ) -> list[tuple[int, int]]:
     """Return list of (i, j) index pairs of holes that mirror each other
     across ``plane``. Each hole is matched at most once. Holes lying on the
@@ -1505,10 +1569,14 @@ def _find_mirrored_hole_pairs(
             ) ** 0.5
         except Exception:
             bbox_diag = 0.0
-    tol_xy = max(_PAIR_XY_TOL, bbox_diag * 0.0005)
-    tol_z = max(_PAIR_Z_TOL, bbox_diag * 0.0005)
-    tol_diam = max(_PAIR_DIAM_TOL, bbox_diag * 0.0002)
-    tol_depth = max(_PAIR_DEPTH_TOL, bbox_diag * 0.0005)
+    # COMPLEX-CAD pass-25 (2026-06-10, P5): the absolute-mm tolerance
+    # FLOORS scale with dimension_scale (the bbox-relative component is
+    # already scale-homogeneous because the catalog's bbox is scaled).
+    # Identity at 1.0 — corpus pairing unchanged.
+    tol_xy = max(_PAIR_XY_TOL * dimension_scale, bbox_diag * 0.0005)
+    tol_z = max(_PAIR_Z_TOL * dimension_scale, bbox_diag * 0.0005)
+    tol_diam = max(_PAIR_DIAM_TOL * dimension_scale, bbox_diag * 0.0002)
+    tol_depth = max(_PAIR_DEPTH_TOL * dimension_scale, bbox_diag * 0.0005)
 
     centers: list[tuple[float, float, float] | None] = []
     sigs: list[tuple[float, float]] = []
@@ -1564,6 +1632,7 @@ def _mirror_feature_step(
     plane: dict,
     bbox: tuple[float, float, float, float, float, float] | None,
     shift: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    dimension_scale: float = 1.0,
 ) -> dict | None:
     """Emit a ``mirror_feature`` step for ``hole`` mirrored across ``plane``.
 
@@ -1574,7 +1643,10 @@ def _mirror_feature_step(
     if not diams:
         return None
     profile_d = float(min(diams))
-    if profile_d <= 0.0 or profile_d > 100.0:
+    # COMPLEX-CAD pass-25 (2026-06-10, P5): the 100 mm profile guard is an
+    # absolute-mm bound — scale it so a 4× catalog's mirrored Ø30 holes
+    # don't silently fall back to per-hole emission (identity at 1.0).
+    if profile_d <= 0.0 or profile_d > 100.0 * dimension_scale:
         return None
     depth = float(hole.get("depth_mm") or 0.0)
     if depth <= 0.0:
@@ -1584,8 +1656,9 @@ def _mirror_feature_step(
     # silently, leaving them to fall through to per-hole emission with the
     # same upstream depth problem. Clamp here so the mirror step at least
     # validates.
-    if depth > 200.0:
-        depth = 200.0
+    # COMPLEX-CAD pass-25 (2026-06-10, P5): cap scales (identity at 1.0).
+    if depth > 200.0 * dimension_scale:
+        depth = 200.0 * dimension_scale
 
     origin = hole.get("axis_origin") or [0.0, 0.0, 0.0]
     axis_dir = hole.get("axis_dir") or [0.0, 0.0, -1.0]
@@ -1700,6 +1773,7 @@ def _pick_base_shape(
     body: Any,
     base_l: float, base_w: float, base_h: float,
     bbox: tuple | None,
+    dimension_scale: float = 1.0,
 ) -> tuple[str, dict]:
     """Pick (skill_name, args) for the base step.
 
@@ -1708,6 +1782,14 @@ def _pick_base_shape(
     bbox aspect), NEVER per-file. Falls back to box on any failure.
 
     Returns ("box", {length_mm, width_mm, height_mm}) by default.
+
+    COMPLEX-CAD pass-25 (2026-06-10, P5a): radii/heights measured from the
+    LIVE body (cylinder/sphere/torus/cone faces, planar cap spans) are in
+    the ORIGINAL part's scale — the body is never scaled, only the catalog
+    is. Multiply every live-measured dimension by ``dimension_scale`` so a
+    2× variant gets a 2× cylinder base. bbox-derived heights are NOT
+    multiplied: the catalog's ``initial_bbox_mm`` (and base_l/w/h) are
+    already in scaled space. Identity at 1.0.
     """
     if body is None:
         return ("box", {"length_mm": base_l, "width_mm": base_w, "height_mm": base_h})
@@ -1803,20 +1885,40 @@ def _pick_base_shape(
         ratio_cone = area_by_kind["cone"]     / total_area
 
         # Pick highest-confidence non-prismatic shape; generic thresholds.
+        # COMPLEX-CAD pass-25 (2026-06-10, P5a): live-measured radii ×
+        # dimension_scale (see docstring); identity at 1.0.
         if ratio_sph > 0.5 and sph_radii:
-            return ("sphere", {"radius_mm": max(sph_radii)})
+            return ("sphere", {"radius_mm": max(sph_radii) * dimension_scale})
         if ratio_tor > 0.4 and tor_majors and tor_minors:
             return ("torus", {
-                "major_radius_mm": max(tor_majors),
-                "minor_radius_mm": max(tor_minors),
+                "major_radius_mm": max(tor_majors) * dimension_scale,
+                "minor_radius_mm": max(tor_minors) * dimension_scale,
             })
         # Cone: dominated by GeomAbs_Cone faces.
-        if ratio_cone > 0.5 and cone_apex_radii:
+        # COMPLEX-CAD pass-25 (2026-06-10, P5b correctness gate): the
+        # registered ``cone`` skill builds along a world axis from the
+        # box-frame origin; only a Z-dominant cone axis regenerates in the
+        # frame the rest of the plan (feat_shift convention) assumes. An
+        # X/Y cone would come back rotated 90° — worse than the box
+        # fallback. Generic threshold (cos 18°), never per-file.
+        if (
+            ratio_cone > 0.5
+            and cone_apex_radii
+            and abs(cone_axes[0][2]) >= 0.95
+        ):
             # Estimate height from bbox along the cone axis.
             ax = cone_axes[0]
             ax_abs = (abs(ax[0]), abs(ax[1]), abs(ax[2]))
             if bbox is not None:
-                (xmin, ymin, zmin), (xmax, ymax, zmax) = bbox
+                # COMPLEX-CAD pass-25 (2026-06-10, P5b): LATENT BUG FIX.
+                # ``bbox`` is the FLAT 6-tuple every caller passes
+                # ((xmin,ymin,zmin,xmax,ymax,zmax) — see _build_plan /
+                # _body_bbox), but this line unpacked it as two 3-tuples.
+                # The ValueError was swallowed by the outer
+                # ``except Exception`` → silent box fallback for EVERY
+                # cone-dominated body with a known bbox. Same bug in the
+                # cylinder branch below.
+                xmin, ymin, zmin, xmax, ymax, zmax = bbox
                 if ax_abs[2] >= max(ax_abs[0], ax_abs[1]):
                     height_mm = float(zmax - zmin)
                 elif ax_abs[1] >= ax_abs[0]:
@@ -1826,16 +1928,46 @@ def _pick_base_shape(
             else:
                 height_mm = max(base_l, base_w, base_h)
             return ("cone", {
-                "radius_lower_mm": max(cone_apex_radii),
-                "radius_upper_mm": 0.1,
-                "height_mm": max(0.1, height_mm),
+                "radius_lower_mm": max(cone_apex_radii) * dimension_scale,
+                "radius_upper_mm": 0.1 * dimension_scale,
+                "height_mm": max(0.1 * dimension_scale, height_mm),
             })
         if ratio_cyl > 0.6 and cyl_radii:
-            # Try exact height from paired circular caps first
-            # (parallel normals + colinear axes with the cylinder).
             ax = cyl_axis_dirs[0]
             ax_abs = (abs(ax[0]), abs(ax[1]), abs(ax[2]))
             cyl_r = max(cyl_radii)
+            # COMPLEX-CAD pass-25 (2026-06-10, P5b correctness gate): the
+            # flat-bbox unpack fix below un-dead-ends this branch for
+            # bodies WITHOUT an aligned cap pair, and area ratio alone
+            # over-triggers it (blast-radius probe: occt__linkrods — two
+            # parallel 5.0×1.5×2.0 link rods, ratio_cyl>0.6 → Ø1.5
+            # "cylinder"; pythonocc__11752 — a 1280×144×133 chassis
+            # plate; freecad__bearing_623ZZ — Y-axis bearing that would
+            # regen rotated 90°). Require real cylinder-of-revolution
+            # evidence before flipping the base away from box:
+            #   1. dominant cylinder axis ≈ ±Z (cos 18° — the emitted
+            #      ``cylinder`` skill builds Z-up at the box-frame
+            #      origin; an X/Y cylinder would come back rotated), and
+            #   2. when the bbox is known, BOTH perpendicular extents
+            #      match the cylinder diameter within 5 % (round
+            #      silhouette — occt__screw: 19.84/20.0 vs Ø20 passes;
+            #      linkrods 5.02 vs Ø1.5 and 11752 1280 vs Ø133 fail).
+            # Generic thresholds (axis cosine + relative extents), never
+            # per-file. The perpendicular extents come from the (scaled)
+            # catalog bbox, so the live radius is compared ×dimension_scale.
+            _cyl_evidence_ok = ax_abs[2] >= 0.95 and cyl_r > 1e-6
+            if _cyl_evidence_ok and bbox is not None:
+                _d_scaled = 2.0 * cyl_r * dimension_scale
+                _perp_x = float(bbox[3]) - float(bbox[0])
+                _perp_y = float(bbox[4]) - float(bbox[1])
+                for _perp in (_perp_x, _perp_y):
+                    if abs(_perp - _d_scaled) / _d_scaled > 0.05:
+                        _cyl_evidence_ok = False
+                        break
+            if not _cyl_evidence_ok:
+                raise RuntimeError("cylinder evidence gate: fall back to box")
+            # Try exact height from paired circular caps first
+            # (parallel normals + colinear axes with the cylinder).
             exact_height_mm: float | None = None
             if len(circ_caps) >= 2:
                 # Caps that are parallel to the cylinder axis and whose
@@ -1849,9 +1981,17 @@ def _pick_base_shape(
                         continue
                     aligned.append(z_along)
                 if len(aligned) >= 2:
-                    exact_height_mm = float(max(aligned) - min(aligned))
+                    # COMPLEX-CAD pass-25 (2026-06-10, P5a): cap span is
+                    # live-body-measured → scale it (bbox heights below
+                    # are catalog-space and stay unscaled).
+                    exact_height_mm = (
+                        float(max(aligned) - min(aligned)) * dimension_scale
+                    )
             if exact_height_mm is None and bbox is not None:
-                (xmin, ymin, zmin), (xmax, ymax, zmax) = bbox
+                # COMPLEX-CAD pass-25 (2026-06-10, P5b): LATENT BUG FIX —
+                # flat 6-tuple unpack (was two 3-tuples → ValueError →
+                # silent box fallback; see the cone branch note above).
+                xmin, ymin, zmin, xmax, ymax, zmax = bbox
                 if ax_abs[2] >= max(ax_abs[0], ax_abs[1]):
                     exact_height_mm = float(zmax - zmin)
                 elif ax_abs[1] >= ax_abs[0]:
@@ -1860,9 +2000,16 @@ def _pick_base_shape(
                     exact_height_mm = float(xmax - xmin)
             if exact_height_mm is None:
                 exact_height_mm = max(base_l, base_w, base_h)
+            # COMPLEX-CAD pass-25 (2026-06-10, P5b): second latent bug on
+            # the same dead path — the registered ``cylinder`` skill's
+            # Args are ``radius_mm`` (+ height_mm, axis="Z" default,
+            # centred at origin / base z=0 — exactly the box-frame
+            # convention feat_shift assumes). The old ``diameter_mm``
+            # payload would have failed Args validation had the step
+            # ever been emitted.
             return ("cylinder", {
-                "diameter_mm": 2.0 * cyl_r,
-                "height_mm": max(0.1, exact_height_mm),
+                "radius_mm": cyl_r * dimension_scale,
+                "height_mm": max(0.1 * dimension_scale, exact_height_mm),
             })
     except Exception:
         pass
@@ -1874,7 +2021,20 @@ def _build_plan(
     body: Any = None,
     base_step_kind: BaseStepKind = "box",
     plan_name: str = "reconstructed_plan",
+    dimension_scale: float = 1.0,
 ) -> dict:
+    # COMPLEX-CAD pass-25 (2026-06-10, plan item P5): ``dimension_scale``
+    # is the caller-declared uniform scale of the CATALOG relative to the
+    # live body (plan_from_scaled_catalog passes its scale_factor). Every
+    # absolute mm guard/clamp/default in this builder (and the step
+    # builders it calls) multiplies by it; the volume floor multiplies by
+    # its cube. At 1.0 every product is bit-identical to the bare
+    # constant, so corpus plans are unchanged (preserve_brep self-match
+    # hard constraint).
+    dimension_scale = float(dimension_scale)
+    if dimension_scale <= 0.0:
+        dimension_scale = 1.0
+    _min_emitted_cut_mm3 = _MIN_EMITTED_CUT_MM3 * dimension_scale ** 3
     holes = catalog.get("holes") or []
     pockets = catalog.get("pockets") or []
     bosses = catalog.get("bosses") or []
@@ -2135,6 +2295,7 @@ def _build_plan(
         # area ratios; NO per-file hardcoding.
         picked_skill, picked_args = _pick_base_shape(
             body, base_l, base_w, base_h, bbox,
+            dimension_scale=dimension_scale,
         )
         steps.append(_new_step("s_base", picked_skill, picked_args))
 
@@ -2185,7 +2346,9 @@ def _build_plan(
         ) ** 0.5 if bbox is not None else 0.0
     except Exception:
         _bbox_diag_for_dedup = 0.0
-    _DEDUP_XY_MM = max(1.0, _bbox_diag_for_dedup * 0.002)
+    # COMPLEX-CAD pass-25 (2026-06-10, P5): the 1 mm absolute floor scales
+    # (the bbox-relative term is already scale-homogeneous). Identity at 1.0.
+    _DEDUP_XY_MM = max(1.0 * dimension_scale, _bbox_diag_for_dedup * 0.002)
 
     def _pocket_key(p: dict) -> tuple:
         ao = p.get("axis_origin") or [0, 0, 0]
@@ -2196,8 +2359,11 @@ def _build_plan(
         # which holds across all scales.
         td = float(p.get("top_d_mm") or 0)
         dp = float(p.get("depth_mm") or 0)
-        td_bucket = round(td * 20.0) if td > 0 else 0  # 5 % buckets ↔ ×20
-        dp_bucket = round(dp * 20.0) if dp > 0 else 0
+        # COMPLEX-CAD pass-25 (2026-06-10, P5): the ×20 bucket is 0.05 mm
+        # absolute — divide by dimension_scale so the bucket width scales
+        # with the catalog and dedup stays scale-invariant (identity at 1.0).
+        td_bucket = round(td * 20.0 / dimension_scale) if td > 0 else 0
+        dp_bucket = round(dp * 20.0 / dimension_scale) if dp > 0 else 0
         return (
             round(float(ao[0]) / _DEDUP_XY_MM),
             round(float(ao[1]) / _DEDUP_XY_MM),
@@ -2232,7 +2398,8 @@ def _build_plan(
         # tripping the PostCondition and FAILing the entire plan.
         _td = float(p.get("top_d_mm") or 0.0)
         _dp = float(p.get("depth_mm") or 0.0)
-        if _predicted_cylinder_volume_mm3(_td, _dp) < _MIN_EMITTED_CUT_MM3:
+        # COMPLEX-CAD pass-25 (2026-06-10, P5): floor scales as scale³.
+        if _predicted_cylinder_volume_mm3(_td, _dp) < _min_emitted_cut_mm3:
             continue
         # PACK B drift fix — drop pockets whose top_d is comparable to the
         # body's smallest XY extent. The pocket detector occasionally
@@ -2288,7 +2455,10 @@ def _build_plan(
             )
             magnet_idx += 1
             continue
-        steps.append(_pocket_step(i, p, bbox=bbox, shift=feat_shift))
+        steps.append(_pocket_step(
+            i, p, bbox=bbox, shift=feat_shift,
+            dimension_scale=dimension_scale,
+        ))
 
     # 2b. Sweep / loft / revolve features — emitted BEFORE the per-boss loop
     #     so we can suppress overlapping detect_bosses entries (the swept and
@@ -2302,23 +2472,23 @@ def _build_plan(
             # — that's exactly the rectangular cross-section cutout the
             # swept_relief skill models. Falls back to the generic
             # swept_pocket_along_curve when the path is curved or off-plane.
-            relief_payload = _try_swept_relief(feat)
+            relief_payload = _try_swept_relief(feat, dimension_scale)
             if relief_payload is not None:
                 steps.append(_swept_relief_step(swept_relief_idx, relief_payload))
                 swept_relief_idx += 1
             else:
-                steps.append(_sweep_pocket_step(i, feat))
+                steps.append(_sweep_pocket_step(i, feat, dimension_scale))
         else:
-            steps.append(_sweep_boss_step(i, feat))
+            steps.append(_sweep_boss_step(i, feat, dimension_scale))
         if feat.get("bbox") is not None:
             sweep_xy_envelopes.append(tuple(feat["bbox"]))
 
     loft_xy_centers: list[tuple[tuple[float, float], float]] = []
     for i, feat in enumerate(loft_features):
         if feat.get("kind") == "pocket":
-            steps.append(_loft_pocket_step(i, feat))
+            steps.append(_loft_pocket_step(i, feat, dimension_scale))
         else:
-            steps.append(_loft_boss_step(i, feat))
+            steps.append(_loft_boss_step(i, feat, dimension_scale))
         cxy = feat.get("center_xy")
         if cxy:
             radius = max(
@@ -2340,7 +2510,9 @@ def _build_plan(
             )
             oring_idx += 1
         else:
-            steps.append(_revolve_pocket_step(i, feat, shift=feat_shift))
+            steps.append(_revolve_pocket_step(
+                i, feat, shift=feat_shift, dimension_scale=dimension_scale,
+            ))
 
     # 3. Bosses, tallest first ─────────────────────────────────────────────
     #    Suppress bosses whose centre footprint falls inside any sweep/loft
@@ -2406,11 +2578,14 @@ def _build_plan(
         key=lambda b: -float(b.get("height_mm") or 0.0),
     )
     for i, b in enumerate(bosses_sorted):
-        steps.append(_boss_step(i, b, bbox=bbox, shift=feat_shift))
+        steps.append(_boss_step(
+            i, b, bbox=bbox, shift=feat_shift,
+            dimension_scale=dimension_scale,
+        ))
 
     # 4. Lugs ──────────────────────────────────────────────────────────────
     for i, lg in enumerate(lugs):
-        steps.append(_lug_step(i, lg))
+        steps.append(_lug_step(i, lg, dimension_scale))
 
     # 5. Ribs ──────────────────────────────────────────────────────────────
     #    Anchor on top face of the placeholder box (or original body top
@@ -2461,7 +2636,9 @@ def _build_plan(
     if len(ribs) >= 2 and len(_ribs_dedup) == 1:
         _ribs_dedup = []
     for i, rb in enumerate(_ribs_dedup):
-        steps.append(_rib_step(i, rb, base_top_z=rib_top_z))
+        steps.append(_rib_step(
+            i, rb, base_top_z=rib_top_z, dimension_scale=dimension_scale,
+        ))
 
     # 5b. Text features (engrave / emboss) ────────────────────────────────
     #     Forward-compat: extract_feature_catalog does not yet detect text,
@@ -2491,15 +2668,18 @@ def _build_plan(
         # Representative seed-hole geometry from the catalog. Prefer a hole
         # matched to this pattern (so the diameter/depth come from a real
         # measurement); fall back to the median hole.
+        # COMPLEX-CAD pass-25 (2026-06-10, P5): the 0.5 mm geometric-match
+        # tolerances scale with dimension_scale (identity at 1.0).
+        _ring_tol = 0.5 * dimension_scale
         seed_hole = None
         if pat.get("pattern_kind") == "circular":
             for h in holes:
-                if _hole_xy_in_ring(h, pat):
+                if _hole_xy_in_ring(h, pat, radius_tol=_ring_tol):
                     seed_hole = h
                     break
         elif pat.get("pattern_kind") == "linear":
             for h in holes:
-                if _hole_xy_on_line(h, pat):
+                if _hole_xy_on_line(h, pat, pos_tol=_ring_tol):
                     seed_hole = h
                     break
         if seed_hole is None and holes:
@@ -2508,24 +2688,30 @@ def _build_plan(
         if seed_hole is None:
             continue
 
-        diams = seed_hole.get("diameters_mm") or [3.4]
+        # COMPLEX-CAD pass-25 (2026-06-10, P5): seed defaults + the 100 mm
+        # profile cap scale with dimension_scale (identity at 1.0).
+        diams = seed_hole.get("diameters_mm") or [3.4 * dimension_scale]
         seed_diam = float(min(diams))
         # PACK F — pattern skills cap profile_diameter at 100 mm. Big seed
         # holes (≥100 mm) come from misclassified bbox-scale features on
         # large assemblies; clamp so Args validates and let the executor's
         # zero-delta-skip catch the cut if it makes no sense.
-        if seed_diam > 100.0:
-            seed_diam = 100.0
+        if seed_diam > 100.0 * dimension_scale:
+            seed_diam = 100.0 * dimension_scale
         elif seed_diam <= 0.0:
-            seed_diam = 3.4
-        seed_depth = float(seed_hole.get("depth_mm") or 5.0)
+            seed_diam = 3.4 * dimension_scale
+        seed_depth = float(seed_hole.get("depth_mm") or 5.0 * dimension_scale)
 
         # Sub-threshold guard mirrors the per-hole/pocket loop: if the
         # predicted cut volume across the pattern is below the
         # volume_decreased PostCondition floor, skip emission. This drops
         # tiny circular_pattern / linear_pattern groups that would FAIL on
         # OCCT roundoff (e.g. 0402 capacitor terminal arrays).
-        if _predicted_cylinder_volume_mm3(seed_diam, seed_depth) * count < _MIN_EMITTED_CUT_MM3:
+        # COMPLEX-CAD pass-25 (2026-06-10, P5): floor scales as scale³.
+        _pattern_cut_mm3 = (
+            _predicted_cylinder_volume_mm3(seed_diam, seed_depth) * count
+        )
+        if _pattern_cut_mm3 < _min_emitted_cut_mm3:
             continue
         # COMPLEX-CAD pass-16 (2026-06-09): in box mode (shift != identity)
         # the circular_pattern / linear_pattern skills use face_named, so
@@ -2544,12 +2730,13 @@ def _build_plan(
                 _circular_pattern_step(
                     circ_idx, pat, seed_diam, seed_depth,
                     bbox=bbox, shift=feat_shift,
+                    dimension_scale=dimension_scale,
                 )
             )
             circ_idx += 1
             # Mark covered holes so the per-hole loop skips them.
             for h in holes:
-                if _hole_xy_in_ring(h, pat):
+                if _hole_xy_in_ring(h, pat, radius_tol=_ring_tol):
                     hid = h.get("id")
                     if hid is not None:
                         handled_hole_ids.add(hid)
@@ -2558,12 +2745,13 @@ def _build_plan(
             step = _linear_pattern_step(
                 lin_idx, pat, seed_diam, seed_depth,
                 bbox=bbox, shift=feat_shift,
+                dimension_scale=dimension_scale,
             )
             if step is not None:
                 steps.append(step)
                 lin_idx += 1
                 for h in holes:
-                    if _hole_xy_on_line(h, pat):
+                    if _hole_xy_on_line(h, pat, pos_tol=_ring_tol):
                         hid = h.get("id")
                         if hid is not None:
                             handled_hole_ids.add(hid)
@@ -2610,14 +2798,18 @@ def _build_plan(
         _diams_m = h.get("diameters_mm") or []
         _d_m = float(min(_diams_m)) if _diams_m else 0.0
         _dp_m = float(h.get("depth_mm") or 0.0)
-        if 2.0 * _predicted_cylinder_volume_mm3(_d_m, _dp_m) < _MIN_EMITTED_CUT_MM3:
+        # COMPLEX-CAD pass-25 (2026-06-10, P5): floor scales as scale³.
+        if 2.0 * _predicted_cylinder_volume_mm3(_d_m, _dp_m) < _min_emitted_cut_mm3:
             continue
         unhandled_holes.append(h)
 
     best_plane: dict | None = None
     best_pairs: list[tuple[int, int]] = []
     for plane in _qualifying_mirror_planes(symmetries):
-        pairs_here = _find_mirrored_hole_pairs(unhandled_holes, plane, bbox=bbox)
+        pairs_here = _find_mirrored_hole_pairs(
+            unhandled_holes, plane, bbox=bbox,
+            dimension_scale=dimension_scale,
+        )
         if len(pairs_here) > len(best_pairs):
             best_plane = plane
             best_pairs = pairs_here
@@ -2635,6 +2827,7 @@ def _build_plan(
                 continue
             step = _mirror_feature_step(
                 mirror_idx, hole_i, best_plane, bbox=bbox, shift=feat_shift,
+                dimension_scale=dimension_scale,
             )
             if step is None:
                 # mirror_feature args couldn't be satisfied -- leave the pair
@@ -2690,8 +2883,11 @@ def _build_plan(
         # Earlier ``or 0.0`` silently dropped any catalog hole whose
         # depth_mm was unset — on a 1018-face industrial part this caused
         # 74 of 143 holes to vanish before plan emission.
-        _dp = float(h.get("depth_mm") or 5.0)
-        if _predicted_cylinder_volume_mm3(_d, _dp) < _MIN_EMITTED_CUT_MM3:
+        # COMPLEX-CAD pass-25 (2026-06-10, P5): the 5 mm default depth
+        # scales (must stay consistent with _hole_step's default) and the
+        # volume floor scales as scale³.
+        _dp = float(h.get("depth_mm") or 5.0 * dimension_scale)
+        if _predicted_cylinder_volume_mm3(_d, _dp) < _min_emitted_cut_mm3:
             continue
         # COMPLEX-CAD pass-23 (2026-06-10): multi-body fastener filter.
         # Assembly STEPs (as1_pe_203) include fastener cylinders that
@@ -2762,7 +2958,10 @@ def _build_plan(
                 except Exception:
                     pass
         sm = std_matches_by_hole.get(hid)
-        steps.append(_hole_step(i, h, sm, bbox=bbox, shift=feat_shift))
+        steps.append(_hole_step(
+            i, h, sm, bbox=bbox, shift=feat_shift,
+            dimension_scale=dimension_scale,
+        ))
 
     plan: dict[str, Any] = {
         "schema_version": 1,
@@ -2848,6 +3047,13 @@ class PlanFromFeatureCatalog(SkillBase):
     class Args(BaseModel):
         catalog: dict | None = None
         base_step_kind: Literal["box", "import_step", "preserve_brep"] = "box"
+        # COMPLEX-CAD pass-25 (2026-06-10, plan item P5): uniform scale of
+        # the supplied catalog relative to the live body. Scales every
+        # absolute mm clamp/guard/default in the planner (depth caps,
+        # mounting-pad height cap, _MIN_EMITTED_CUT_MM3 × scale³, …) and
+        # the live-body-measured base-shape dims in _pick_base_shape.
+        # 1.0 ⇒ bit-identical plans to pre-P5 (corpus safety).
+        dimension_scale: float = 1.0
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
         import pathlib
@@ -2872,6 +3078,8 @@ class PlanFromFeatureCatalog(SkillBase):
             catalog or {},
             body=body,
             base_step_kind=args.base_step_kind,
+            # COMPLEX-CAD pass-25 (2026-06-10, P5).
+            dimension_scale=args.dimension_scale,
         )
 
         # Cache for chained calls.

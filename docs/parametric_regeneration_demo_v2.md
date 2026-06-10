@@ -1,6 +1,6 @@
 # Parametric Regeneration Demo v2 — analytic scoring (plan item P4)
 
-Generated 2026-06-10T11:28:07+00:00 by `tools/parametric_regen_demo.py` (logic: `src/phone_designer/corpus/parametric_demo.py`).
+Generated 2026-06-10T14:57:56+00:00 by `tools/parametric_regen_demo.py` (logic: `src/phone_designer/corpus/parametric_demo.py`).
 
 v1 (`docs/parametric_variation_demo.md`) scored nothing analytically
 and its `per_feat` variant produced **bit-identical geometry without
