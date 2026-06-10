@@ -4,12 +4,13 @@ Two round-trip layers, mirroring the export skill's two-layer strategy:
 
 1. **In-house export round trip** (mandated path): attach PMI with the
    existing pmi/ + inspect/ skills, export with ``export_step_ap242_pmi``,
-   read back with ``read_step_pmi``. Empirically verified limitation: the
-   export skill creates *empty* XCAF GDT labels and never gets the AP242
-   schema applied (it calls ``Interface_Static.SetCVal_s`` before the STEP
-   controller is initialised), so the STEP **body** contains zero GDT
-   entities — the tolerance types / values / datum letters survive through
-   the ``.pmi.json`` sidecar, which the reader picks up.
+   read back with ``read_step_pmi``. PMI-EXPORT-FIX (2026-06-11): the
+   export skill now writes real ``XCAFDimTolObjects`` payloads with shape
+   attachment and forces the AP242 schema after controller init, so the
+   tolerance types / values / datum letters must survive in the STEP
+   **body** itself (CAF route) — the ``.pmi.json`` sidecar remains as a
+   back-compat second layer (and is the only carrier for categories AP242
+   cannot represent: welds, surface textures, per-dimension datum refs).
 
 2. **Genuine AP242 PMI round trip** (CAF route proof): build a STEP file
    whose XCAF document carries real ``XCAFDimTolObjects`` payloads
@@ -75,50 +76,87 @@ def _box_with_pmi():
 
 
 # ---------------------------------------------------------------------------
-# 1. In-house export round trip (sidecar carries the fidelity).
+# 1. In-house export round trip — PMI must survive in the STEP body itself.
+#    PMI-EXPORT-FIX (2026-06-11): previously this test documented that the
+#    exporter wrote empty XCAF labels (sidecar-only fidelity); the exporter
+#    now writes real XCAFDimTolObjects payloads with shape attachment.
 # ---------------------------------------------------------------------------
 
-def test_roundtrip_via_export_skill_sidecar(tmp_path: Path):
+def test_roundtrip_via_export_skill_step_body(tmp_path: Path):
     body = _box_with_pmi()
     out = tmp_path / "rt_inhouse.step"
-    ExportStepAp242Pmi().apply(body, {"path": str(out)})
+    ex = ExportStepAp242Pmi().apply(body, {"path": str(out)})
+
+    # Export went through the CAF route and reports real emission counts.
+    assert ex.extras["used_caf"] is True
+    assert ex.extras["caf_stats"]["dimensions_emitted"] == 1
+    assert ex.extras["caf_stats"]["geom_tolerances_emitted"] == 2
+    assert ex.extras["caf_stats"]["datums_emitted"] == 2
+    # Per-dimension datum refs honestly reported as sidecar-only.
+    assert "dimension_datum_refs" in ex.extras["caf_stats"]["sidecar_only"]
 
     r = ReadStepPmi().apply(body, {"path": str(out)})
     pmi = r.extras["pmi"]
 
     # Contract shape.
     assert pmi["source_path"] == str(out)
-    assert isinstance(pmi["dimensions"], list)
-    assert isinstance(pmi["geometric_tolerances"], list)
-    assert isinstance(pmi["datums"], list)
     assert set(pmi["counts"]) == {"dimensions", "geometric_tolerances", "datums"}
 
-    # Sidecar found and parsed — this is where the in-house exporter
-    # actually preserves the PMI (its STEP body carries no GDT entities).
+    # --- STEP body carries the PMI (CAF route, sidecar NOT consulted). ---
+    assert pmi["counts"] == {
+        "dimensions": 1,
+        "geometric_tolerances": 2,
+        "datums": 2,
+    }
+
+    # Tolerance types + values recovered from the STEP body.
+    gts = {g["type"]: g for g in pmi["geometric_tolerances"]}
+    assert set(gts) == {"flatness", "position"}
+    assert gts["flatness"]["value_mm"] == pytest.approx(0.02)
+    assert gts["position"]["value_mm"] == pytest.approx(0.1)
+    # ⌀-zone modifier on the position FCF survives.
+    assert gts["position"]["value_kind"].endswith("diameter")
+
+    # Datum letters recovered from the STEP body — FCF reference order and
+    # the datum table.
+    assert gts["position"]["datum_refs"] == ["A", "B"]
+    assert gts["flatness"]["datum_refs"] == []
+    assert {d["name"] for d in pmi["datums"]} == {"A", "B"}
+
+    # Dimension value + ± tolerances recovered from the STEP body (lower
+    # bound reads back as a magnitude — exported as -0.05).
+    dims = pmi["dimensions"]
+    assert len(dims) == 1
+    d = dims[0]
+    assert "linear" in d["type"]
+    assert d["value_mm"] == pytest.approx(10.0)
+    assert d["is_plus_minus"] is True
+    assert d["upper_tol_mm"] == pytest.approx(0.05)
+    assert abs(d["lower_tol_mm"]) == pytest.approx(0.05)
+    # Dimension attached to real sub-shape labels (faces), both sides.
+    assert d["shape_ref_labels"]["first"]
+    assert d["shape_ref_labels"]["second"]
+
+    # --- Sidecar still works (back-compat second layer). ---
     assert pmi["sidecar_path"] is not None
     sc = pmi["sidecar"]
     assert sc is not None
     assert sc["schema"] == "AP242"
-
-    # Tolerance types + values survive (FCFs).
     fcfs = {f["geom_char"]: f for f in sc["pmi"]["fcfs"]}
     assert set(fcfs) == {"flatness", "position"}
     assert fcfs["flatness"]["tolerance_value"] == 0.02
     assert fcfs["position"]["tolerance_value"] == 0.1
-    # Datum letters survive (FCF refs + datum table).
     assert fcfs["position"]["datums"] == ["A", "B"]
     assert set(sc["pmi"]["datums"].keys()) == {"A", "B"}
-    # Dimension value + tolerances survive.
-    dims = sc["pmi"]["dimensions"]
-    assert len(dims) == 1
-    assert dims[0]["nominal"] == 10.0
-    assert dims[0]["upper_tol"] == 0.05
-    assert dims[0]["lower_tol"] == -0.05
-    assert dims[0]["datum_refs"] == ["A"]
-
-    # Honest reporting: when the STEP body carries nothing, the skill says so.
-    if sum(pmi["counts"].values()) == 0:
-        assert any("sidecar" in n for n in pmi["notes"])
+    sc_dims = sc["pmi"]["dimensions"]
+    assert len(sc_dims) == 1
+    assert sc_dims[0]["nominal"] == 10.0
+    assert sc_dims[0]["upper_tol"] == 0.05
+    assert sc_dims[0]["lower_tol"] == -0.05
+    # Per-dimension datum refs have no AP242 representation — the sidecar
+    # is their only carrier (the STEP-body dimension reads back without them).
+    assert sc_dims[0]["datum_refs"] == ["A"]
+    assert d["datum_refs"] == []
 
     # Read-only — body unchanged.
     assert r.body is body

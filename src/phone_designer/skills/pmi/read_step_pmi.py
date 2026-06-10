@@ -44,16 +44,15 @@ Binding notes (cadquery-ocp / OCCT 7.8 — verified empirically):
 * Plus/minus bounds read back as magnitudes: a dimension exported with
   lower_tol = -0.05 reads back ``lower_tol_mm == 0.05``.
 
-KNOWN LIMITATION (in-house round trip): ``export_step_ap242_pmi`` creates
-*empty* XCAF dimension/datum labels (no ``XCAFDimTolObjects`` payload, no
-shape attachment) and calls ``Interface_Static.SetCVal_s`` before the STEP
-controller is initialised, so the AP242 schema never takes effect — the
-STEP body it writes contains **zero** GDT entities. Reading such a file
-yields empty CAF lists here; the full annotation table is still recovered
-from the JSON sidecar. STEP files whose AP242 PMI was written semantically
-(NX / Creo / the fixture in ``tests/skills/test_read_step_pmi.py``)
+In-house round trip: PMI-EXPORT-FIX (2026-06-11) — ``export_step_ap242_pmi``
+now writes real ``XCAFDimTolObjects`` payloads with shape attachment and
+forces the AP242 schema after controller init, so in-house exports
 round-trip tolerance types + values + datum letters through the CAF route
-— verified by the test.
+(verified by ``tests/skills/test_read_step_pmi.py``), as do semantically
+written external files (NX / Creo). A PMI-less STEP body next to a
+``.pmi.json`` sidecar can still occur (e.g. the exporter's plain-write
+fallback, or sidecar-only categories like welds); the annotation table is
+then recovered from the sidecar and an honest note is emitted.
 
 body unchanged — ``body_present`` post-condition (reads a FILE only).
 """
@@ -380,9 +379,11 @@ class ReadStepPmi(SkillBase):
             "datums": len(caf["datums"]),
         }
         if sum(counts.values()) == 0 and sidecar is not None:
+            # PMI-EXPORT-FIX (2026-06-11): wording updated — the in-house
+            # exporter now writes real GDT entities; this branch covers its
+            # plain-write fallback and sidecar-only annotation categories.
             notes.append(
-                "STEP body carries no XCAF GDT entities (export_step_ap242_pmi "
-                "writes empty XCAF labels — see skill docstring); PMI recovered "
+                "STEP body carries no XCAF GDT entities; PMI recovered "
                 "from the .pmi.json sidecar instead."
             )
 
