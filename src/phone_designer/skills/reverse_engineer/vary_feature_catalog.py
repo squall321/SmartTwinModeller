@@ -20,9 +20,14 @@ or tuple)::
     radius_mm, pitch_radius_mm, separation_mm,
     profile_diameter_mm, lower_diameter_mm, upper_diameter_mm,
     spacing_mm, font_size_mm, base_thickness_mm,
-    axis_origin (3-vector, each component scaled),
+    entry_depth_mm, mean_distance_mm,
+    axis_origin, entry_origin, plane_origin, centroid
+        (3-vectors, each component scaled),
     center, center_xy, position (1-D coordinate lists),
     diameters_mm (per-element scaled),
+
+Direction vectors (``axis_dir``, ``plane_normal``, ``axis_direction``) are
+NEVER scaled — they are unit directions, not dimensions.
 
 Dotted keys for ``per_feature_scale`` / ``absolute_overrides`` traverse
 list indices and dict keys, e.g. ``"pockets.0.depth_mm"`` or
@@ -65,6 +70,16 @@ _SCALAR_DIM_FIELDS: frozenset[str] = frozenset({
     "base_thickness_mm",
     "diameter_or_size_mm",
     "anchor_z",
+    # P1 whitelist repair (2026-06-10): entry_depth_mm is the pass-23
+    # classify_holes sibling field that plan_from_feature_catalog PREFERS
+    # for box-mode hole cuts — leaving it unscaled made every scaled
+    # variant emit holes at the original depth/position (zero-delta SKIP
+    # → bare slab). mean_distance_mm (detect_mirror_symmetry residual)
+    # and _ref_radius_mm (loft cone reference radius) are the remaining
+    # *_mm scalars the detectors actually emit into the catalog.
+    "entry_depth_mm",
+    "mean_distance_mm",
+    "_ref_radius_mm",
 })
 
 # Vector / list fields where every numeric component is scaled.
@@ -79,6 +94,15 @@ _VECTOR_DIM_FIELDS: frozenset[str] = frozenset({
     "initial_bbox_mm",
     "path_points",
     "positions",
+    # P1 whitelist repair (2026-06-10): entry_origin (classify_holes
+    # pass-23) is PREFERRED by plan_from_feature_catalog for box-mode hole
+    # positions; plane_origin anchors detect_mirror_symmetry planes;
+    # centroid is an accepted coordinate key in feature_fidelity_diff.
+    # Direction vectors (axis_dir / plane_normal / axis_direction) stay
+    # OUT — unit directions must never scale.
+    "entry_origin",
+    "plane_origin",
+    "centroid",
 })
 
 
