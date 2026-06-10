@@ -362,9 +362,15 @@ def _hole_step(
     else:
         axis_origin = hole.get("axis_origin") or [0.0, 0.0, 0.0]
         depth = float(hole.get("depth_mm") or 5.0)
-    # Keep the 200 mm clamp — see pass-21 commit for why removing it
-    # regresses pocket pairing on as1_pe_203 (geometric overlap with
-    # the 18 catalog pockets).
+    # Keep the 200 mm clamp — pass-24c (2026-06-10) retried removing it
+    # for entry-based emission only (entry_depth_mm is body-clipped by
+    # construction, so depth overflow is impossible): as1_pe_203 box
+    # holes finally matched 3/7 (was 0/7), BUT the 1016 mm Ø254 cuts
+    # carved through pocket cavities and pocket matches fell 14 → 8
+    # (net 0.6897 → 0.5484). REVERTED. The clamp can only go after the
+    # planner emits footprint-true pockets (plan items A10/P9) or
+    # CSG-aware emission ordering — same verdict as pass-19/21, now
+    # with the position-correctness variable eliminated.
     if depth > 200.0:
         depth = 200.0
     face_sel = _pick_face_selector(axis_origin, axis_dir, bbox)

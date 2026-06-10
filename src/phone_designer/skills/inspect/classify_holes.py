@@ -145,6 +145,83 @@ def _body_entry_along_axis(shape, axis_origin, axis_dir, depth_mm: float):
     return new_origin, axis_dir, new_depth, True
 
 
+def _rescue_band_anchored_entry(shape, p_lo, p_hi):
+    """COMPLEX-CAD pass-24 (2026-06-10): second-chance entry probe for a
+    hole the pass-23 phantom filter is about to drop.
+
+    Why it exists: OCCT's analytic ``Cylinder().Location()`` is an
+    ARBITRARY point on the axis line. For STEP-imported faces it usually
+    coincides with a face end, but for faces created by our own cut
+    operations it can sit MID-BAND — Ventilator's regen tap-drill walls
+    report z=7.85 while the combined bore (Ø1.6 cut + Ø1.0 remnant)
+    spans z=-1.25..10.70. ``_standardize_entry``'s stage-1 flip computes
+    "the opposite end" as ``origin ∓ axis_dir·depth`` — garbage when the
+    origin is mid-band (z=19.81, 9 mm ABOVE the real bore top) — so the
+    standardized entry lands outside the body bbox and the pass-23
+    phantom filter then kills a REAL hole. 12 of Ventilator's 13 Ø1 mm
+    holes vanished from the regen catalog this way (preserve_brep 0.381).
+
+    Rescue: re-anchor to the bore's TRUE band endpoints (face-bbox
+    projections recorded by ``_classify_one`` — radius-independent, so
+    Ø0.6 mm and Ø12 mm bores behave identically), pick the endpoint
+    nearest a body bbox face as the entry (the same stage-2 heuristic
+    ``_standardize_entry`` already uses), point axis_dir at the other
+    endpoint, and re-run the bbox-overlap test. True phantoms
+    (as1_pe_203's multi-body fastener pins — their actual faces sit
+    fully outside the body bbox) still fail the re-test and stay
+    dropped exactly as in pass-23.
+
+    Gating: only reached when ``_body_entry_along_axis`` reported no
+    intersect, so every hole that survives today is bit-identical.
+
+    Returns ``(origin, axis_dir, entry_origin, entry_depth_mm)`` or
+    ``None`` when the bore really has no overlap with the body.
+    """
+    if not p_lo or not p_hi:
+        return None
+    try:
+        lo = (float(p_lo[0]), float(p_lo[1]), float(p_lo[2]))
+        hi = (float(p_hi[0]), float(p_hi[1]), float(p_hi[2]))
+    except Exception:
+        return None
+    span = math.dist(lo, hi)
+    if span <= 1e-9:
+        return None
+    try:
+        from OCP.Bnd import Bnd_Box
+        from OCP.BRepBndLib import BRepBndLib
+        bb = Bnd_Box()
+        BRepBndLib.AddOptimal_s(shape, bb)
+        if bb.IsVoid():
+            return None
+        xmin, ymin, zmin, xmax, ymax, zmax = bb.Get()
+    except Exception:
+        return None
+
+    def _dist_to_nearest_face(p) -> float:
+        return min(
+            abs(p[0] - xmin), abs(p[0] - xmax),
+            abs(p[1] - ymin), abs(p[1] - ymax),
+            abs(p[2] - zmin), abs(p[2] - zmax),
+        )
+
+    if _dist_to_nearest_face(lo) <= _dist_to_nearest_face(hi):
+        origin, other = lo, hi
+    else:
+        origin, other = hi, lo
+    dirv = (
+        (other[0] - origin[0]) / span,
+        (other[1] - origin[1]) / span,
+        (other[2] - origin[2]) / span,
+    )
+    eo, _ed, edepth, intersects = _body_entry_along_axis(
+        shape, origin, dirv, span
+    )
+    if not intersects:
+        return None
+    return origin, dirv, eo, edepth
+
+
 def _standardize_entry(shape, axis_origin, axis_dir, depth_mm: float):
     """COMPLEX-CAD pass-17 (2026-06-09): rewrite axis_origin/axis_dir so
     axis_origin sits at the EXIT (open) face of the cylinder — the body
@@ -614,6 +691,39 @@ def _classify_one(
             | set(threaded_face_indices)
         ),
     }
+    # COMPLEX-CAD pass-24 (2026-06-10): stash the bore's TRUE band
+    # endpoints on the (pre-standardization) group axis. proj_lo/proj_hi
+    # come from the member faces' bboxes, so these points bound the
+    # actual face geometry even when the analytic cylinder location
+    # (axis_origin above) sits mid-band — which is exactly the case
+    # _standardize_entry mishandles on regen tap-drill cuts. Private
+    # keys (leading underscore) consumed by _rescue_band_anchored_entry
+    # in ClassifyHoles._apply; never copied into the emitted hole dict.
+    descriptor["_band_lo_point"] = [
+        axis_origin[0] + axis_dir[0] * proj_lo,
+        axis_origin[1] + axis_dir[1] * proj_lo,
+        axis_origin[2] + axis_dir[2] * proj_lo,
+    ]
+    descriptor["_band_hi_point"] = [
+        axis_origin[0] + axis_dir[0] * proj_hi,
+        axis_origin[1] + axis_dir[1] * proj_hi,
+        axis_origin[2] + axis_dir[2] * proj_hi,
+    ]
+    # COMPLEX-CAD pass-24b (2026-06-10): the rescue is ONLY legitimate
+    # when the analytic cylinder location actually sat MID-BAND (the
+    # regen-cut pathology that makes _standardize_entry's flip compute
+    # garbage). The analytic location projects to 0.0 by construction,
+    # so mid-band ⇔ 0 strictly inside [proj_lo, proj_hi] AND far from
+    # both endpoints. Without this gate the rescue also resurrected
+    # endpoint-anchored SMD pin cylinders that pass-23's phantom filter
+    # had CORRECTLY dropped — V2 harness caught 4 regressions (SOT-223 /
+    # SOIC-8 0.9167→0.8462, USB_A 0.9146→0.8444, USB_C −0.014).
+    _span = proj_hi - proj_lo
+    _end_dist = min(abs(0.0 - proj_lo), abs(proj_hi - 0.0))
+    descriptor["_origin_mid_band"] = bool(
+        proj_lo < 0.0 < proj_hi
+        and _end_dist > max(0.1 * _span, 0.5)
+    )
 
     if match_standards:
         descriptor["standard_match"] = _best_standard_match(primary_d, cb_d, cs_d)
@@ -741,7 +851,33 @@ class ClassifyHoles(SkillBase):
                     desc["axis_origin"], desc["axis_dir"], desc["depth_mm"],
                 )
                 if not intersects:
-                    continue
+                    # COMPLEX-CAD pass-24 (2026-06-10): before dropping,
+                    # re-test against the bore's true band endpoints —
+                    # the standardized axis_origin is garbage when the
+                    # analytic cylinder location sat mid-band (see
+                    # _rescue_band_anchored_entry). Real small bores
+                    # survive with a band-anchored entry; true phantom
+                    # multi-body fasteners still fail the re-test and
+                    # drop exactly as in pass-23.
+                    # pass-24b gate: ONLY when the analytic location
+                    # actually sat mid-band. Endpoint-anchored cylinders
+                    # (normal STEP faces, SMD pins) keep the pass-23
+                    # verdict — rescuing them resurrected pins
+                    # asymmetrically and regressed 4 SMD files.
+                    if not desc.get("_origin_mid_band"):
+                        continue
+                    rescue = _rescue_band_anchored_entry(
+                        shape,
+                        desc.get("_band_lo_point"),
+                        desc.get("_band_hi_point"),
+                    )
+                    if rescue is None:
+                        continue
+                    r_origin, r_dir, eo, edepth = rescue
+                    desc["axis_origin"] = [
+                        round(float(v), 4) for v in r_origin
+                    ]
+                    desc["axis_dir"] = [round(float(v), 4) for v in r_dir]
                 desc["entry_origin"] = [round(float(v), 4) for v in eo]
                 desc["entry_depth_mm"] = round(float(edepth), 4)
             except Exception:

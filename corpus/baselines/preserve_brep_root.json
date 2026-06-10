@@ -2,7 +2,7 @@
  "schema": 1,
  "mode": "preserve_brep",
  "subset": "root",
- "generated_at": "2026-06-10T04:58:05+00:00",
+ "generated_at": "2026-06-10T08:30:00+00:00",
  "records": {
   "kicad__Buzzer_15x7.5RM7.6.step": {
    "file": "kicad__Buzzer_15x7.5RM7.6.step",
@@ -27,7 +27,7 @@
    },
    "volume_delta_pct": -1.398,
    "error": null,
-   "duration_s": 6.5,
+   "duration_s": 5.4,
    "plan_steps": 4,
    "executor_outcome": "PASS"
   },
@@ -44,7 +44,7 @@
    },
    "volume_delta_pct": null,
    "error": null,
-   "duration_s": 6.2,
+   "duration_s": 4.4,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -71,7 +71,7 @@
    },
    "volume_delta_pct": -4.388,
    "error": null,
-   "duration_s": 9.9,
+   "duration_s": 6.7,
    "plan_steps": 6,
    "executor_outcome": "FAIL"
   },
@@ -98,7 +98,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 7.4,
+   "duration_s": 5.2,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -125,7 +125,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 6.2,
+   "duration_s": 5.2,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -152,7 +152,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 5.9,
+   "duration_s": 5.3,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -179,7 +179,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 5.5,
+   "duration_s": 5.0,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -211,7 +211,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 5.9,
+   "duration_s": 5.0,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -243,7 +243,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 5.6,
+   "duration_s": 5.1,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -275,7 +275,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 5.4,
+   "duration_s": 5.1,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -307,7 +307,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 6.0,
+   "duration_s": 5.1,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -339,7 +339,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 5.6,
+   "duration_s": 5.2,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -371,7 +371,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 6.1,
+   "duration_s": 5.1,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -398,19 +398,19 @@
    },
    "volume_delta_pct": -7.507,
    "error": null,
-   "duration_s": 7.6,
+   "duration_s": 6.2,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
   "kicad__Trimmer_Bourns_3296.step": {
    "file": "kicad__Trimmer_Bourns_3296.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.4706,
+   "match_ratio": 0.6111,
    "per_kind": {
     "holes": {
      "a": 4,
-     "b": 0,
-     "matched": 0
+     "b": 3,
+     "matched": 3
     },
     "pockets": {
      "a": 2,
@@ -424,13 +424,13 @@
     },
     "patterns": {
      "a": 1,
-     "b": 1,
+     "b": 2,
      "matched": 1
     }
    },
    "volume_delta_pct": -1.482,
    "error": null,
-   "duration_s": 6.6,
+   "duration_s": 5.3,
    "plan_steps": 6,
    "executor_outcome": "PASS"
   },
@@ -452,7 +452,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 10.2,
+   "duration_s": 8.3,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -489,7 +489,7 @@
    },
    "volume_delta_pct": -0.228,
    "error": null,
-   "duration_s": 6.7,
+   "duration_s": 5.3,
    "plan_steps": 2,
    "executor_outcome": "PASS"
   },
@@ -516,7 +516,7 @@
    },
    "volume_delta_pct": -0.935,
    "error": null,
-   "duration_s": 9.3,
+   "duration_s": 7.3,
    "plan_steps": 3,
    "executor_outcome": "PASS"
   },
@@ -543,7 +543,7 @@
    },
    "volume_delta_pct": -9.363,
    "error": null,
-   "duration_s": 8.1,
+   "duration_s": 7.2,
    "plan_steps": 5,
    "executor_outcome": "PASS"
   },
@@ -570,7 +570,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 8.0,
+   "duration_s": 7.5,
    "plan_steps": 2,
    "executor_outcome": "PASS"
   },
@@ -602,7 +602,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 6.6,
+   "duration_s": 5.5,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -634,7 +634,7 @@
    },
    "volume_delta_pct": -33.24,
    "error": null,
-   "duration_s": 11.4,
+   "duration_s": 10.0,
    "plan_steps": 7,
    "executor_outcome": "PASS"
   },
@@ -671,7 +671,7 @@
    },
    "volume_delta_pct": -40.579,
    "error": null,
-   "duration_s": 10.1,
+   "duration_s": 8.6,
    "plan_steps": 7,
    "executor_outcome": "PASS"
   },
@@ -703,7 +703,7 @@
    },
    "volume_delta_pct": -0.781,
    "error": null,
-   "duration_s": 6.2,
+   "duration_s": 5.6,
    "plan_steps": 2,
    "executor_outcome": "FAIL"
   },
@@ -714,7 +714,7 @@
    "per_kind": {
     "holes": {
      "a": 1,
-     "b": 0,
+     "b": 1,
      "matched": 0
     },
     "pockets": {
@@ -730,7 +730,7 @@
    },
    "volume_delta_pct": -66.832,
    "error": null,
-   "duration_s": 7.5,
+   "duration_s": 6.1,
    "plan_steps": 2,
    "executor_outcome": "PASS"
   },
@@ -784,7 +784,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 12.9,
+   "duration_s": 12.6,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -821,7 +821,7 @@
    },
    "volume_delta_pct": -1.096,
    "error": null,
-   "duration_s": 11.0,
+   "duration_s": 10.7,
    "plan_steps": 5,
    "executor_outcome": "PASS"
   },
@@ -848,7 +848,7 @@
    },
    "volume_delta_pct": -0.435,
    "error": null,
-   "duration_s": 10.4,
+   "duration_s": 10.6,
    "plan_steps": 5,
    "executor_outcome": "PASS"
   },
@@ -880,7 +880,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 8.4,
+   "duration_s": 8.1,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -902,7 +902,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 7.1,
+   "duration_s": 6.7,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -944,9 +944,9 @@
    "match_ratio": 1.0,
    "per_kind": {
     "holes": {
-     "a": 4,
-     "b": 4,
-     "matched": 4
+     "a": 7,
+     "b": 7,
+     "matched": 7
     },
     "pockets": {
      "a": 18,
@@ -961,8 +961,8 @@
    },
    "volume_delta_pct": -0.081,
    "error": null,
-   "duration_s": 31.4,
-   "plan_steps": 19,
+   "duration_s": 32.7,
+   "plan_steps": 22,
    "executor_outcome": "PASS"
   },
   "kicad__PinHeader_1x04_P2.54mm_Vertical.step": {
@@ -1047,7 +1047,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 13.5,
+   "duration_s": 13.1,
    "plan_steps": 4,
    "executor_outcome": "PASS"
   },
@@ -1074,7 +1074,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 15.1,
+   "duration_s": 14.5,
    "plan_steps": 4,
    "executor_outcome": "PASS"
   },
@@ -1096,7 +1096,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 8.6,
+   "duration_s": 8.4,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1128,7 +1128,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 10.3,
+   "duration_s": 10.0,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1155,7 +1155,7 @@
    },
    "volume_delta_pct": -0.051,
    "error": null,
-   "duration_s": 14.5,
+   "duration_s": 13.4,
    "plan_steps": 6,
    "executor_outcome": "PASS"
   },
@@ -1187,7 +1187,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 12.0,
+   "duration_s": 9.6,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1219,7 +1219,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 22.4,
+   "duration_s": 19.1,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1246,7 +1246,7 @@
    },
    "volume_delta_pct": -0.042,
    "error": null,
-   "duration_s": 16.7,
+   "duration_s": 13.7,
    "plan_steps": 6,
    "executor_outcome": "PASS"
   },
@@ -1268,7 +1268,7 @@
    },
    "volume_delta_pct": -0.062,
    "error": null,
-   "duration_s": 21.7,
+   "duration_s": 20.4,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
@@ -1300,7 +1300,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 36.0,
+   "duration_s": 31.3,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1332,7 +1332,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 14.7,
+   "duration_s": 13.4,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1359,7 +1359,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 36.1,
+   "duration_s": 33.5,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
@@ -1391,7 +1391,7 @@
    },
    "volume_delta_pct": -13.269,
    "error": null,
-   "duration_s": 39.9,
+   "duration_s": 36.7,
    "plan_steps": 34,
    "executor_outcome": "PASS"
   },
@@ -1418,7 +1418,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 50.6,
+   "duration_s": 46.7,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
@@ -1455,7 +1455,7 @@
    },
    "volume_delta_pct": -1.752,
    "error": null,
-   "duration_s": 122.4,
+   "duration_s": 115.3,
    "plan_steps": 57,
    "executor_outcome": "PASS"
   },
@@ -1482,18 +1482,18 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 76.5,
+   "duration_s": 69.0,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
   "pythonocc__11752.step": {
    "file": "pythonocc__11752.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.87,
+   "match_ratio": 0.8661,
    "per_kind": {
     "holes": {
-     "a": 142,
-     "b": 131,
+     "a": 143,
+     "b": 133,
      "matched": 119
     },
     "pockets": {
@@ -1519,8 +1519,8 @@
    },
    "volume_delta_pct": -100.687,
    "error": null,
-   "duration_s": 641.4,
-   "plan_steps": 142,
+   "duration_s": 447.1,
+   "plan_steps": 143,
    "executor_outcome": "FAIL"
   },
   "kicad__LQFP-128_14x14mm_P0.4mm.step": {
@@ -1546,7 +1546,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 98.0,
+   "duration_s": 80.2,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
@@ -1578,19 +1578,19 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 38.9,
+   "duration_s": 34.2,
    "plan_steps": 2,
    "executor_outcome": "PASS"
   },
   "pythonocc__Ventilator.step": {
    "file": "pythonocc__Ventilator.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.381,
+   "match_ratio": 0.9091,
    "per_kind": {
     "holes": {
      "a": 14,
-     "b": 2,
-     "matched": 1
+     "b": 14,
+     "matched": 13
     },
     "pockets": {
      "a": 1,
@@ -1601,11 +1601,16 @@
      "a": 6,
      "b": 6,
      "matched": 6
+    },
+    "patterns": {
+     "a": 0,
+     "b": 1,
+     "matched": 0
     }
    },
    "volume_delta_pct": -0.532,
    "error": null,
-   "duration_s": 97.8,
+   "duration_s": 91.5,
    "plan_steps": 15,
    "executor_outcome": "PASS"
   }
