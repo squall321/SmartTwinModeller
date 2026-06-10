@@ -347,18 +347,26 @@ def _hole_step(
     htype = hole.get("type", "simple")
     diams = hole.get("diameters_mm") or []
     primary_d = float(min(diams)) if diams else 3.4
-    depth = float(hole.get("depth_mm") or 5.0)
-    # COMPLEX-CAD pass-21 REVERTED. Even with pass-20 reorder (holes
-    # before pockets) AND no clamp, as1_pe_203 box drops 0.625 → 0.516
-    # because the deep 1016 mm holes still overlap with where 4 of the
-    # 18 pockets sit on the chassis topology — whichever cut runs
-    # second, BRepAlgoAPI_Cut no-ops on already-removed material.
-    # Reorder doesn't fix geometric overlap; only a CSG-aware planner
-    # or a depth-vs-position constraint solver would.
+    # COMPLEX-CAD pass-23 (2026-06-10): for box-mode cuts prefer
+    # ``entry_origin`` + ``entry_depth_mm`` if classify_holes populated
+    # them. They are the BODY-RELATIVE entry — derived by intersecting
+    # the cylinder line with the body bbox — so the cut lands at the
+    # actual body surface even when the catalog's axis_origin sits
+    # outside the body (as1_pe_203 hole 0 axis_origin world y=-1016
+    # below body bottom y=-685.8). preserve_brep keeps using
+    # axis_origin to maintain the round-trip identity.
+    axis_dir = hole.get("axis_dir") or [0.0, 0.0, -1.0]
+    if shift != (0.0, 0.0, 0.0) and hole.get("entry_origin") is not None:
+        axis_origin = hole.get("entry_origin")
+        depth = float(hole.get("entry_depth_mm") or hole.get("depth_mm") or 5.0)
+    else:
+        axis_origin = hole.get("axis_origin") or [0.0, 0.0, 0.0]
+        depth = float(hole.get("depth_mm") or 5.0)
+    # Keep the 200 mm clamp — see pass-21 commit for why removing it
+    # regresses pocket pairing on as1_pe_203 (geometric overlap with
+    # the 18 catalog pockets).
     if depth > 200.0:
         depth = 200.0
-    axis_dir = hole.get("axis_dir") or [0.0, 0.0, -1.0]
-    axis_origin = hole.get("axis_origin") or [0.0, 0.0, 0.0]
     face_sel = _pick_face_selector(axis_origin, axis_dir, bbox)
     # Re-anchor catalog world-frame coords into the placeholder box's frame
     # (shift = (-cx, -cy, -zmin)). Identity when shift is (0,0,0).
@@ -2679,6 +2687,51 @@ def _build_plan(
         _dp = float(h.get("depth_mm") or 5.0)
         if _predicted_cylinder_volume_mm3(_d, _dp) < _MIN_EMITTED_CUT_MM3:
             continue
+        # COMPLEX-CAD pass-23 (2026-06-10): multi-body fastener filter.
+        # Assembly STEPs (as1_pe_203) include fastener cylinders that
+        # belong to OTHER bodies in the assembly — their axis_origin sits
+        # outside the inspected body's bbox and the cylinder segment
+        # doesn't intersect the body at all (e.g. as1_pe_203 hole 0:
+        # axis_origin world y=−1016 below body ymin, axis_dir=(0,−1,0)
+        # heading even further away). Emitting them in box mode is wasted
+        # work — the cut subtracts nothing and the regen detector never
+        # finds them, dropping match ratio.
+        # Skip when the cylinder line × body bbox has zero overlap.
+        # preserve_brep mode keeps these (round-trip needs every catalog
+        # entry).
+        if base_step_kind == "box" and bbox is not None:
+            _origin_w = h.get("axis_origin") or [0.0, 0.0, 0.0]
+            _axis_w = h.get("axis_dir") or [0.0, 0.0, -1.0]
+            try:
+                _t_lo, _t_hi = 0.0, float(_dp)
+                _miss = False
+                for _ki, _kmin, _kmax in (
+                    (0, float(bbox[0]), float(bbox[3])),
+                    (1, float(bbox[1]), float(bbox[4])),
+                    (2, float(bbox[2]), float(bbox[5])),
+                ):
+                    _ok = float(_origin_w[_ki])
+                    _dk = float(_axis_w[_ki])
+                    if abs(_dk) < 1e-9:
+                        if _ok < _kmin or _ok > _kmax:
+                            _miss = True
+                            break
+                        continue
+                    _t1 = (_kmin - _ok) / _dk
+                    _t2 = (_kmax - _ok) / _dk
+                    if _t1 > _t2:
+                        _t1, _t2 = _t2, _t1
+                    if _t1 > _t_lo:
+                        _t_lo = _t1
+                    if _t2 < _t_hi:
+                        _t_hi = _t2
+                    if _t_lo > _t_hi:
+                        _miss = True
+                        break
+                if _miss:
+                    continue
+            except Exception:
+                pass
         # Round-body guard: skip ±Z holes whose XY position falls outside
         # the bbox's inscribed circle on near-square bodies. The placeholder
         # box covers the full rect bbox, but earlier pocket steps round off

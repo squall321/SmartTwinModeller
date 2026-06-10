@@ -118,16 +118,18 @@ def _xyz_of(entry: dict, frame_offset: tuple[float, float, float] = (0.0, 0.0, 0
     """First available 3-tuple position from common catalog keys.
 
     COMPLEX-CAD pass-9 (2026-06-09): add ``frame_offset`` so callers can
-    align two catalogs that live in DIFFERENT coordinate frames. In box
-    mode the regen body's catalog is in BOX-LOCAL coords (XY-centered,
-    Z floor at 0) while the original catalog is in WORLD coords; before
-    this, every pair failed the spatial gate by ~|shift| mm because the
-    fidelity diff compared frames directly. The caller passes
-    frame_offset = world-to-box shift (i.e. -bbox_center for XY,
-    -bbox.zmin for Z) so the regen-side xyz is mapped INTO the original
-    world frame before distance comparison.
+    align two catalogs that live in DIFFERENT coordinate frames.
+
+    COMPLEX-CAD pass-23 (2026-06-10): prefer ``entry_origin`` over
+    ``axis_origin`` when present. Both orig and regen classify_holes
+    populate entry_origin = the cylinder's intersection with the body
+    bbox along axis_dir. For poked-through cylinders (cylinder axis
+    extending beyond the body) entry_origin agrees between orig and
+    regen even when axis_origin doesn't (orig stores the cylinder's
+    parametric endpoint outside the body; regen stores the cut's
+    entry inside the body).
     """
-    for key in ("axis_origin", "centroid", "center", "position", "origin"):
+    for key in ("entry_origin", "axis_origin", "centroid", "center", "position", "origin"):
         v = entry.get(key)
         if isinstance(v, (list, tuple)) and len(v) >= 3:
             try:

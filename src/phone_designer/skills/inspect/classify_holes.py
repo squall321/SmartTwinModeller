@@ -71,6 +71,80 @@ def _point_inside_solid(shape, x: float, y: float, z: float, tol: float = 1e-6) 
         return False
 
 
+def _body_entry_along_axis(shape, axis_origin, axis_dir, depth_mm: float):
+    """COMPLEX-CAD pass-23 (2026-06-10): given a cylinder's axis_origin
+    + axis_dir + depth, compute the body's INNER ENTRY point where the
+    cylinder first crosses the body bbox along ±axis_dir.
+
+    Used by the planner to emit a cut at the actual body face instead
+    of at a cylinder parametric endpoint that may sit outside the body
+    (as1_pe_203 hole 0 has axis_origin at world y=-1016, BELOW body
+    bottom at y=-685.8; the cylinder enters the body at y=-685.8).
+
+    Does NOT mutate the catalog's axis_origin — fidelity diff and the
+    preserve_brep self-match path keep the natural convention.
+
+    Returns ``(origin, dir, body_relative_depth_mm, intersects)`` —
+    ``intersects`` is False when the cylinder segment [0, depth] has
+    zero overlap with the body bbox (signals a phantom multi-body
+    fastener belonging to another solid in an assembly STEP). In that
+    case the first three values fall back to the input unchanged.
+    """
+    try:
+        from OCP.Bnd import Bnd_Box
+        from OCP.BRepBndLib import BRepBndLib
+        bb = Bnd_Box()
+        BRepBndLib.AddOptimal_s(shape, bb)
+        if bb.IsVoid():
+            return axis_origin, axis_dir, depth_mm, True
+        xmin, ymin, zmin, xmax, ymax, zmax = bb.Get()
+    except Exception:
+        return axis_origin, axis_dir, depth_mm, True
+
+    ox, oy, oz = float(axis_origin[0]), float(axis_origin[1]), float(axis_origin[2])
+    dx, dy, dz = float(axis_dir[0]), float(axis_dir[1]), float(axis_dir[2])
+
+    # Pass-23d (2026-06-10) tolerance: expand body bbox by a small
+    # margin so cylinders sitting RIGHT AT the body boundary survive
+    # the in-bbox test after preserve_brep round-trip introduces sub-mm
+    # numerical drift. Without this, Crystal_SMD_3225-4Pin regressed
+    # 1.0 → 0.85 because 4 of its 8 pin cylinders flipped from "inside"
+    # to "outside" by 0.001 mm between orig and regen detection.
+    _margin = max(2.0, 0.02 * max(xmax - xmin, ymax - ymin, zmax - zmin))
+    xmin -= _margin; ymin -= _margin; zmin -= _margin
+    xmax += _margin; ymax += _margin; zmax += _margin
+
+    def _axis_range(coord, dcomp, lo, hi):
+        if abs(dcomp) < 1e-9:
+            if lo <= coord <= hi:
+                return -float("inf"), float("inf")
+            return None
+        t1 = (lo - coord) / dcomp
+        t2 = (hi - coord) / dcomp
+        return (min(t1, t2), max(t1, t2))
+
+    rx = _axis_range(ox, dx, xmin, xmax)
+    ry = _axis_range(oy, dy, ymin, ymax)
+    rz = _axis_range(oz, dz, zmin, zmax)
+    if rx is None or ry is None or rz is None:
+        return axis_origin, axis_dir, depth_mm, False
+
+    t_lo = max(rx[0], ry[0], rz[0])
+    t_hi = min(rx[1], ry[1], rz[1])
+    if t_hi <= t_lo:
+        return axis_origin, axis_dir, depth_mm, False
+
+    # Confine to the cylinder's actual segment [0, depth_mm].
+    t_lo_c = max(t_lo, 0.0)
+    t_hi_c = min(t_hi, depth_mm)
+    if t_hi_c <= t_lo_c:
+        return axis_origin, axis_dir, depth_mm, False
+
+    new_origin = (ox + dx * t_lo_c, oy + dy * t_lo_c, oz + dz * t_lo_c)
+    new_depth = t_hi_c - t_lo_c
+    return new_origin, axis_dir, new_depth, True
+
+
 def _standardize_entry(shape, axis_origin, axis_dir, depth_mm: float):
     """COMPLEX-CAD pass-17 (2026-06-09): rewrite axis_origin/axis_dir so
     axis_origin sits at the EXIT (open) face of the cylinder — the body
@@ -645,12 +719,42 @@ class ClassifyHoles(SkillBase):
                 desc["axis_dir"] = [round(float(v), 4) for v in new_d]
             except Exception:
                 pass
+            # COMPLEX-CAD pass-23 (2026-06-10): compute the body-relative
+            # entry point + depth. This is the CUT-WORTHY position even
+            # for cylinders whose parametric axis_origin sits outside the
+            # body (poked-through through-holes). Stored as a separate
+            # field so axis_origin keeps its natural convention for the
+            # preserve_brep self-match path; the planner picks
+            # entry_origin / entry_depth_mm when emitting box-mode cuts.
+            #
+            # ALSO drop phantom multi-body fastener cylinders: when the
+            # cylinder segment [0, depth_mm] has zero overlap with the
+            # body bbox, the face belongs to ANOTHER solid in the
+            # assembly (as1_pe_203 has 7 such cylinders — long fastener
+            # pins at y=-1016..-2032 below body bottom y=-685.8). They
+            # waste planner emission AND pollute the fidelity-diff union
+            # denominator. Both orig and regen catalogues apply the same
+            # filter — preserve_brep self-match stays 1.0 by construction.
+            try:
+                eo, ed, edepth, intersects = _body_entry_along_axis(
+                    shape,
+                    desc["axis_origin"], desc["axis_dir"], desc["depth_mm"],
+                )
+                if not intersects:
+                    continue
+                desc["entry_origin"] = [round(float(v), 4) for v in eo]
+                desc["entry_depth_mm"] = round(float(edepth), 4)
+            except Exception:
+                desc["entry_origin"] = desc["axis_origin"]
+                desc["entry_depth_mm"] = desc["depth_mm"]
             desc["id"] = len(holes)
             holes.append({
                 "id": desc["id"],
                 "type": desc["type"],
                 "axis_origin": desc["axis_origin"],
                 "axis_dir": desc["axis_dir"],
+                "entry_origin": desc["entry_origin"],
+                "entry_depth_mm": desc["entry_depth_mm"],
                 "diameters_mm": desc["diameters_mm"],
                 "depth_mm": desc["depth_mm"],
                 "face_indices": desc["face_indices"],
