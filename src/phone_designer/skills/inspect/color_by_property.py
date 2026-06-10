@@ -39,6 +39,7 @@ from phone_designer.skills._history import EntityHistoryMap
 from phone_designer.skills._post_conditions import PostCondition
 from phone_designer.skills._registry import skill
 from phone_designer.skills._spec import SkillBase, SkillResult
+from phone_designer.skills.inspect._draft_math import unsigned_pull_angle_deg
 
 
 def _load(family: str, name: str):
@@ -188,11 +189,13 @@ def _wall_thickness_at(face, shape) -> float:
 
 
 def _draft_angle_deg(face) -> float:
+    # Angle between normal and +Z, hemispheres collapsed — math now lives in
+    # the shared _draft_math helper (also used by inspect_draft_angles).
+    # _face_normal always returns a unit vector, so the degenerate (None)
+    # branch is unreachable; 90.0 fallback preserves the old acos(0) value.
     n = _face_normal(face)
-    # angle between normal and +Z. abs() so we don't distinguish ± Z hemispheres.
-    cos_v = abs(n[2])
-    cos_v = max(-1.0, min(1.0, cos_v))
-    return math.degrees(math.acos(cos_v))
+    ang = unsigned_pull_angle_deg(n, (0.0, 0.0, 1.0))
+    return 90.0 if ang is None else ang
 
 
 def _abs_mean_curvature(face) -> float:
