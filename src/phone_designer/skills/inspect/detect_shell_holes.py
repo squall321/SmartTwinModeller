@@ -233,15 +233,22 @@ def _fit_circle_2d(pts2d):
         Syyy += y * y * y
         Sxyy += x * y * y
         Sxxy += x * x * y
-    # Solve
-    #   [ Sxx Sxy Sx ] [a]   [ (Sxxx + Sxyy) / 2 ]
-    #   [ Sxy Syy Sy ] [b] = [ (Syyy + Sxxy) / 2 ]
-    #   [ Sx  Sy  N  ] [c]   [ (Sxx + Syy) / 2   ]
+    # Solve (rows are the gradient of Σ(x²+y²-2ax-2by-c)², divided by 2)
+    #   [ Sxx Sxy Sx/2 ] [a]   [ (Sxxx + Sxyy) / 2 ]
+    #   [ Sxy Syy Sy/2 ] [b] = [ (Syyy + Sxxy) / 2 ]
+    #   [ Sx  Sy  N/2  ] [c]   [ (Sxx + Syy) / 2   ]
     # where center = (a, b), radius² = c + a² + b².
+    #
+    # V6-audit fix (2026-06-10): the c column previously read [Sx, Sy, N] —
+    # a 2× mis-scale vs the calculus (∂/∂c gives 2a·Sx + 2b·Sy + c·N =
+    # Sxx + Syy, i.e. N/2 after halving). With centroid-origin projection
+    # (Sx ≈ Sy ≈ 0) that made c = R²/2, so every PERFECT circle fitted at
+    # r = R/√2 and the default sin(10°) radial-deviation gate rejected all
+    # clean circular cutouts.
     A = [
-        [Sxx, Sxy, Sx],
-        [Sxy, Syy, Sy],
-        [Sx, Sy, float(n)],
+        [Sxx, Sxy, 0.5 * Sx],
+        [Sxy, Syy, 0.5 * Sy],
+        [Sx, Sy, 0.5 * float(n)],
     ]
     b = [
         0.5 * (Sxxx + Sxyy),
