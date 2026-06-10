@@ -49,6 +49,7 @@ import phone_designer.skills.modify_finish.surface_finish_tag  # noqa: F401
 import phone_designer.skills.modify_pocket.extrude_plateau  # noqa: F401
 import phone_designer.skills.modify_pocket.extrude_pocket  # noqa: F401
 import phone_designer.skills.modify_pocket.extrude_pocket_blended  # noqa: F401
+import phone_designer.skills.modify_pocket.extrude_pocket_world  # noqa: F401
 import phone_designer.skills.modify_pocket.extrude_through  # noqa: F401
 import phone_designer.skills.modify_pocket.loft_pocket_between_sketches  # noqa: F401
 import phone_designer.skills.modify_pocket.grille_pattern  # noqa: F401
@@ -266,11 +267,14 @@ import phone_designer.skills.inspect.match_standard_hole  # noqa: F401
 import phone_designer.skills.inspect.match_standard_bearing  # noqa: F401
 import phone_designer.skills.inspect.match_standard_oring  # noqa: F401
 import phone_designer.skills.inspect.identify_fastener_recess  # noqa: F401
+import phone_designer.skills.inspect.base_step_kind_chooser  # noqa: F401
+import phone_designer.skills.inspect.body_orientation_check  # noqa: F401
 import phone_designer.skills.reverse_engineer.extract_feature_catalog  # noqa: F401
 import phone_designer.skills.reverse_engineer.feature_fidelity_diff  # noqa: F401
 import phone_designer.skills.reverse_engineer.plan_from_feature_catalog  # noqa: F401
 import phone_designer.skills.reverse_engineer.vary_feature_catalog  # noqa: F401
 import phone_designer.skills.reverse_engineer.plan_from_scaled_catalog  # noqa: F401
+import phone_designer.skills.reverse_engineer.assembly_reverse_engineer  # noqa: F401
 from phone_designer.skills.io.iges_import import IgesImport
 from phone_designer.skills.io.iges_export import IgesExport
 from phone_designer.skills.io.brep_import import BrepImport
