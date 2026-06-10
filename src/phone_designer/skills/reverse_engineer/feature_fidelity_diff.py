@@ -31,6 +31,8 @@ _KINDS = (
     "holes", "pockets", "bosses", "ribs", "lugs",
     "sweep_features", "loft_features", "revolve_features",
     "symmetries", "patterns",
+    # A3 (2026-06-10): fillet / chamfer inventory from classify_edge_blends.
+    "edge_blends",
 )
 
 _TOL_XYZ_MM_FLOOR = 5.0   # minimum spatial tolerance (phone-scale)
@@ -48,6 +50,9 @@ _TOL_DIM_FRAC_BY_KIND: dict[str, float] = {
     "revolve_features": 0.15,  # composite radius+depth dims — loose
     "sweep_features": 0.15,
     "loft_features": 0.15,
+    # A3 (2026-06-10): fillet radius / chamfer width — same band as
+    # pockets/bosses (R2 vs R2.5 stays distinct; round-trip noise passes).
+    "edge_blends": 0.10,
 }
 _TOL_DIM_FRAC_DEFAULT = 0.15
 
@@ -174,6 +179,15 @@ def _primary_dim(entry: dict, kind: str) -> float | None:
             if v is not None:
                 return v
         return None
+    if kind == "edge_blends":
+        # A3 (2026-06-10): fillet → radius_mm, chamfer → width_mm. The
+        # centroid gate in _greedy_pair handles spatial proximity; this
+        # dim gate keeps an R2 fillet from pairing with an R3 one.
+        for key in ("radius_mm", "width_mm"):
+            v = _coerce(entry.get(key))
+            if v is not None:
+                return v
+        return None
     if kind in ("revolve_features", "sweep_features", "loft_features"):
         for key in ("radius_mm", "diameter_mm", "depth_mm", "height_mm", "length_mm"):
             v = _coerce(entry.get(key))
@@ -257,7 +271,9 @@ def _avg_dim_drift_pct_from_pairs(
     all_pairs: dict[str, list[tuple[int, int, float]]],
 ) -> float | None:
     drifts: list[float] = []
-    for k in ("pockets", "holes", "bosses", "revolve_features"):
+    # A3 (2026-06-10): edge_blends added — informational only (match_ratio
+    # is unaffected; paired blends contribute their *_mm drift like holes).
+    for k in ("pockets", "holes", "bosses", "revolve_features", "edge_blends"):
         pairs = all_pairs.get(k) or []
         a_list = cat_a.get(k) or []
         b_list = cat_b.get(k) or []
@@ -306,7 +322,7 @@ def _drift_breakdown_from_pairs(
     """
     out: dict[str, dict[str, dict]] = {}
     for k in ("pockets", "holes", "bosses", "revolve_features",
-              "sweep_features", "loft_features"):
+              "sweep_features", "loft_features", "edge_blends"):
         pairs = all_pairs.get(k) or []
         a_list = cat_a.get(k) or []
         b_list = cat_b.get(k) or []

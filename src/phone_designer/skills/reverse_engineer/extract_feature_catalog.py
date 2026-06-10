@@ -15,6 +15,7 @@ their outputs into a single ``extras["feature_catalog"]`` dict::
       "sweep_features":    [...],   # surface-of-extrusion / b-spline sweep tubes
       "loft_features":     [...],   # cone / lofted-bspline boss/pocket pairs
       "revolve_features":  [...],   # revolved bspline pockets / annular grooves
+      "edge_blends":       [...],   # classify_edge_blends (fillets / chamfers)
       "base_thickness_mm": float,   # dominant slab thickness for base-box step
       "_timings_sec":      {...},   # per-detector wall-clock in seconds
       "_skipped_detectors":[...],   # detectors that hit their 'too_big' guard
@@ -539,6 +540,20 @@ class ExtractFeatureCatalog(SkillBase):
                         "{'min_top_d_mm': 2.0, 'min_face_count_per_pocket': 3, "
                         "'min_depth_to_width_ratio': 0.05}.",
         )
+        include_edge_blends: bool = Field(
+            default=False,
+            description="A3 (2026-06-10): run classify_edge_blends and "
+                        "populate catalog['edge_blends'] (fillet / chamfer "
+                        "strip inventory). OPT-IN: the A3 spot check showed "
+                        "blend detection is not yet round-trip stable — "
+                        "boolean-cut residue faces on regen bodies classify "
+                        "as extra fillets (Ventilator orig 31 vs regen 54 "
+                        "blends → 0.9091 → 0.6184; Crystal_SMD 1.0 → 0.8824 "
+                        "with 8 vs 4). Until the detector filters "
+                        "cut-created faces (convexity/provenance gates), "
+                        "default-on would violate the preserve_brep "
+                        "self-match hard constraint.",
+        )
 
     def _build_catalog_for(
         self,
@@ -791,6 +806,26 @@ class ExtractFeatureCatalog(SkillBase):
         else:
             sweep_features, loft_features, revolve_features = [], [], []
 
+        # ── edge blends (fillets / chamfers) — A3 (2026-06-10) ─────────────
+        # Run SERIALLY after the independent pool (not inside it) so the new
+        # detector cannot perturb the proven 6-detector thread interleaving.
+        # Same _timed per-detector isolation: a failure leaves [] and the
+        # rest of the catalog intact; a too_big guard hit returns the
+        # sentinel dict (mirrors classify_pockets) which _counts() in
+        # feature_fidelity_diff already treats as 0 entries.
+        edge_blends: Any = []
+        if getattr(self, "_include_edge_blends", False):
+            from phone_designer.skills.inspect.classify_edge_blends import (
+                ClassifyEdgeBlends,
+            )
+            eb_res = _timed(
+                "classify_edge_blends", ClassifyEdgeBlends().apply, body, {},
+            )
+            if eb_res is not None:
+                edge_blends = eb_res.extras.get("edge_blends", [])
+                if isinstance(edge_blends, dict) and edge_blends.get("skipped"):
+                    skipped_detectors.append("classify_edge_blends")
+
         feature_catalog = {
             "holes": holes,
             "pockets": pockets,
@@ -803,6 +838,7 @@ class ExtractFeatureCatalog(SkillBase):
             "sweep_features": sweep_features,
             "loft_features": loft_features,
             "revolve_features": revolve_features,
+            "edge_blends": edge_blends,
             "base_thickness_mm": (
                 float(base_thickness) if base_thickness is not None else None
             ),
@@ -821,6 +857,7 @@ class ExtractFeatureCatalog(SkillBase):
         # Wire arg → instance attr so _build_catalog_for can read it.
         self._parallel_mode = bool(args.parallel)
         self._classify_pockets_extra_args = dict(args.classify_pockets_extra_args or {})
+        self._include_edge_blends = bool(args.include_edge_blends)
         # ── Whole-body catalog (always computed) ───────────────────────────
         feature_catalog = self._build_catalog_for(body, args.max_face_count)
 
