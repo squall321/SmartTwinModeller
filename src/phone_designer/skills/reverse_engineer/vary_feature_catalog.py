@@ -40,7 +40,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from phone_designer.skills._history import EntityHistoryMap
 from phone_designer.skills._post_conditions import PostCondition
@@ -125,23 +125,32 @@ def _scale_value(value: Any, factor: float) -> Any:
     return value
 
 
-def _apply_uniform_scale(node: Any, factor: float) -> None:
+def _apply_uniform_scale(
+    node: Any, factor: float, exclude: frozenset[str] = frozenset(),
+) -> None:
     """In-place: walk ``node`` and scale every dimensional field by ``factor``.
 
     Dicts: for keys in ``_SCALAR_DIM_FIELDS`` ∪ ``_VECTOR_DIM_FIELDS`` scale
     the value; recurse into every value regardless of key.
     Lists/tuples: recurse into elements (cannot scale by key — list parents
     pass key context via the field they live under).
+
+    ``exclude`` (P7, 2026-06-10): field names that must NOT be uniformly
+    scaled even though they are whitelisted — e.g. ``base_thickness_mm``
+    under ``constraints.preserve_wall_thickness``. Excluded fields are left
+    untouched entirely (no scaling, no recursion into them).
     """
     if isinstance(node, dict):
         for k, v in list(node.items()):
+            if k in exclude:
+                continue
             if k in _SCALAR_DIM_FIELDS or k in _VECTOR_DIM_FIELDS:
                 node[k] = _scale_value(v, factor)
             else:
-                _apply_uniform_scale(v, factor)
+                _apply_uniform_scale(v, factor, exclude)
     elif isinstance(node, list):
         for item in node:
-            _apply_uniform_scale(item, factor)
+            _apply_uniform_scale(item, factor, exclude)
     # scalars and other types — nothing to recurse into.
 
 
@@ -192,33 +201,90 @@ def _navigate_to_parent(root: Any, parts: list[str]) -> tuple[Any, str | int] | 
     return (cur, last_key)
 
 
-def _apply_per_feature_scale(root: dict, per_feature_scale: dict) -> None:
+def _apply_per_feature_scale(
+    root: dict,
+    per_feature_scale: dict,
+    unresolved: list[str] | None = None,
+) -> None:
     """In-place: for each dotted key in ``per_feature_scale`` multiply the
     targeted value by its scale (after the uniform pass has already run).
-    Missing keys are silently ignored.
+    Missing keys are skipped; when ``unresolved`` is given (P8) the skipped
+    dotted keys are appended to it so callers can surface / raise on them.
     """
     for dotted_key, scale in per_feature_scale.items():
         parts = _split_dotted_key(dotted_key)
         nav = _navigate_to_parent(root, parts)
         if nav is None:
+            if unresolved is not None:
+                unresolved.append(str(dotted_key))
             continue
         parent, last = nav
         current = parent[last]
         parent[last] = _scale_value(current, scale)
 
 
-def _apply_absolute_overrides(root: dict, absolute_overrides: dict) -> None:
+def _apply_absolute_overrides(
+    root: dict,
+    absolute_overrides: dict,
+    unresolved: list[str] | None = None,
+) -> None:
     """In-place: for each dotted key in ``absolute_overrides`` assign the
-    given value EXACTLY (no scaling). Missing parent paths are silently
-    ignored — the caller is responsible for providing a valid path.
+    given value EXACTLY (no scaling). Missing parent paths are skipped; when
+    ``unresolved`` is given (P8) the skipped dotted keys are appended to it.
     """
     for dotted_key, value in absolute_overrides.items():
         parts = _split_dotted_key(dotted_key)
         nav = _navigate_to_parent(root, parts)
         if nav is None:
+            if unresolved is not None:
+                unresolved.append(str(dotted_key))
             continue
         parent, last = nav
         parent[last] = value
+
+
+def vary_catalog_ex(
+    catalog: dict,
+    scale_factor: float | None = None,
+    per_feature_scale: dict | None = None,
+    absolute_overrides: dict | None = None,
+    exclude_fields: set[str] | frozenset[str] | None = None,
+) -> tuple[dict, dict]:
+    """Pure function (P8): deep-copy ``catalog``, apply the variation rules,
+    and return ``(varied_catalog, warnings)``.
+
+    ``warnings`` schema::
+
+        {"unresolved_overrides": [dotted_key, ...]}
+
+    Every ``per_feature_scale`` / ``absolute_overrides`` dotted key whose
+    path does not resolve inside the catalog (typo, stale index, older
+    catalog version) is collected instead of being silently dropped — the
+    pre-P8 behaviour produced bit-identical plans for typo'd keys with no
+    signal at all.
+
+    ``exclude_fields`` (P7): whitelisted field names exempted from the
+    uniform ``scale_factor`` pass — e.g. ``{"base_thickness_mm"}`` under
+    ``constraints.preserve_wall_thickness``. Per-feature / absolute
+    overrides still reach excluded fields (explicit intent beats the
+    exemption).
+    """
+    new_catalog = copy.deepcopy(catalog or {})
+    unresolved: list[str] = []
+    if scale_factor is not None and float(scale_factor) != 1.0:
+        _apply_uniform_scale(
+            new_catalog, float(scale_factor),
+            frozenset(exclude_fields or ()),
+        )
+    if per_feature_scale:
+        _apply_per_feature_scale(
+            new_catalog, dict(per_feature_scale), unresolved,
+        )
+    if absolute_overrides:
+        _apply_absolute_overrides(
+            new_catalog, dict(absolute_overrides), unresolved,
+        )
+    return new_catalog, {"unresolved_overrides": unresolved}
 
 
 def vary_catalog(
@@ -226,19 +292,19 @@ def vary_catalog(
     scale_factor: float | None = None,
     per_feature_scale: dict | None = None,
     absolute_overrides: dict | None = None,
+    exclude_fields: set[str] | frozenset[str] | None = None,
 ) -> dict:
-    """Pure function: deep-copy ``catalog`` and apply the variation rules.
-
-    Exposed at module level so plan_from_scaled_catalog and other callers can
-    reuse the same transform without re-running the full skill wrapper.
+    """Back-compat thin wrapper around :func:`vary_catalog_ex` returning only
+    the varied catalog (pre-P8 signature). New callers that care about
+    unresolved dotted keys should use ``vary_catalog_ex`` instead.
     """
-    new_catalog = copy.deepcopy(catalog or {})
-    if scale_factor is not None and float(scale_factor) != 1.0:
-        _apply_uniform_scale(new_catalog, float(scale_factor))
-    if per_feature_scale:
-        _apply_per_feature_scale(new_catalog, dict(per_feature_scale))
-    if absolute_overrides:
-        _apply_absolute_overrides(new_catalog, dict(absolute_overrides))
+    new_catalog, _warnings = vary_catalog_ex(
+        catalog,
+        scale_factor=scale_factor,
+        per_feature_scale=per_feature_scale,
+        absolute_overrides=absolute_overrides,
+        exclude_fields=exclude_fields,
+    )
     return new_catalog
 
 
@@ -262,6 +328,11 @@ def vary_catalog(
 )
 class VaryFeatureCatalog(SkillBase):
     class Args(BaseModel):
+        # P8 (2026-06-10): unknown arg keys raise ValidationError instead of
+        # being silently dropped (e.g. 'absolut_overrides' typo previously
+        # produced an unvaried catalog with no signal).
+        model_config = ConfigDict(extra="forbid")
+
         catalog: dict = Field(
             default_factory=dict,
             description="The feature_catalog dict to vary (produced by "
@@ -288,16 +359,33 @@ class VaryFeatureCatalog(SkillBase):
                         "(beats both scale_factor and per_feature_scale). "
                         "Example: {'holes.0.diameter_mm': 8.5}.",
         )
+        strict: bool = Field(
+            default=False,
+            description="P8: when True, raise ValueError if any "
+                        "per_feature_scale / absolute_overrides dotted key "
+                        "does not resolve inside the catalog (typo / stale "
+                        "index). When False the unresolved keys are reported "
+                        "in extras['unresolved_overrides'] instead.",
+        )
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
-        varied = vary_catalog(
+        varied, warnings = vary_catalog_ex(
             args.catalog,
             scale_factor=args.scale_factor,
             per_feature_scale=args.per_feature_scale,
             absolute_overrides=args.absolute_overrides,
         )
+        unresolved = warnings.get("unresolved_overrides") or []
+        if args.strict and unresolved:
+            raise ValueError(
+                "vary_feature_catalog: unresolved override dotted key(s) "
+                f"(strict=True): {unresolved}"
+            )
         return SkillResult(
             body=body,
             history=EntityHistoryMap(),
-            extras={"varied_catalog": varied},
+            extras={
+                "varied_catalog": varied,
+                "unresolved_overrides": unresolved,
+            },
         )

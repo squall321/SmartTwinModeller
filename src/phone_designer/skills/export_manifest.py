@@ -272,11 +272,13 @@ import phone_designer.skills.inspect.body_orientation_check  # noqa: F401
 import phone_designer.skills.inspect.topology_health  # noqa: F401
 import phone_designer.skills.inspect.geometry_deviation  # noqa: F401
 import phone_designer.skills.inspect.validate_rebuilt_body  # noqa: F401
+import phone_designer.skills.inspect.inspect_draft_angles  # noqa: F401
 import phone_designer.skills.reverse_engineer.extract_feature_catalog  # noqa: F401
 import phone_designer.skills.reverse_engineer.feature_fidelity_diff  # noqa: F401
 import phone_designer.skills.reverse_engineer.plan_from_feature_catalog  # noqa: F401
 import phone_designer.skills.reverse_engineer.vary_feature_catalog  # noqa: F401
 import phone_designer.skills.reverse_engineer.plan_from_scaled_catalog  # noqa: F401
+import phone_designer.skills.reverse_engineer.normalize_varied_catalog  # noqa: F401
 import phone_designer.skills.reverse_engineer.assembly_reverse_engineer  # noqa: F401
 from phone_designer.skills.io.iges_import import IgesImport
 from phone_designer.skills.io.iges_export import IgesExport
@@ -360,6 +362,7 @@ import phone_designer.skills.pmi.pmi_surface_texture  # noqa: F401
 import phone_designer.skills.pmi.pmi_weld_symbol  # noqa: F401
 import phone_designer.skills.pmi.export_step_ap242_pmi  # noqa: F401
 import phone_designer.skills.pmi.pmi_inspect_summary  # noqa: F401
+import phone_designer.skills.pmi.read_step_pmi  # noqa: F401
 import phone_designer.skills.fem_cae.mesh_refinement_zones  # noqa: F401
 import phone_designer.skills.fem_cae.thermal_bc_tag  # noqa: F401
 import phone_designer.skills.fem_cae.contact_pair  # noqa: F401
