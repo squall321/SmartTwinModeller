@@ -1,12 +1,21 @@
 # 검증·분석·재생성 역량 확보 플랜 (2026-06)
 
-> **진행 상태 (2026-06-10):** Wave 1 완료 (V1 ✅ 2dfbb34, P1 ✅ 8a4790f,
+> **진행 상태 (2026-06-11):** Wave 1 완료 (V1 ✅ 2dfbb34, P1 ✅ 8a4790f,
 > V3 ✅ 70662dc) · Wave 2 완료 (V2 ✅ corpus-regress+baselines,
 > V4 ✅ geometry_deviation, P3 ✅ validate_rebuilt_body,
 > A1 ✅ topology_health, A2 ✅ pass-24 — Ventilator 0.381→0.9091,
-> root corpus **55/55 ≥ 0.5** 달성, P4 ✅ 데모 v2 gated 전 셀 PASS).
-> 다음: Wave 3 — V5(executor provenance), V6(RE 코어 테스트),
-> V7=A4(ground-truth 사이드카), A3(edge blends), A5–A8, P5–P8.
+> root corpus **55/55 ≥ 0.5** 달성, P4 ✅ 데모 v2 gated 전 셀 PASS) ·
+> **Wave 3 완료** (V5 ✅ executor provenance+strict_cuts,
+> V6 ✅ RE 코어 46 테스트+ratchet — detect_shell_holes 버그 발굴·수정,
+> V7=A4 ✅ ground-truth 사이드카 42파일/111치수,
+> A5 ✅ inspect_draft_angles, A6 ✅ measure_thread_pitch+pass-25,
+> A7 ✅ read_step_pmi — export 측이 빈 GDT 를 쓰는 결함 발견,
+> A8 ✅ gdt_position DRF+MMC, P5 ✅ scale-aware planner,
+> P6/P7/P8 ✅ normalize+constraints+strict,
+> A3 ⚠️ classify_edge_blends 스킬 완성 — 단 카탈로그 연결은 OPT-IN:
+> 컷 잔여면이 regen 에서 fillet 으로 오분류 (Ventilator 31→54),
+> default-on 은 self-match 하드 제약 위반. 잔여: cut-residue 필터 후
+> default-on, A9/A10=P9, export PMI 수정, KR600/RC_Buggy 타임아웃).
 
 9-agent 병렬 감사(스킬 인벤토리 / 테스트 인프라 / RE 파이프라인 / 파라메트릭
 변형 / 코퍼스 / executor 신뢰층 + 3개 설계 에이전트) 결과를 종합한 실행
