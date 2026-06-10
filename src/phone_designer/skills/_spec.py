@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
@@ -159,17 +160,40 @@ class SkillBase(ABC):
         # Pre-execution shape metrics (None when create skills receive body=None).
         pre_metrics = _measure(body)
 
+        _t0 = time.perf_counter()
         result = self._apply(body, args)
+        duration_ms = (time.perf_counter() - _t0) * 1000.0
+
+        # Post-execution metrics — measured ONCE here and shared between the
+        # post-condition gate below and the per-step provenance record (V5).
+        post_metrics = _measure(result.body)
 
         # Post-condition verification — catches silent no-ops like an
         # extrude_pocket that removed 0 mm³ due to a face-orientation bug.
         # Skills opt-in via `post_conditions=[...]` in their @skill(...) block.
         spec = getattr(self, "spec", None)
         if spec is not None and getattr(spec, "post_conditions", None):
-            post_metrics = _measure(result.body)
             check_post_conditions(
                 spec.post_conditions, pre_metrics, post_metrics, spec.name,
             )
+
+        # V5 per-step provenance — the pre/post measurements used to be
+        # computed and then DISCARDED; now they ride along in extras so
+        # PlanExecutor can copy them onto Step.metrics. Values are None when
+        # the corresponding body is None (create skills' pre, io skills'
+        # post) or when BRepGProp integration failed.
+        pre_v = pre_metrics.get("volume_mm3") if pre_metrics else None
+        post_v = post_metrics.get("volume_mm3") if post_metrics else None
+        result.extras["_step_metrics"] = {
+            "pre_volume_mm3": pre_v,
+            "post_volume_mm3": post_v,
+            "delta_mm3": (
+                post_v - pre_v if pre_v is not None and post_v is not None else None
+            ),
+            "pre_face_count": pre_metrics.get("face_count") if pre_metrics else None,
+            "post_face_count": post_metrics.get("face_count") if post_metrics else None,
+            "duration_ms": duration_ms,
+        }
 
         # tag chain propagate v2 — declared history_rules 에 따라 input ref 들을
         # output body 의 face 로 옮긴다. modified_inherit 는 nearest-by-bbox,

@@ -44,10 +44,33 @@ class ExecutionResult:
     step_results: dict[str, SkillResult] = field(default_factory=dict)
     freeze_mismatches: list[dict[str, Any]] = field(default_factory=list)
     error_count: int = 0
+    # V5 — every step that ended SKIPPED, with why. Two sources:
+    #   "zero_delta_volume: ..."  — the PLAN-DEPTH-CEILING leniency branch
+    #   "upstream_failure"        — cascade skip after a failed step
+    skipped_steps: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def outcome(self) -> str:
         return "PASS" if self.error_count == 0 else "FAIL"
+
+    def to_report_json(self) -> dict[str, Any]:
+        """V5 provenance report — JSON-serializable execution summary."""
+        return {
+            "plan_name": self.plan.plan_name,
+            "outcome": self.outcome,
+            "error_count": self.error_count,
+            "steps": [
+                {
+                    "id": s.id,
+                    "skill": s.skill,
+                    "status": s.status.value,
+                    "metrics": s.metrics,
+                    "failure_reason": s.failure.message if s.failure else None,
+                }
+                for s in self.plan.steps
+            ],
+            "skipped_steps": list(self.skipped_steps),
+        }
 
 
 def _import_all_skills():
@@ -84,6 +107,10 @@ class PlanExecutor:
         for step in self.plan.steps:
             if not previous_pass:
                 step.status = StepStatus.SKIPPED
+                result.skipped_steps.append({
+                    "step_id": step.id,
+                    "reason": "upstream_failure",
+                })
                 continue
 
             step.status = StepStatus.PENDING
@@ -141,6 +168,11 @@ class PlanExecutor:
                 # 성공
                 step.status = StepStatus.PASS
                 step.failure = None
+                # V5 provenance — SkillBase.apply stashed pre/post metrics
+                # in extras; persist them on the step for report export.
+                extras = getattr(skill_result, "extras", None)
+                if isinstance(extras, dict) and "_step_metrics" in extras:
+                    step.metrics = extras["_step_metrics"]
                 body = skill_result.body
                 result.step_results[step.id] = skill_result
 
@@ -176,6 +208,19 @@ class PlanExecutor:
                         ),
                         raw_traceback=traceback.format_exc(),
                     )
+                    result.skipped_steps.append({
+                        "step_id": step.id,
+                        "reason": "zero_delta_volume: " + msg,
+                    })
+                    # V5 strict_cuts — a wasted cut on a material-removal
+                    # step is a hard error when the plan opts in. The step
+                    # stays SKIPPED (body preserved, plan continues) but
+                    # the outcome flips to FAIL via error_count.
+                    if (
+                        getattr(self.plan, "strict_cuts", False)
+                        and _is_material_removal_step(step)
+                    ):
+                        result.error_count += 1
                     # Body unchanged — continue with previous body for the
                     # next step. A wasted cut doesn't tear the plan down.
                     previous_pass = True
@@ -231,6 +276,38 @@ class PlanExecutor:
         return instance.apply(body, args)
 
 
+#: V5 strict_cuts — skill-name prefixes that identify material-removal steps
+#: (in addition to any skill whose registry category starts with "modify").
+_MATERIAL_REMOVAL_NAME_PREFIXES = (
+    "hole",
+    "extrude_pocket",
+    "counterbore",
+    "countersink",
+    "tap_drill",
+    "clearance",
+)
+
+
+def _is_material_removal_step(step: Step) -> bool:
+    """True iff ``step`` is a material-removal step for strict_cuts purposes.
+
+    Matches either:
+      - skill name prefix: hole / extrude_pocket* / counterbore* /
+        countersink* / tap_drill* / clearance*
+      - registry category starting with "modify" (covers both the
+        "modify/pocket"-style slash form and a hypothetical "modify_*" form)
+    """
+    name = step.skill or ""
+    if any(name.startswith(p) for p in _MATERIAL_REMOVAL_NAME_PREFIXES):
+        return True
+    try:
+        spec = registry.get(name)
+    except KeyError:
+        return False
+    category = getattr(spec, "category", "") or ""
+    return category.startswith("modify")
+
+
 def _freeze_matches(expected: FreezeMeta, actual: SelectorFreeze) -> bool:
     return (
         expected.matched_count == actual.matched_count
@@ -284,12 +361,17 @@ def _is_zero_delta_volume_failure(msg: str) -> bool:
     import re
     m = re.search(r"delta=(-?\d+(?:\.\d+)?)", msg)
     floor_m = re.search(r"expected\s*[≤≥<>]\s*[-+]?(\d+(?:\.\d+)?)", msg)
+    # V5 fix: a message that does NOT parse as a zero-delta report (e.g.
+    # "could not measure volume (pre=None, post=None)") is NOT evidence of
+    # a harmless no-op cut — it must route to FAIL, not SKIP. The old
+    # fallback returned True here and silently converted measurement
+    # failures into skips.
     if m is None:
-        return True
+        return False
     try:
         delta = abs(float(m.group(1)))
     except (TypeError, ValueError):
-        return True
+        return False
     if delta < 0.05:
         return True
     if floor_m is not None:

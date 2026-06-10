@@ -65,6 +65,8 @@ def generate(
     plan: Path = typer.Option(..., "--plan", help="plan YAML 경로"),
     out: Path = typer.Option(..., "--out", help="출력 STEP 경로"),
     mode: str = typer.Option("strict", "--mode", help="strict | loose"),
+    report: Path = typer.Option(None, "--report",
+                                help="(선택) 실행 provenance 보고서 JSON 출력 경로"),
 ):
     """Plan 실행 → STEP export."""
     from phone_designer.plan.executor import ExecutionMode, PlanExecutor
@@ -75,6 +77,17 @@ def generate(
 
     mode_enum = ExecutionMode.STRICT if mode == "strict" else ExecutionMode.LOOSE
     result = PlanExecutor(loaded, mode=mode_enum).run()
+
+    # V5 provenance — write the per-step report BEFORE the outcome gate so
+    # a FAIL run still leaves a diagnosable artifact.
+    if report is not None:
+        import json
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_text(
+            json.dumps(result.to_report_json(), ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        typer.echo(f">>> report: {report}")
 
     for s in loaded.steps:
         marker = {"pass": "  ok  ", "fail": "  FAIL", "skipped": "  SKIP",

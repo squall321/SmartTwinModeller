@@ -47,6 +47,12 @@ class Step(BaseModel):
     status: StepStatus = StepStatus.PENDING
     failure: FailureMeta | None = None
     notes: str | None = None       # 사용자 코멘트
+    # V5 per-step provenance — populated by PlanExecutor after each PASS step
+    # from SkillResult.extras['_step_metrics']:
+    #   {pre_volume_mm3, post_volume_mm3, delta_mm3,
+    #    pre_face_count, post_face_count, duration_ms}
+    # None for steps that never ran (SKIPPED/FAIL before _apply returned).
+    metrics: dict[str, Any] | None = None
 
 
 class Plan(BaseModel):
@@ -64,6 +70,14 @@ class Plan(BaseModel):
     # engineering pipelines (long auto-generated plans where a single bad
     # step from catalog noise shouldn't tear down 119 others) opt in.
     continue_on_step_failure: bool = False
+    # V5 strict_cuts — opt-in hard gate on wasted material-removal steps.
+    # When True, a zero-delta SKIP (the executor's PLAN-DEPTH-CEILING
+    # leniency for cuts that removed no material) on a material-removal
+    # step (category modify/* or hole/extrude_pocket*/counterbore*/
+    # countersink*/tap_drill*/clearance* skills) increments error_count so
+    # the plan outcome is FAIL instead of silently passing. Default False
+    # keeps existing corpus behavior bit-identical when the flag is absent.
+    strict_cuts: bool = False
 
     def find_step(self, step_id: str) -> Step | None:
         for s in self.steps:
