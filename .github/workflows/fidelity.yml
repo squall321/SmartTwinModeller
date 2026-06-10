@@ -54,6 +54,11 @@ jobs:
         run: |
           venv\Scripts\python.exe -c "import build123d, cadquery_ocp; print('build123d', build123d.__version__); print('OCP wheel ok')"
 
+      - name: Build fidelity fixtures (deterministic, into fixtures/generated/)
+        shell: pwsh
+        run: |
+          venv\Scripts\python.exe scripts\build_fidelity_fixtures.py
+
       - name: Skill manifest drift check (registered count == manifest.json count)
         shell: pwsh
         run: |

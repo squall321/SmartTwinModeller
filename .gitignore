@@ -30,6 +30,7 @@ Thumbs.db
 # Phone Designer 런타임 / 생성물
 manifest.json
 run_logs/
+fixtures/generated/
 fixtures/simple_watch*.step
 fixtures/simple_watch_components/
 *.step

@@ -1,8 +1,9 @@
 name: skill_audit
 
-# C3: Weekly skill_audit_v4 run — non-blocking, exports bucket summary as an
-# artifact for manual review. Catches slow drift (façade regressions, new
-# fixture_broken skills) that the fidelity gate doesn't surface directly.
+# C3: Weekly skill audit run (phone_designer.skills.audit) — non-blocking,
+# exports the history-rule catalog report as an artifact for manual review.
+# Catches slow drift (façade regressions, broken default applies) that the
+# fidelity gate doesn't surface directly.
 
 on:
   schedule:
@@ -19,7 +20,7 @@ permissions:
 
 jobs:
   audit:
-    name: skill_audit_v4 summary
+    name: skill audit summary
     runs-on: windows-latest
     # NOT required — see branch protection. This job is review-only.
     timeout-minutes: 60
@@ -44,33 +45,40 @@ jobs:
           venv\Scripts\python.exe -m pip install --upgrade pip wheel setuptools
           venv\Scripts\python.exe -m pip install -e ".[dev]"
 
-      - name: Run skill_audit_v4 (in-process Pydantic-aware fixture audit)
+      - name: Run skill audit (python -m phone_designer.skills.audit)
         shell: pwsh
+        # Review-only job: the audit exits 1 when any skill fails its default
+        # apply — keep the weekly run green and inspect the report artifact.
+        continue-on-error: true
+        timeout-minutes: 45
         env:
           PYTHONUTF8: "1"
+          # Defense in depth — launch_ui_panel is skipped below (it enters the
+          # Qt event loop / crashes VTK OpenGL on headless runners), but force
+          # headless anyway in case another skill grows a UI path.
+          PHONE_DESIGNER_UI_HEADLESS: "1"
+          QT_QPA_PLATFORM: offscreen
         run: |
           New-Item -ItemType Directory -Path run_logs\_tmp -Force | Out-Null
-          venv\Scripts\python.exe run_logs\_tmp\skill_audit_v4.py
+          venv\Scripts\python.exe -m phone_designer.skills.audit --out run_logs\_tmp\history_rule_catalog.md --skip launch_ui_panel
 
-      - name: Upload skill_audit_v4 summary + jsonl
+      - name: Upload skill audit report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: skill_audit_v4-${{ github.run_id }}
-          path: |
-            run_logs/_tmp/skill_audit_v4_summary.json
-            run_logs/_tmp/skill_audit_v4.jsonl
-            run_logs/_tmp/skill_audit_v4_last_attempted.txt
+          name: skill-audit-${{ github.run_id }}
+          path: run_logs/_tmp/history_rule_catalog.md
           if-no-files-found: warn
           retention-days: 90
 
-      - name: Print bucket summary to job log
+      - name: Print audit summary to job log
         if: always()
         shell: pwsh
         run: |
-          $p = "run_logs\_tmp\skill_audit_v4_summary.json"
+          $p = "run_logs\_tmp\history_rule_catalog.md"
           if (Test-Path $p) {
-            Get-Content $p -Raw
+            # Header block only (totals + pass/fail counts) — full table is the artifact.
+            Get-Content $p -TotalCount 15
           } else {
-            Write-Output "skill_audit_v4_summary.json was not produced — inspect last_attempted.txt artifact."
+            Write-Output "history_rule_catalog.md was not produced — audit crashed before writing the report."
           }

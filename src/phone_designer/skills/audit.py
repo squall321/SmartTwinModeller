@@ -313,12 +313,20 @@ def main():
         "--out", type=Path,
         default=Path("docs/reports/history_rule_catalog.md"),
     )
+    ap.add_argument(
+        "--skip", nargs="*", default=[], metavar="SKILL_NAME",
+        help="skill 이름들을 audit 에서 제외 (예: launch_ui_panel — headless "
+             "CI runner 에서 Qt event loop 진입 / VTK OpenGL crash)",
+    )
     args = ap.parse_args()
 
     print(">>> Phase 1 audit: history rule catalog")
     body = _make_standard_body()
     audits = []
     for spec in registry.all():
+        if spec.name in args.skip:
+            print(f"    {spec.name:35s} ... SKIP (--skip)")
+            continue
         print(f"    {spec.name:35s} ... ", end="", flush=True)
         a = audit_skill(spec.name, spec, body)
         audits.append(a)
