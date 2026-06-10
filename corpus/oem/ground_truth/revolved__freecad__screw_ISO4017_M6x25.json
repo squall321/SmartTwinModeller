@@ -1,0 +1,23 @@
+{
+  "file": "corpus/oem/revolved/freecad__screw_ISO4017_M6x25.step",
+  "expected": [
+    {
+      "kind": "af_width",
+      "value_mm": 10.0,
+      "tol_pct": 5,
+      "note": "ISO 4017 M6 hex head: width across flats s = 10.0"
+    },
+    {
+      "kind": "height",
+      "value_mm": 29.0,
+      "tol_pct": 5,
+      "note": "overall = L 25 + head height k 4.0 (ISO 4017 M6)"
+    },
+    {
+      "kind": "bore_diameter",
+      "value_mm": 6.0,
+      "tol_pct": 5,
+      "note": "thread major Ø d = 6.0 — must appear in classify_holes diameter set (the revolved shank registers in the hole detector; head washer-face Ø 8.88 is the largest cylinder, so outer_diameter is not used for d here)"
+    }
+  ]
+}

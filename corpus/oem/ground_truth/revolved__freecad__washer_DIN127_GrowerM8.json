@@ -1,0 +1,23 @@
+{
+  "file": "corpus/oem/revolved/freecad__washer_DIN127_GrowerM8.step",
+  "expected": [
+    {
+      "kind": "bbox_x",
+      "value_mm": 14.8,
+      "tol_pct": 5,
+      "note": "DIN 127 B M8: outside Ø d2 = 14.8 — via bbox (helical sweep has no cylindrical faces, so cylinder-radius OD probe finds nothing)"
+    },
+    {
+      "kind": "bbox_y",
+      "value_mm": 14.8,
+      "tol_pct": 5,
+      "note": "DIN 127 B M8: outside Ø d2 = 14.8 (bbox, see bbox_x note)"
+    },
+    {
+      "kind": "height",
+      "value_mm": 4.0,
+      "tol_pct": 5,
+      "note": "DIN 127 B M8: free height h = 2*s = 4.0 (section s = 2.0, single-coil spring washer)"
+    }
+  ]
+}

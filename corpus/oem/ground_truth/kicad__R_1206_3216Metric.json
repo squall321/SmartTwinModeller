@@ -1,0 +1,17 @@
+{
+  "file": "corpus/oem/kicad__R_1206_3216Metric.step",
+  "expected": [
+    {
+      "kind": "bbox_x",
+      "value_mm": 3.2,
+      "tol_pct": 5,
+      "note": "chip body length 3.2 (metric 3216 package, terminations included)"
+    },
+    {
+      "kind": "bbox_y",
+      "value_mm": 1.6,
+      "tol_pct": 5,
+      "note": "chip body width 1.6 (metric 3216 package)"
+    }
+  ]
+}

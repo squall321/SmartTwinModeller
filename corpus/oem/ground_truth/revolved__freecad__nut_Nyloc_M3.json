@@ -1,0 +1,23 @@
+{
+  "file": "corpus/oem/revolved/freecad__nut_Nyloc_M3.step",
+  "expected": [
+    {
+      "kind": "af_width",
+      "value_mm": 5.5,
+      "tol_pct": 5,
+      "note": "width across flats s = 5.5 (DIN 985 M3 nyloc, same A/F as DIN 934)"
+    },
+    {
+      "kind": "height",
+      "value_mm": 4.0,
+      "tol_pct": 5,
+      "note": "DIN 985 M3 nut height m = 4.0 (includes nylon insert collar)"
+    },
+    {
+      "kind": "bore_diameter",
+      "value_mm": 3.0,
+      "tol_pct": 5,
+      "note": "thread modeled — ISO 261 nominal Ø3.0 must appear among classify_holes bore diameters"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "file": "corpus/oem/revolved/freecad__screw_ISO10642_M3x10.step",
+  "expected": [
+    {
+      "kind": "outer_diameter",
+      "value_mm": 3.0,
+      "tol_pct": 5,
+      "note": "ISO 10642 M3 countersunk: thread major Ø d = 3.0 (head is conical — shank is the largest cylinder)"
+    },
+    {
+      "kind": "height",
+      "value_mm": 10.0,
+      "tol_pct": 5,
+      "note": "nominal length L = 10 (countersunk screws: L includes the head)"
+    },
+    {
+      "kind": "bbox_x",
+      "value_mm": 6.0,
+      "tol_pct": 5,
+      "note": "head Ø dk = 6.0 (catalog threads_metric.yaml countersink_d_iso10642_mm for M3)"
+    }
+  ]
+}

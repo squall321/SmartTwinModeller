@@ -1,0 +1,17 @@
+{
+  "file": "corpus/oem/revolved/freecad__washer_DIN125_M8.step",
+  "expected": [
+    {
+      "kind": "outer_diameter",
+      "value_mm": 16.0,
+      "tol_pct": 5,
+      "note": "DIN 125 A M8: outside Ø d2 = 16.0. NOTE: thickness deliberately NOT asserted — DIN 125 nominal h = 1.6 but this hand-modeled file measures 1.8 mm (+12.5% deviation in the source model)"
+    },
+    {
+      "kind": "bore_diameter",
+      "value_mm": 8.4,
+      "tol_pct": 5,
+      "note": "DIN 125 A M8: clearance hole d1 = 8.4"
+    }
+  ]
+}

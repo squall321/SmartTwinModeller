@@ -1,0 +1,23 @@
+{
+  "file": "corpus/oem/revolved/freecad__screw_ISO7380_M6x12.step",
+  "expected": [
+    {
+      "kind": "outer_diameter",
+      "value_mm": 6.0,
+      "tol_pct": 5,
+      "note": "ISO 7380-1 M6 button head: thread major Ø d = 6.0 (domed head is spherical — shank is the largest cylinder face)"
+    },
+    {
+      "kind": "height",
+      "value_mm": 15.3,
+      "tol_pct": 5,
+      "note": "overall = L 12 + head height k 3.3 (ISO 7380-1 M6)"
+    },
+    {
+      "kind": "bbox_x",
+      "value_mm": 10.5,
+      "tol_pct": 5,
+      "note": "head Ø dk = 10.5 (ISO 7380-1 M6)"
+    }
+  ]
+}

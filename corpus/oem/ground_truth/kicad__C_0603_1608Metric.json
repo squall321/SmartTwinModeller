@@ -1,0 +1,17 @@
+{
+  "file": "corpus/oem/kicad__C_0603_1608Metric.step",
+  "expected": [
+    {
+      "kind": "bbox_x",
+      "value_mm": 1.6,
+      "tol_pct": 5,
+      "note": "chip body length 1.6 (metric 1608 package, terminations included)"
+    },
+    {
+      "kind": "bbox_y",
+      "value_mm": 0.8,
+      "tol_pct": 5,
+      "note": "chip body width 0.8 (metric 1608 package)"
+    }
+  ]
+}

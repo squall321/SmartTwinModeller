@@ -1,0 +1,17 @@
+{
+  "file": "corpus/oem/kicad__C_0805_2012Metric.step",
+  "expected": [
+    {
+      "kind": "bbox_x",
+      "value_mm": 2.0,
+      "tol_pct": 5,
+      "note": "chip body length 2.0 (metric 2012 package, terminations included)"
+    },
+    {
+      "kind": "bbox_y",
+      "value_mm": 1.25,
+      "tol_pct": 5,
+      "note": "chip body width 1.25 (metric 2012 package)"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "file": "corpus/oem/revolved/freecad__bearing_624ZZ.stp",
+  "expected": [
+    {
+      "kind": "bore_diameter",
+      "value_mm": 4.0,
+      "tol_pct": 5,
+      "note": "inner-ring bore d = 4.0. 624ZZ shielded miniature: 4 x 13 x 5 (published ISO 15 624 series)"
+    },
+    {
+      "kind": "outer_diameter",
+      "value_mm": 13.0,
+      "tol_pct": 5,
+      "note": "outer-ring OD D = 13.0. 624ZZ shielded miniature: 4 x 13 x 5 (published ISO 15 624 series)"
+    },
+    {
+      "kind": "width",
+      "value_mm": 5.0,
+      "tol_pct": 5,
+      "note": "axial width B = 5.0 (min bbox extent — orientation-robust). 624ZZ shielded miniature: 4 x 13 x 5 (published ISO 15 624 series)"
+    }
+  ]
+}

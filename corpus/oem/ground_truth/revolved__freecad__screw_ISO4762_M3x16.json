@@ -1,0 +1,23 @@
+{
+  "file": "corpus/oem/revolved/freecad__screw_ISO4762_M3x16.step",
+  "expected": [
+    {
+      "kind": "outer_diameter",
+      "value_mm": 5.5,
+      "tol_pct": 5,
+      "note": "ISO 4762 M3 socket head Ø dk = 5.5 (cylindrical head is the largest cylinder face; catalog threads_metric.yaml head_diameter_socket_mm)"
+    },
+    {
+      "kind": "height",
+      "value_mm": 19.0,
+      "tol_pct": 5,
+      "note": "overall = L 16 + head height k 3.0 (ISO 4762 M3)"
+    },
+    {
+      "kind": "bore_diameter",
+      "value_mm": 3.0,
+      "tol_pct": 5,
+      "note": "thread major Ø d = 3.0 — must appear in classify_holes diameter set (revolved shank registers in the hole detector)"
+    }
+  ]
+}

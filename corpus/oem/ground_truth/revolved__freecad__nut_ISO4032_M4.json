@@ -1,0 +1,23 @@
+{
+  "file": "corpus/oem/revolved/freecad__nut_ISO4032_M4.step",
+  "expected": [
+    {
+      "kind": "af_width",
+      "value_mm": 7.0,
+      "tol_pct": 5,
+      "note": "width across flats s = 7.0 (ISO 4032 / DIN 934 M4; catalog hex_nuts_din934.yaml)"
+    },
+    {
+      "kind": "height",
+      "value_mm": 3.2,
+      "tol_pct": 5,
+      "note": "nut height m = 3.2 (ISO 4032 = DIN 934; catalog hex_nuts_din934.yaml)"
+    },
+    {
+      "kind": "bore_diameter",
+      "value_mm": 4.0,
+      "tol_pct": 5,
+      "note": "simplified unthreaded nut bore at ISO 261 nominal thread Ø M4 (threads not modeled; catalog threads_metric.yaml outer_d_mm)"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "file": "corpus/oem/industrial/freecad__6803_2RS.step",
+  "expected": [
+    {
+      "kind": "bore_diameter",
+      "value_mm": 17.0,
+      "tol_pct": 5,
+      "note": "inner-ring bore d = 17.0. 6803-2RS thin-section sealed: 17 x 26 x 5 (published ISO 15 6800 series)"
+    },
+    {
+      "kind": "outer_diameter",
+      "value_mm": 26.0,
+      "tol_pct": 5,
+      "note": "outer-ring OD D = 26.0. 6803-2RS thin-section sealed: 17 x 26 x 5 (published ISO 15 6800 series)"
+    },
+    {
+      "kind": "width",
+      "value_mm": 5.0,
+      "tol_pct": 5,
+      "note": "axial width B = 5.0 (min bbox extent — orientation-robust). 6803-2RS thin-section sealed: 17 x 26 x 5 (published ISO 15 6800 series)"
+    }
+  ]
+}

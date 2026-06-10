@@ -1,0 +1,23 @@
+{
+  "file": "corpus/oem/revolved/freecad__bearing_608ZZ.step",
+  "expected": [
+    {
+      "kind": "bore_diameter",
+      "value_mm": 8.0,
+      "tol_pct": 5,
+      "note": "inner-ring bore d = 8.0. 608ZZ shielded: 8 x 22 x 7 (catalog bearings_metric.yaml '608')"
+    },
+    {
+      "kind": "outer_diameter",
+      "value_mm": 22.0,
+      "tol_pct": 5,
+      "note": "outer-ring OD D = 22.0. 608ZZ shielded: 8 x 22 x 7 (catalog bearings_metric.yaml '608')"
+    },
+    {
+      "kind": "width",
+      "value_mm": 7.0,
+      "tol_pct": 5,
+      "note": "axial width B = 7.0 (min bbox extent — orientation-robust). 608ZZ shielded: 8 x 22 x 7 (catalog bearings_metric.yaml '608')"
+    }
+  ]
+}

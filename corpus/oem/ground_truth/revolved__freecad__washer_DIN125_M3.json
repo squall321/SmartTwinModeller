@@ -1,0 +1,23 @@
+{
+  "file": "corpus/oem/revolved/freecad__washer_DIN125_M3.step",
+  "expected": [
+    {
+      "kind": "outer_diameter",
+      "value_mm": 7.0,
+      "tol_pct": 5,
+      "note": "DIN 125 A M3: outside Ø d2 = 7.0"
+    },
+    {
+      "kind": "bore_diameter",
+      "value_mm": 3.2,
+      "tol_pct": 5,
+      "note": "DIN 125 A M3: clearance hole d1 = 3.2"
+    },
+    {
+      "kind": "thickness",
+      "value_mm": 0.5,
+      "tol_pct": 5,
+      "note": "DIN 125 A M3: thickness h = 0.5"
+    }
+  ]
+}

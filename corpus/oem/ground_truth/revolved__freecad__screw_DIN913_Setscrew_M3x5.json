@@ -1,0 +1,17 @@
+{
+  "file": "corpus/oem/revolved/freecad__screw_DIN913_Setscrew_M3x5.step",
+  "expected": [
+    {
+      "kind": "outer_diameter",
+      "value_mm": 3.0,
+      "tol_pct": 5,
+      "note": "DIN 913 M3 set screw: thread major Ø d = 3.0 (headless — shank is the largest cylinder)"
+    },
+    {
+      "kind": "height",
+      "value_mm": 5.0,
+      "tol_pct": 5,
+      "note": "nominal length L = 5 (headless set screw: overall = L)"
+    }
+  ]
+}

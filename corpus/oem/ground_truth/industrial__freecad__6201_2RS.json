@@ -1,0 +1,23 @@
+{
+  "file": "corpus/oem/industrial/freecad__6201_2RS.step",
+  "expected": [
+    {
+      "kind": "bore_diameter",
+      "value_mm": 12.0,
+      "tol_pct": 5,
+      "note": "inner-ring bore d = 12.0. 6201-2RS sealed: 12 x 32 x 10 (catalog bearings_metric.yaml '6201')"
+    },
+    {
+      "kind": "outer_diameter",
+      "value_mm": 32.0,
+      "tol_pct": 5,
+      "note": "outer-ring OD D = 32.0. 6201-2RS sealed: 12 x 32 x 10 (catalog bearings_metric.yaml '6201')"
+    },
+    {
+      "kind": "width",
+      "value_mm": 10.0,
+      "tol_pct": 5,
+      "note": "axial width B = 10.0 (min bbox extent — orientation-robust). 6201-2RS sealed: 12 x 32 x 10 (catalog bearings_metric.yaml '6201')"
+    }
+  ]
+}

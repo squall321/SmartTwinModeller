@@ -1,0 +1,17 @@
+{
+  "file": "corpus/oem/revolved/freecad__washer_DIN125_M10.step",
+  "expected": [
+    {
+      "kind": "outer_diameter",
+      "value_mm": 20.0,
+      "tol_pct": 5,
+      "note": "DIN 125 A M10: outside Ø d2 = 20.0. NOTE: thickness deliberately NOT asserted — DIN 125 nominal h = 2.0 but this hand-modeled file measures 2.2 mm (+10% deviation in the source model)"
+    },
+    {
+      "kind": "bore_diameter",
+      "value_mm": 10.5,
+      "tol_pct": 5,
+      "note": "DIN 125 A M10: clearance hole d1 = 10.5"
+    }
+  ]
+}

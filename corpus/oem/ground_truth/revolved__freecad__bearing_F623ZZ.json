@@ -1,0 +1,23 @@
+{
+  "file": "corpus/oem/revolved/freecad__bearing_F623ZZ.stp",
+  "expected": [
+    {
+      "kind": "bore_diameter",
+      "value_mm": 3.0,
+      "tol_pct": 5,
+      "note": "F623ZZ flanged miniature bearing: bore d = 3.0"
+    },
+    {
+      "kind": "outer_diameter",
+      "value_mm": 11.5,
+      "tol_pct": 5,
+      "note": "F623ZZ: FLANGE Ø = 11.5 is the largest cylinder face (bearing outer-ring OD is 10.0; max-cylinder probe sees the flange)"
+    },
+    {
+      "kind": "width",
+      "value_mm": 4.0,
+      "tol_pct": 5,
+      "note": "F623ZZ: axial width B = 4.0 (min bbox extent)"
+    }
+  ]
+}
