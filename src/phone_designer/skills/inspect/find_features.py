@@ -211,6 +211,7 @@ def _detect_chamfer(face, body_bbox, all_faces) -> dict | None:
     manufacturing={},
     failure_modes=[],
     cost_hint=0.1,
+    result_grade="estimate",  # A9 (2026-06-11): docstring says "LLM hint, not ground truth"
     post_conditions=[PostCondition(kind="body_present")],
 )
 class FindFeatures(SkillBase):

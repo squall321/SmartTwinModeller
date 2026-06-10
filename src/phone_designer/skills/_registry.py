@@ -132,6 +132,11 @@ def skill(
     failure_modes: list[str] | None = None,
     cost_hint: float = 0.5,
     expansion: list[str] | None = None,
+    # A9 (2026-06-11): 'measured' (default) | 'estimate'. Estimate-grade skills
+    # return heuristic / closed-form approximations rather than direct
+    # geometric measurements. Stored on SkillSpec.result_grade and exported in
+    # to_manifest_dict(); default keeps the other 350+ skills unchanged.
+    result_grade: str = "measured",
 ):
     """Skill 클래스 데코레이터 — SkillSpec 만들고 registry 등록."""
 
@@ -154,6 +159,7 @@ def skill(
             manufacturing=_normalize_manufacturing(manufacturing),
             failure_modes=failure_modes or [],
             cost_hint=cost_hint,
+            result_grade=result_grade,  # A9 (2026-06-11)
             expansion=expansion,
             implementation_class=cls,
         )

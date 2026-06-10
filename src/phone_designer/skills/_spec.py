@@ -89,6 +89,13 @@ class SkillSpec:
     manufacturing: ManufacturingSpec = field(default_factory=ManufacturingSpec)
     failure_modes: list[str] = field(default_factory=list)
     cost_hint: float = 0.5             # 0..1, Phase 1 에서 실측 가능
+    # A9 (2026-06-11): result provenance grade. 'measured' = direct geometric
+    # measurement (BRepGProp, ray-march, BRepCheck ...); 'estimate' = heuristic
+    # / closed-form approximation (thin-plate modal, Peterson Kt, RSS stack,
+    # surface-type feature hints). Default 'measured' — zero behavioral change
+    # for skills that don't declare it. Consumed by extract_quality_report to
+    # label report sections.
+    result_grade: str = "measured"
     expansion: list[str] | None = None  # macro only
     implementation_class: type | None = None  # @skill 가 채움
 
@@ -109,6 +116,8 @@ class SkillSpec:
             "manufacturing": self.manufacturing.to_dict(),
             "failure_modes": self.failure_modes,
             "cost_hint": self.cost_hint,
+            # A9 (2026-06-11): 'measured' | 'estimate' provenance grade.
+            "result_grade": self.result_grade,
             "expansion": self.expansion,
         }
 

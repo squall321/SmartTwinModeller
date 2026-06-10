@@ -275,6 +275,7 @@ import phone_designer.skills.inspect.validate_rebuilt_body  # noqa: F401
 import phone_designer.skills.inspect.inspect_draft_angles  # noqa: F401
 import phone_designer.skills.inspect.classify_edge_blends  # noqa: F401
 import phone_designer.skills.inspect.measure_thread  # noqa: F401
+import phone_designer.skills.inspect.extract_quality_report  # noqa: F401
 import phone_designer.skills.reverse_engineer.extract_feature_catalog  # noqa: F401
 import phone_designer.skills.reverse_engineer.feature_fidelity_diff  # noqa: F401
 import phone_designer.skills.reverse_engineer.plan_from_feature_catalog  # noqa: F401

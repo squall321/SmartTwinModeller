@@ -67,6 +67,7 @@ def _occt_shape(body: Any):
     manufacturing={},
     failure_modes=[],
     cost_hint=0.05,
+    result_grade="estimate",  # A9 (2026-06-11): analytical worst-case/RSS model on user dims, no geometry measured
     post_conditions=[PostCondition(kind="body_present")],
 )
 class ToleranceStack(SkillBase):

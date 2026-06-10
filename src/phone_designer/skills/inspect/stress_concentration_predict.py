@@ -148,6 +148,7 @@ def _concave_edges(shape) -> list[Any]:
     manufacturing={},
     failure_modes=["fm.invalid_radius", "fm.invalid_stress"],
     cost_hint=0.1,
+    result_grade="estimate",  # A9 (2026-06-11): Peterson Kt formula, not FEA
     post_conditions=[PostCondition(kind="body_present")],
 )
 class StressConcentrationPredict(SkillBase):

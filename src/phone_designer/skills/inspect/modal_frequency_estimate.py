@@ -53,6 +53,7 @@ from phone_designer.skills._spec import SkillBase, SkillResult
     manufacturing={},
     failure_modes=["fm.invalid_material", "fm.degenerate_bbox"],
     cost_hint=0.05,
+    result_grade="estimate",  # A9 (2026-06-11): thin-plate closed-form approximation, not FEA
     post_conditions=[PostCondition(kind="body_present")],
 )
 class ModalFrequencyEstimate(SkillBase):
