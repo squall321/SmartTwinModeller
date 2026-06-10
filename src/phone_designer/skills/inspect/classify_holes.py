@@ -476,11 +476,20 @@ def _group_cylinders_by_axis(cyl_records):
 # ──────────────────────────────────────────────────────────────────────────────
 # Standard match
 
+# COMPLEX-CAD pass-25 (2026-06-10): weight of the |measured_pitch − entry
+# pitch| term in _best_standard_match. Pitch differences between adjacent
+# ISO specs are 0.05–0.5 mm — weight 2.0 makes a 0.15 mm pitch mismatch
+# cost as much as a 0.3 mm diameter miss, enough to break diameter ties
+# (e.g. Ø2.5 = M2.5 outer_d AND M3 tap_drill) without ever overriding a
+# clear diameter winner. Only applied when the caller measured a pitch.
+_PITCH_WEIGHT = 2.0
+
 
 def _best_standard_match(
     primary_d_mm: float,
     cb_d_mm: float | None,
     cs_d_mm: float | None,
+    measured_pitch_mm: float | None = None,
 ):
     """Return (thread_spec, fit, confidence) for the closest standard, or None.
 
@@ -490,6 +499,12 @@ def _best_standard_match(
       - Confidence ~ 1 / (1 + distance_per_mm).
       - If cb_d_mm given, prefer specs whose counterbore_d matches.
       - If cs_d_mm given, prefer specs whose countersink_d matches.
+      - COMPLEX-CAD pass-25 (2026-06-10): if ``measured_pitch_mm`` is given
+        (e.g. from measure_thread_pitch), candidates are scored on BOTH
+        diameter AND pitch distance. With ``measured_pitch_mm=None`` the
+        scoring is BIT-IDENTICAL to the pre-pass-25 diameter-only behavior
+        — corpus-safety requirement; the catalog path does not call
+        measure_thread_pitch automatically yet (future integration item).
     """
     data = _load("standards", "threads_metric")
     if data is None:
@@ -515,6 +530,14 @@ def _best_standard_match(
                 score += 0.5 * abs(cb_d_mm - float(entry["counterbore_d_iso_mm"]))
             if cs_d_mm is not None and "countersink_d_iso10642_mm" in entry:
                 score += 0.5 * abs(cs_d_mm - float(entry["countersink_d_iso10642_mm"]))
+            # COMPLEX-CAD pass-25 (2026-06-10): pitch distance term — only
+            # when the caller measured a pitch AND the entry declares one.
+            # With measured_pitch_mm=None this block is dead code and the
+            # score is bit-identical to the diameter-only behavior.
+            if measured_pitch_mm is not None and entry.get("pitch_mm") is not None:
+                score += _PITCH_WEIGHT * abs(
+                    float(measured_pitch_mm) - float(entry["pitch_mm"])
+                )
             if score < best_score:
                 best_score = score
                 best = spec
@@ -532,6 +555,12 @@ def _best_standard_match(
             if d is None:
                 continue
             score = abs(primary_d_mm - float(d))
+            # COMPLEX-CAD pass-25 (2026-06-10): same pitch term as the
+            # metric loop (imperial entries that carry a metric pitch_mm).
+            if measured_pitch_mm is not None and entry.get("pitch_mm") is not None:
+                score += _PITCH_WEIGHT * abs(
+                    float(measured_pitch_mm) - float(entry["pitch_mm"])
+                )
             if score < best_score:
                 best_score = score
                 best = spec
@@ -555,6 +584,10 @@ def _classify_one(
     axis_dir,
     *,
     match_standards: bool,
+    # COMPLEX-CAD pass-25 (2026-06-10): optional measured pitch (e.g. from
+    # measure_thread_pitch) forwarded to _best_standard_match. Default None
+    # keeps the diameter-only scoring bit-identical.
+    measured_pitch_mm: float | None = None,
 ):
     """group_face_indices indexes into ``cyl_records`` for cyl members.
 
@@ -726,7 +759,11 @@ def _classify_one(
     )
 
     if match_standards:
-        descriptor["standard_match"] = _best_standard_match(primary_d, cb_d, cs_d)
+        descriptor["standard_match"] = _best_standard_match(
+            primary_d, cb_d, cs_d,
+            # COMPLEX-CAD pass-25 (2026-06-10): None by default — inert.
+            measured_pitch_mm=measured_pitch_mm,
+        )
     else:
         descriptor["standard_match"] = None
 
@@ -763,6 +800,18 @@ class ClassifyHoles(SkillBase):
                         "catalogs/standards/threads_metric.yaml (and "
                         "threads_imperial.yaml when present) and attach the "
                         "closest standard spec to each descriptor.",
+        )
+        # COMPLEX-CAD pass-25 (2026-06-10): optional measured thread pitch
+        # (e.g. from the measure_thread_pitch skill). When supplied, the
+        # standard lookup scores candidates on BOTH diameter AND pitch
+        # distance. Default None — scoring stays bit-identical to the
+        # diameter-only behavior (corpus-safety; the catalog path does NOT
+        # call measure_thread_pitch automatically yet — integration into
+        # extract_feature_catalog is a future item).
+        measured_pitch_mm: float | None = Field(
+            default=None, gt=0.0, le=50.0,
+            description="Measured thread pitch (mm) to refine the standard "
+                        "match. Omit for diameter-only matching.",
         )
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
@@ -813,6 +862,8 @@ class ClassifyHoles(SkillBase):
                 group, cyl_records, cone_records, other_records, faces,
                 o, d,
                 match_standards=args.match_standards,
+                # COMPLEX-CAD pass-25 (2026-06-10): None by default — inert.
+                measured_pitch_mm=args.measured_pitch_mm,
             )
             # COMPLEX-CAD pass-7 (2026-06-09): standardise axis_origin so
             # downstream RE always sees the entry point + the inward
