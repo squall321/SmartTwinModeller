@@ -2,12 +2,12 @@
  "schema": 1,
  "mode": "preserve_brep",
  "subset": "root",
- "generated_at": "2026-06-10T08:30:00+00:00",
+ "generated_at": "2026-06-11T03:30:00+00:00",
  "records": {
   "kicad__Buzzer_15x7.5RM7.6.step": {
    "file": "kicad__Buzzer_15x7.5RM7.6.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.6429,
+   "match_ratio": 0.6111,
    "per_kind": {
     "holes": {
      "a": 3,
@@ -23,11 +23,16 @@
      "a": 6,
      "b": 6,
      "matched": 6
+    },
+    "edge_blends": {
+     "a": 4,
+     "b": 2,
+     "matched": 2
     }
    },
    "volume_delta_pct": -1.398,
    "error": null,
-   "duration_s": 5.4,
+   "duration_s": 9.9,
    "plan_steps": 4,
    "executor_outcome": "PASS"
   },
@@ -44,14 +49,14 @@
    },
    "volume_delta_pct": null,
    "error": null,
-   "duration_s": 4.4,
+   "duration_s": 6.8,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
   "pythonocc__face_recognition_sample_part.step": {
    "file": "pythonocc__face_recognition_sample_part.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.8462,
+   "match_ratio": 0.8889,
    "per_kind": {
     "holes": {
      "a": 6,
@@ -67,11 +72,16 @@
      "a": 6,
      "b": 6,
      "matched": 6
+    },
+    "edge_blends": {
+     "a": 5,
+     "b": 5,
+     "matched": 5
     }
    },
    "volume_delta_pct": -4.388,
    "error": null,
-   "duration_s": 6.7,
+   "duration_s": 12.2,
    "plan_steps": 6,
    "executor_outcome": "FAIL"
   },
@@ -94,11 +104,16 @@
      "a": 6,
      "b": 6,
      "matched": 6
+    },
+    "edge_blends": {
+     "a": 4,
+     "b": 4,
+     "matched": 4
     }
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 5.2,
+   "duration_s": 7.5,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -125,7 +140,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 5.2,
+   "duration_s": 7.9,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -152,7 +167,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 5.3,
+   "duration_s": 6.7,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -179,7 +194,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 5.0,
+   "duration_s": 6.2,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -211,7 +226,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 5.0,
+   "duration_s": 7.2,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -243,7 +258,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 5.1,
+   "duration_s": 7.1,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -275,7 +290,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 5.1,
+   "duration_s": 6.7,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -307,7 +322,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 5.1,
+   "duration_s": 7.9,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -339,7 +354,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 5.2,
+   "duration_s": 7.0,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -371,7 +386,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 5.1,
+   "duration_s": 7.8,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -398,7 +413,7 @@
    },
    "volume_delta_pct": -7.507,
    "error": null,
-   "duration_s": 6.2,
+   "duration_s": 12.2,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
@@ -430,7 +445,7 @@
    },
    "volume_delta_pct": -1.482,
    "error": null,
-   "duration_s": 5.3,
+   "duration_s": 7.4,
    "plan_steps": 6,
    "executor_outcome": "PASS"
   },
@@ -452,14 +467,14 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 8.3,
+   "duration_s": 9.6,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
   "kicad__SOT-89.step": {
    "file": "kicad__SOT-89.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.8571,
+   "match_ratio": 0.9286,
    "per_kind": {
     "holes": {
      "a": 1,
@@ -469,7 +484,7 @@
     "pockets": {
      "a": 5,
      "b": 5,
-     "matched": 4
+     "matched": 5
     },
     "ribs": {
      "a": 1,
@@ -487,16 +502,16 @@
      "matched": 0
     }
    },
-   "volume_delta_pct": -0.228,
+   "volume_delta_pct": -0.235,
    "error": null,
-   "duration_s": 5.3,
+   "duration_s": 7.3,
    "plan_steps": 2,
    "executor_outcome": "PASS"
   },
   "kicad__SOT-23.step": {
    "file": "kicad__SOT-23.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.8571,
+   "match_ratio": 0.8696,
    "per_kind": {
     "holes": {
      "a": 4,
@@ -512,18 +527,23 @@
      "a": 6,
      "b": 6,
      "matched": 6
+    },
+    "edge_blends": {
+     "a": 9,
+     "b": 8,
+     "matched": 8
     }
    },
    "volume_delta_pct": -0.935,
    "error": null,
-   "duration_s": 7.3,
+   "duration_s": 10.2,
    "plan_steps": 3,
    "executor_outcome": "PASS"
   },
   "kicad__SOT-223.step": {
    "file": "kicad__SOT-223.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.9167,
+   "match_ratio": 0.9375,
    "per_kind": {
     "holes": {
      "a": 4,
@@ -539,11 +559,16 @@
      "a": 6,
      "b": 6,
      "matched": 6
+    },
+    "edge_blends": {
+     "a": 4,
+     "b": 4,
+     "matched": 4
     }
    },
    "volume_delta_pct": -9.363,
    "error": null,
-   "duration_s": 7.2,
+   "duration_s": 9.7,
    "plan_steps": 5,
    "executor_outcome": "PASS"
   },
@@ -570,7 +595,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 7.5,
+   "duration_s": 9.2,
    "plan_steps": 2,
    "executor_outcome": "PASS"
   },
@@ -602,14 +627,14 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 5.5,
+   "duration_s": 8.1,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
   "kicad__CP_Elec_3x5.4.step": {
    "file": "kicad__CP_Elec_3x5.4.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.6875,
+   "match_ratio": 0.7,
    "per_kind": {
     "holes": {
      "a": 5,
@@ -630,18 +655,23 @@
      "a": 6,
      "b": 6,
      "matched": 6
+    },
+    "edge_blends": {
+     "a": 3,
+     "b": 4,
+     "matched": 3
     }
    },
    "volume_delta_pct": -33.24,
    "error": null,
-   "duration_s": 10.0,
+   "duration_s": 13.5,
    "plan_steps": 7,
    "executor_outcome": "PASS"
   },
   "kicad__CP_Elec_10x10.step": {
    "file": "kicad__CP_Elec_10x10.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.8333,
+   "match_ratio": 0.8571,
    "per_kind": {
     "holes": {
      "a": 5,
@@ -667,18 +697,23 @@
      "a": 6,
      "b": 6,
      "matched": 6
+    },
+    "edge_blends": {
+     "a": 3,
+     "b": 3,
+     "matched": 3
     }
    },
    "volume_delta_pct": -40.579,
    "error": null,
-   "duration_s": 8.6,
+   "duration_s": 10.4,
    "plan_steps": 7,
    "executor_outcome": "PASS"
   },
   "kicad__TO-220-3_Vertical.step": {
    "file": "kicad__TO-220-3_Vertical.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.8,
+   "match_ratio": 0.8333,
    "per_kind": {
     "holes": {
      "a": 1,
@@ -699,11 +734,16 @@
      "a": 6,
      "b": 6,
      "matched": 6
+    },
+    "edge_blends": {
+     "a": 2,
+     "b": 2,
+     "matched": 2
     }
    },
    "volume_delta_pct": -0.781,
    "error": null,
-   "duration_s": 5.6,
+   "duration_s": 6.9,
    "plan_steps": 2,
    "executor_outcome": "FAIL"
   },
@@ -730,14 +770,14 @@
    },
    "volume_delta_pct": -66.832,
    "error": null,
-   "duration_s": 6.1,
+   "duration_s": 8.1,
    "plan_steps": 2,
    "executor_outcome": "PASS"
   },
   "kicad__SOT-353.step": {
    "file": "kicad__SOT-353.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.9143,
+   "match_ratio": 0.8837,
    "per_kind": {
     "holes": {
      "a": 4,
@@ -758,11 +798,16 @@
      "a": 6,
      "b": 5,
      "matched": 5
+    },
+    "edge_blends": {
+     "a": 8,
+     "b": 6,
+     "matched": 6
     }
    },
    "volume_delta_pct": -3.354,
    "error": null,
-   "duration_s": 10.0,
+   "duration_s": 11.3,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
@@ -784,14 +829,14 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 12.6,
+   "duration_s": 13.7,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
   "kicad__Panasonic_EVQPUA_button.step": {
    "file": "kicad__Panasonic_EVQPUA_button.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.8824,
+   "match_ratio": 0.7241,
    "per_kind": {
     "holes": {
      "a": 6,
@@ -817,18 +862,23 @@
      "a": 1,
      "b": 0,
      "matched": 0
+    },
+    "edge_blends": {
+     "a": 12,
+     "b": 7,
+     "matched": 6
     }
    },
    "volume_delta_pct": -1.096,
    "error": null,
-   "duration_s": 10.7,
+   "duration_s": 11.5,
    "plan_steps": 5,
    "executor_outcome": "PASS"
   },
   "kicad__SOIC-8_3.9x4.9mm_P1.27mm.step": {
    "file": "kicad__SOIC-8_3.9x4.9mm_P1.27mm.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.9167,
+   "match_ratio": 0.95,
    "per_kind": {
     "holes": {
      "a": 4,
@@ -844,11 +894,16 @@
      "a": 6,
      "b": 6,
      "matched": 6
+    },
+    "edge_blends": {
+     "a": 8,
+     "b": 8,
+     "matched": 8
     }
    },
    "volume_delta_pct": -0.435,
    "error": null,
-   "duration_s": 10.6,
+   "duration_s": 11.6,
    "plan_steps": 5,
    "executor_outcome": "PASS"
   },
@@ -880,7 +935,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 8.1,
+   "duration_s": 9.0,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -898,18 +953,23 @@
      "a": 6,
      "b": 6,
      "matched": 6
+    },
+    "edge_blends": {
+     "a": 5,
+     "b": 5,
+     "matched": 5
     }
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 6.7,
+   "duration_s": 8.1,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
   "kicad__HSOP-8-1EP_3.9x4.9mm.step": {
    "file": "kicad__HSOP-8-1EP_3.9x4.9mm.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.5484,
+   "match_ratio": 0.641,
    "per_kind": {
     "holes": {
      "a": 4,
@@ -930,11 +990,16 @@
      "a": 0,
      "b": 6,
      "matched": 0
+    },
+    "edge_blends": {
+     "a": 8,
+     "b": 8,
+     "matched": 8
     }
    },
    "volume_delta_pct": -0.269,
    "error": null,
-   "duration_s": 12.2,
+   "duration_s": 13.2,
    "plan_steps": 6,
    "executor_outcome": "PASS"
   },
@@ -961,7 +1026,7 @@
    },
    "volume_delta_pct": -0.081,
    "error": null,
-   "duration_s": 32.7,
+   "duration_s": 35.0,
    "plan_steps": 22,
    "executor_outcome": "PASS"
   },
@@ -989,11 +1054,16 @@
      "a": 1,
      "b": 1,
      "matched": 1
+    },
+    "edge_blends": {
+     "a": 36,
+     "b": 36,
+     "matched": 36
     }
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 7.0,
+   "duration_s": 8.6,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1020,7 +1090,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 7.7,
+   "duration_s": 9.3,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1043,11 +1113,16 @@
      "a": 6,
      "b": 6,
      "matched": 6
+    },
+    "edge_blends": {
+     "a": 10,
+     "b": 10,
+     "matched": 10
     }
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 13.1,
+   "duration_s": 15.4,
    "plan_steps": 4,
    "executor_outcome": "PASS"
   },
@@ -1070,11 +1145,16 @@
      "a": 6,
      "b": 6,
      "matched": 6
+    },
+    "edge_blends": {
+     "a": 10,
+     "b": 10,
+     "matched": 10
     }
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 14.5,
+   "duration_s": 16.4,
    "plan_steps": 4,
    "executor_outcome": "PASS"
   },
@@ -1092,11 +1172,16 @@
      "a": 6,
      "b": 6,
      "matched": 6
+    },
+    "edge_blends": {
+     "a": 5,
+     "b": 5,
+     "matched": 5
     }
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 8.4,
+   "duration_s": 9.2,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1124,18 +1209,23 @@
      "a": 2,
      "b": 2,
      "matched": 2
+    },
+    "edge_blends": {
+     "a": 84,
+     "b": 84,
+     "matched": 84
     }
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 10.0,
+   "duration_s": 11.9,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
   "kicad__DIP-8_W7.62mm.step": {
    "file": "kicad__DIP-8_W7.62mm.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.8333,
+   "match_ratio": 0.8421,
    "per_kind": {
     "holes": {
      "a": 3,
@@ -1151,11 +1241,16 @@
      "a": 6,
      "b": 6,
      "matched": 6
+    },
+    "edge_blends": {
+     "a": 6,
+     "b": 7,
+     "matched": 6
     }
    },
    "volume_delta_pct": -0.051,
    "error": null,
-   "duration_s": 13.4,
+   "duration_s": 18.3,
    "plan_steps": 6,
    "executor_outcome": "PASS"
   },
@@ -1183,11 +1278,16 @@
      "a": 1,
      "b": 1,
      "matched": 1
+    },
+    "edge_blends": {
+     "a": 84,
+     "b": 84,
+     "matched": 84
     }
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 9.6,
+   "duration_s": 12.0,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1219,14 +1319,14 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 19.1,
+   "duration_s": 23.4,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
   "kicad__DIP-14_W7.62mm.step": {
    "file": "kicad__DIP-14_W7.62mm.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.8333,
+   "match_ratio": 0.8421,
    "per_kind": {
     "holes": {
      "a": 3,
@@ -1242,11 +1342,16 @@
      "a": 6,
      "b": 6,
      "matched": 6
+    },
+    "edge_blends": {
+     "a": 6,
+     "b": 7,
+     "matched": 6
     }
    },
    "volume_delta_pct": -0.042,
    "error": null,
-   "duration_s": 13.7,
+   "duration_s": 16.7,
    "plan_steps": 6,
    "executor_outcome": "PASS"
   },
@@ -1268,7 +1373,7 @@
    },
    "volume_delta_pct": -0.062,
    "error": null,
-   "duration_s": 20.4,
+   "duration_s": 24.7,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
@@ -1300,7 +1405,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 31.3,
+   "duration_s": 38.4,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1328,11 +1433,16 @@
      "a": 2,
      "b": 2,
      "matched": 2
+    },
+    "edge_blends": {
+     "a": 164,
+     "b": 164,
+     "matched": 164
     }
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 13.4,
+   "duration_s": 19.6,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1355,18 +1465,23 @@
      "a": 6,
      "b": 6,
      "matched": 6
+    },
+    "edge_blends": {
+     "a": 16,
+     "b": 16,
+     "matched": 16
     }
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 33.5,
+   "duration_s": 42.0,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
   "kicad__USB_C_Receptacle_GCT_USB4085.step": {
    "file": "kicad__USB_C_Receptacle_GCT_USB4085.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.8036,
+   "match_ratio": 0.7383,
    "per_kind": {
     "holes": {
      "a": 18,
@@ -1387,11 +1502,16 @@
      "a": 2,
      "b": 2,
      "matched": 2
+    },
+    "edge_blends": {
+     "a": 51,
+     "b": 35,
+     "matched": 34
     }
    },
    "volume_delta_pct": -13.269,
    "error": null,
-   "duration_s": 36.7,
+   "duration_s": 46.9,
    "plan_steps": 34,
    "executor_outcome": "PASS"
   },
@@ -1414,18 +1534,23 @@
      "a": 6,
      "b": 6,
      "matched": 6
+    },
+    "edge_blends": {
+     "a": 16,
+     "b": 16,
+     "matched": 16
     }
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 46.7,
+   "duration_s": 65.3,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
   "kicad__USB_A_Molex_67643_Horizontal.step": {
    "file": "kicad__USB_A_Molex_67643_Horizontal.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.9146,
+   "match_ratio": 0.8943,
    "per_kind": {
     "holes": {
      "a": 40,
@@ -1451,11 +1576,16 @@
      "a": 2,
      "b": 1,
      "matched": 1
+    },
+    "edge_blends": {
+     "a": 41,
+     "b": 35,
+     "matched": 35
     }
    },
    "volume_delta_pct": -1.752,
    "error": null,
-   "duration_s": 115.3,
+   "duration_s": 141.5,
    "plan_steps": 57,
    "executor_outcome": "PASS"
   },
@@ -1478,18 +1608,23 @@
      "a": 6,
      "b": 6,
      "matched": 6
+    },
+    "edge_blends": {
+     "a": 16,
+     "b": 16,
+     "matched": 16
     }
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 69.0,
+   "duration_s": 87.6,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
   "pythonocc__11752.step": {
    "file": "pythonocc__11752.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.8661,
+   "match_ratio": 0.8684,
    "per_kind": {
     "holes": {
      "a": 143,
@@ -1515,11 +1650,16 @@
      "a": 67,
      "b": 63,
      "matched": 63
+    },
+    "edge_blends": {
+     "a": 80,
+     "b": 70,
+     "matched": 70
     }
    },
    "volume_delta_pct": -100.687,
    "error": null,
-   "duration_s": 447.1,
+   "duration_s": 601.4,
    "plan_steps": 143,
    "executor_outcome": "FAIL"
   },
@@ -1542,11 +1682,16 @@
      "a": 6,
      "b": 6,
      "matched": 6
+    },
+    "edge_blends": {
+     "a": 16,
+     "b": 16,
+     "matched": 16
     }
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 80.2,
+   "duration_s": 368.3,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
@@ -1574,18 +1719,23 @@
      "a": 1,
      "b": 1,
      "matched": 1
+    },
+    "edge_blends": {
+     "a": 8,
+     "b": 8,
+     "matched": 8
     }
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 34.2,
+   "duration_s": 90.2,
    "plan_steps": 2,
    "executor_outcome": "PASS"
   },
   "pythonocc__Ventilator.step": {
    "file": "pythonocc__Ventilator.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.9091,
+   "match_ratio": 0.9459,
    "per_kind": {
     "holes": {
      "a": 14,
@@ -1606,11 +1756,16 @@
      "a": 0,
      "b": 1,
      "matched": 0
+    },
+    "edge_blends": {
+     "a": 15,
+     "b": 15,
+     "matched": 15
     }
    },
    "volume_delta_pct": -0.532,
    "error": null,
-   "duration_s": 91.5,
+   "duration_s": 152.5,
    "plan_steps": 15,
    "executor_outcome": "PASS"
   }

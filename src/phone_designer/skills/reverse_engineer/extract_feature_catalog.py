@@ -541,18 +541,20 @@ class ExtractFeatureCatalog(SkillBase):
                         "'min_depth_to_width_ratio': 0.05}.",
         )
         include_edge_blends: bool = Field(
-            default=False,
+            default=True,
             description="A3 (2026-06-10): run classify_edge_blends and "
                         "populate catalog['edge_blends'] (fillet / chamfer "
-                        "strip inventory). OPT-IN: the A3 spot check showed "
-                        "blend detection is not yet round-trip stable — "
-                        "boolean-cut residue faces on regen bodies classify "
-                        "as extra fillets (Ventilator orig 31 vs regen 54 "
-                        "blends → 0.9091 → 0.6184; Crystal_SMD 1.0 → 0.8824 "
-                        "with 8 vs 4). Until the detector filters "
-                        "cut-created faces (convexity/provenance gates), "
-                        "default-on would violate the preserve_brep "
-                        "self-match hard constraint.",
+                        "strip inventory). A3-FIX (2026-06-11): DEFAULT-ON — "
+                        "the detector is now preserve_brep round-trip stable "
+                        "via same-surface fragment aggregation + union "
+                        "arc-extent gate (Ventilator 31/54 → 15/15 matched "
+                        "15, score 0.9091 → 0.9459) and the sub-radius stub "
+                        "gate (Crystal_SMD castellation walls dropped both "
+                        "sides, 8/4 → 0/0, stays 1.0). 6-file spot check "
+                        "(linkrods, as1-oc-214, as1_pe_203, Crystal_SMD, "
+                        "C_0603, Ventilator): every previously-PERFECT file "
+                        "still 1.0 with blends in the union. Set False to "
+                        "skip the detector (catalog carries []).",
         )
 
     def _build_catalog_for(

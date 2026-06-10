@@ -15,12 +15,28 @@ Fixtures are tiny build123d bodies with KNOWN blends:
        still absent — exercises the arc-extent gate while tangent
        blends touch the wall.
 
+A3-FIX (2026-06-11) round-trip stability gates:
+
+    6. Box fillet SPLIT in two by a mid-height notch cut → ONE merged
+       entry (fragment_count 2, same radius); per-face entries return
+       with merge_coaxial_fragments=False.
+    7. Thin plate (h=0.1) with R0.2 corner roundover — tangency seam
+       (0.1) shorter than the radius → stub gate drops it (castellation
+       / spotface pattern, Crystal_SMD); ratio 0 disables the gate.
+
 Plus catalog wiring: extract_feature_catalog populates 'edge_blends'
-(and skips it when include_edge_blends=False).
+by DEFAULT (A3-FIX default-on) and skips when include_edge_blends=False.
 """
 from __future__ import annotations
 
-from build123d import Axis, Box as B3dBox, Cylinder as B3dCylinder, chamfer, fillet
+from build123d import (
+    Axis,
+    Box as B3dBox,
+    Cylinder as B3dCylinder,
+    Pos,
+    chamfer,
+    fillet,
+)
 
 from phone_designer.skills.inspect.classify_edge_blends import ClassifyEdgeBlends
 
@@ -53,6 +69,29 @@ def _cylinder_top_fillet(radius=1.5):
     part = _cylinder()
     top_circle = part.edges().group_by(Axis.Z)[-1]
     return fillet(top_circle, radius=radius)
+
+
+# A3-FIX (2026-06-11) fixtures — round-trip stability gates.
+
+
+def _box_split_fillet(radius=2.0):
+    """Box with one vertical R2 fillet, then a mid-height corner notch
+    cut that SPLITS the fillet cylinder into two coaxial fragments —
+    the boolean-split pattern the regen executor produces."""
+    part = _box_one_fillet(radius=radius)
+    blend = _blends(part)[0]
+    cx, cy, _cz = blend["centroid"]
+    notch = Pos(cx, cy, 0.0) * B3dBox(3.0, 3.0, 2.0)
+    return part - notch
+
+
+def _thin_plate_stub_fillet():
+    """0.1 mm tall plate with an R0.2 corner roundover: the tangency
+    seam (0.1) is shorter than the radius — the Crystal_SMD
+    castellation / spotface stub pattern."""
+    part = B3dBox(20.0, 30.0, 0.1)
+    edge = part.edges().filter_by(Axis.Z)[0]
+    return fillet(edge, radius=0.2)
 
 
 def _blends(body, **args):
@@ -134,6 +173,53 @@ def test_min_radius_floor_filters_fillet():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# A3-FIX (2026-06-11) — round-trip stability gates
+
+
+def test_split_fillet_merges_into_one_entry():
+    """Two boolean-split fragments of ONE fillet cylinder must yield a
+    single merged entry — fragment counts are topology-dependent and
+    broke the preserve_brep round trip (Ventilator 31 vs 54)."""
+    body = _box_split_fillet(radius=2.0)
+    fillets = [b for b in _blends(body) if b["kind"] == "fillet"]
+    assert len(fillets) == 1, f"expected 1 merged fillet, got {fillets}"
+    f = fillets[0]
+    assert abs(f["radius_mm"] - 2.0) / 2.0 <= 0.02, f
+    assert f["fragment_count"] == 2, f
+    # merged seam length = sum of both fragments (10 - 2 notch = 8)
+    assert 7.0 <= f["edge_length_mm"] <= 9.0, f
+
+
+def test_split_fillet_per_face_with_merge_disabled():
+    """merge_coaxial_fragments=False restores the pre-fix per-face
+    entries (escape hatch / debugging)."""
+    body = _box_split_fillet(radius=2.0)
+    blends = _blends(body, merge_coaxial_fragments=False)
+    fillets = [b for b in blends if b["kind"] == "fillet"]
+    assert len(fillets) == 2, f"expected 2 per-face fillets, got {fillets}"
+    assert all(f["fragment_count"] == 1 for f in fillets), fillets
+
+
+def test_stub_fillet_dropped_by_length_to_radius_gate():
+    """A roundover whose tangency seam is shorter than its own radius
+    is a castellation / spotface wall (Crystal_SMD corners) — dropped
+    by default; min_length_to_radius_ratio=0 disables the gate."""
+    body = _thin_plate_stub_fillet()
+    assert [b for b in _blends(body) if b["kind"] == "fillet"] == []
+    kept = [
+        b for b in _blends(body, min_length_to_radius_ratio=0.0)
+        if b["kind"] == "fillet"
+    ]
+    assert len(kept) == 1, f"ratio=0 must disable the stub gate: {kept}"
+    assert abs(kept[0]["radius_mm"] - 0.2) <= 0.01, kept
+
+
+def test_single_fillet_carries_fragment_count_one():
+    f = [b for b in _blends(_box_one_fillet()) if b["kind"] == "fillet"][0]
+    assert f["fragment_count"] == 1, f
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Spec / read-only contract
 
 
@@ -167,13 +253,12 @@ def test_catalog_carries_edge_blends_key():
         ExtractFeatureCatalog,
     )
     body = _box_one_fillet(radius=2.0)
-    # OPT-IN (A3 spot-check finding): blend detection is not yet
-    # round-trip stable on regen bodies (boolean-cut residue faces
-    # classify as extra fillets — Ventilator orig 31 vs regen 54), so
-    # include_edge_blends defaults to False; the catalog carries blends
-    # only when explicitly requested.
+    # A3-FIX (2026-06-11): DEFAULT-ON — the detector is round-trip
+    # stable now (same-surface aggregation + union arc gate + stub
+    # gate; 6-file spot check green), so the catalog carries blends
+    # without opting in. include_edge_blends=False still skips.
     cat = ExtractFeatureCatalog().apply(
-        body, {"parallel": False, "include_edge_blends": True},
+        body, {"parallel": False},
     ).extras["feature_catalog"]
     assert "edge_blends" in cat
     fillets = [b for b in cat["edge_blends"] if b["kind"] == "fillet"]
@@ -181,7 +266,7 @@ def test_catalog_carries_edge_blends_key():
     assert abs(fillets[0]["radius_mm"] - 2.0) <= 0.05
 
     cat_off = ExtractFeatureCatalog().apply(
-        body, {"parallel": False},
+        body, {"parallel": False, "include_edge_blends": False},
     ).extras["feature_catalog"]
     assert cat_off.get("edge_blends") == []
 

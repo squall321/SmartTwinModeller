@@ -2,7 +2,7 @@
  "schema": 1,
  "mode": "box",
  "subset": "complex",
- "generated_at": "2026-06-10T08:30:00+00:00",
+ "generated_at": "2026-06-11T03:30:00+00:00",
  "records": {
   "complex/occt__screw.step": {
    "file": "complex/occt__screw.step",
@@ -27,7 +27,7 @@
    },
    "volume_delta_pct": 292.635,
    "error": null,
-   "duration_s": 4.8,
+   "duration_s": 6.0,
    "plan_steps": 2,
    "executor_outcome": "PASS"
   },
@@ -54,7 +54,7 @@
    },
    "volume_delta_pct": 238.483,
    "error": null,
-   "duration_s": 9.2,
+   "duration_s": 12.2,
    "plan_steps": 23,
    "executor_outcome": "PASS"
   },
@@ -76,14 +76,14 @@
    },
    "volume_delta_pct": 228.363,
    "error": null,
-   "duration_s": 10.7,
+   "duration_s": 12.5,
    "plan_steps": 9,
    "executor_outcome": "PASS"
   },
   "complex/pythonocc__11752.stp": {
    "file": "complex/pythonocc__11752.stp",
    "mode": "box",
-   "match_ratio": 0.0622,
+   "match_ratio": 0.0467,
    "per_kind": {
     "holes": {
      "a": 143,
@@ -109,18 +109,23 @@
      "a": 67,
      "b": 3,
      "matched": 3
+    },
+    "edge_blends": {
+     "a": 80,
+     "b": 0,
+     "matched": 0
     }
    },
    "volume_delta_pct": 98.639,
    "error": null,
-   "duration_s": 148.6,
+   "duration_s": 205.5,
    "plan_steps": 148,
    "executor_outcome": "PASS"
   },
   "complex/occt__linkrods.step": {
    "file": "complex/occt__linkrods.step",
    "mode": "box",
-   "match_ratio": 0.8333,
+   "match_ratio": 0.5,
    "per_kind": {
     "holes": {
      "a": 2,
@@ -141,18 +146,23 @@
      "a": 1,
      "b": 0,
      "matched": 0
+    },
+    "edge_blends": {
+     "a": 8,
+     "b": 0,
+     "matched": 0
     }
    },
    "volume_delta_pct": 239.9,
    "error": null,
-   "duration_s": 21.5,
+   "duration_s": 26.5,
    "plan_steps": 3,
    "executor_outcome": "PASS"
   },
   "complex/pythonocc__Ventilator.stp": {
    "file": "complex/pythonocc__Ventilator.stp",
    "mode": "box",
-   "match_ratio": 0.4643,
+   "match_ratio": 0.3023,
    "per_kind": {
     "holes": {
      "a": 14,
@@ -168,11 +178,16 @@
      "a": 6,
      "b": 6,
      "matched": 6
+    },
+    "edge_blends": {
+     "a": 15,
+     "b": 0,
+     "matched": 0
     }
    },
    "volume_delta_pct": 271.512,
    "error": null,
-   "duration_s": 42.8,
+   "duration_s": 58.7,
    "plan_steps": 9,
    "executor_outcome": "PASS"
   },
