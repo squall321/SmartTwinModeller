@@ -2,7 +2,7 @@
  "schema": 1,
  "mode": "box",
  "subset": "complex",
- "generated_at": "2026-06-11T03:30:00+00:00",
+ "generated_at": "2026-06-11T07:00:00+00:00",
  "records": {
   "complex/occt__screw.step": {
    "file": "complex/occt__screw.step",
@@ -27,7 +27,7 @@
    },
    "volume_delta_pct": 292.635,
    "error": null,
-   "duration_s": 6.0,
+   "duration_s": 6.2,
    "plan_steps": 2,
    "executor_outcome": "PASS"
   },
@@ -54,7 +54,7 @@
    },
    "volume_delta_pct": 238.483,
    "error": null,
-   "duration_s": 12.2,
+   "duration_s": 13.2,
    "plan_steps": 23,
    "executor_outcome": "PASS"
   },
@@ -74,9 +74,9 @@
      "matched": 6
     }
    },
-   "volume_delta_pct": 228.363,
+   "volume_delta_pct": 228.677,
    "error": null,
-   "duration_s": 12.5,
+   "duration_s": 13.6,
    "plan_steps": 9,
    "executor_outcome": "PASS"
   },
@@ -118,7 +118,7 @@
    },
    "volume_delta_pct": 98.639,
    "error": null,
-   "duration_s": 205.5,
+   "duration_s": 187.0,
    "plan_steps": 148,
    "executor_outcome": "PASS"
   },
@@ -155,7 +155,7 @@
    },
    "volume_delta_pct": 239.9,
    "error": null,
-   "duration_s": 26.5,
+   "duration_s": 27.3,
    "plan_steps": 3,
    "executor_outcome": "PASS"
   },
@@ -187,7 +187,7 @@
    },
    "volume_delta_pct": 271.512,
    "error": null,
-   "duration_s": 58.7,
+   "duration_s": 55.3,
    "plan_steps": 9,
    "executor_outcome": "PASS"
   },
@@ -197,8 +197,8 @@
    "match_ratio": null,
    "per_kind": null,
    "volume_delta_pct": null,
-   "error": "TIMEOUT after 300s",
-   "duration_s": 300.0
+   "error": "TIMEOUT after 900s",
+   "duration_s": 900.0
   },
   "complex/pythonocc__RC_Buggy_2_front_suspension.stp": {
    "file": "complex/pythonocc__RC_Buggy_2_front_suspension.stp",
@@ -206,8 +206,8 @@
    "match_ratio": null,
    "per_kind": null,
    "volume_delta_pct": null,
-   "error": "TIMEOUT after 300s",
-   "duration_s": 300.0
+   "error": "TIMEOUT after 900s",
+   "duration_s": 900.0
   }
  }
 }

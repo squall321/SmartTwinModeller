@@ -80,6 +80,18 @@ _SCALAR_DIM_FIELDS: frozenset[str] = frozenset({
     "entry_depth_mm",
     "mean_distance_mm",
     "_ref_radius_mm",
+    # COMPLEX-CAD pass-26 (2026-06-11, A10/P9): classify_pockets footprint
+    # sibling fields — true in-plane W×L of the pocket cross-section plus
+    # the entry-plane axial span, so they scale with the body exactly like
+    # top_d_mm / depth_mm. footprint_angle_deg (a rotation) and
+    # footprint_kind (a tag) are dimensionless and stay out. The entry
+    # fields are pocket-prefixed (NOT the holes' entry_depth_mm /
+    # entry_origin) so feature_fidelity_diff's exact-key entry_origin
+    # preference never pairs pockets on them — see classify_pockets'
+    # NAMING note.
+    "footprint_width_mm",
+    "footprint_length_mm",
+    "pocket_entry_depth_mm",
 })
 
 # Vector / list fields where every numeric component is scaled.
@@ -103,6 +115,10 @@ _VECTOR_DIM_FIELDS: frozenset[str] = frozenset({
     "entry_origin",
     "plane_origin",
     "centroid",
+    # COMPLEX-CAD pass-26 (2026-06-11, A10/P9): pocket entry anchor — a
+    # world coordinate, scales like entry_origin. Pocket-prefixed name on
+    # purpose (diff exact-key decoupling; see classify_pockets).
+    "pocket_entry_origin",
 })
 
 

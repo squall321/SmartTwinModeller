@@ -388,6 +388,19 @@ def _hole_step(
     # with the position-correctness variable eliminated.
     # COMPLEX-CAD pass-25 (2026-06-10, P5): the 200 mm cap scales with the
     # catalog's uniform dimension_scale (200*1.0 == 200 → corpus-identical).
+    # COMPLEX-CAD pass-26 (2026-06-11, A10/P9 stretch) — clamp-removal
+    # RETRIED AND REVERTED AGAIN, verdict updated: with footprint-true
+    # pocket emission live, the entry-based unclamp was re-measured on
+    # as1_pe_203 box → 0.6562 (clamped) vs 0.5484 (unclamped), pockets
+    # 12/18 → 8/18, holes stuck at 3/7 either way (pass-24's
+    # band-anchored rescue already recovered those 3 WITH the clamp).
+    # Root cause unchanged: as1_pe_203's pockets are 17/18 FREEFORM, so
+    # they still emit square proxies that the 1016 mm Ø381 cuts carve
+    # through — footprint-true emission only covers classified
+    # (circular/rect/slot) footprints. The clamp can only go after
+    # freeform-footprint coverage or CSG-aware emission ordering.
+    # (Diagnostic note: only as1_pe_203 carries >200 mm holes in the box
+    # corpus, so the retry was a provable no-op everywhere else.)
     if depth > 200.0 * dimension_scale:
         depth = 200.0 * dimension_scale
     face_sel = _pick_face_selector(axis_origin, axis_dir, bbox)
@@ -509,6 +522,119 @@ def _axis_dir_to_str(axis_dir) -> str:
     return f"{'+' if dom[1] >= 0 else '-'}{dom[0]}"
 
 
+def _footprint_true_pocket_step(
+    sid: str,
+    pocket: dict,
+    top_d: float,
+    fallback_depth: float,
+    bbox: tuple[float, float, float, float, float, float] | None,
+    shift: tuple[float, float, float],
+    dimension_scale: float = 1.0,
+) -> dict | None:
+    """COMPLEX-CAD pass-26 (2026-06-11, plan items A10/P9): BOX-MODE-ONLY
+    footprint-true pocket emission.
+
+    classify_pockets now carries SIBLING fields (pass-23 pattern —
+    ``axis_origin`` stays the immutable floor-centroid identity):
+    ``footprint_kind`` / ``footprint_width_mm`` / ``footprint_length_mm`` /
+    ``footprint_angle_deg`` / ``pocket_entry_origin`` /
+    ``pocket_entry_depth_mm`` (pocket-prefixed so feature_fidelity_diff's
+    exact-key ``entry_origin`` preference never sees them — see the NAMING
+    note in classify_pockets). When the footprint is one of
+    circular/rectangular/slot we cut the TRUE cross-section with
+    extrude_pocket_world's new additive args, anchored at the ENTRY plane
+    and drilling toward the floor — replacing the square top_d × top_d
+    proxy that was the primary documented source of box-mode volume
+    drift, and resolving the axis_dir sign ambiguity that put legacy
+    world-pocket cuts on the wrong side of the floor for floor-derived
+    axes.
+
+    Returns None whenever anything is missing/degenerate so the caller
+    falls through to the legacy proxy emission (and preserve_brep never
+    calls this at all — caller gates on shift != identity).
+    """
+    import math as _math
+
+    _KIND_MAP = {"circular": "circular", "rectangular": "rect", "slot": "slot"}
+    skill_kind = _KIND_MAP.get(pocket.get("footprint_kind"))
+    if skill_kind is None:
+        return None
+    entry = pocket.get("pocket_entry_origin")
+    origin = pocket.get("axis_origin") or [0.0, 0.0, 0.0]
+    if not (isinstance(entry, (list, tuple)) and len(entry) >= 3):
+        return None
+    if skill_kind == "circular":
+        w_mm = l_mm = float(
+            pocket.get("footprint_width_mm") or top_d or 0.0
+        )
+    else:
+        w_mm = float(pocket.get("footprint_width_mm") or 0.0)
+        l_mm = float(pocket.get("footprint_length_mm") or 0.0)
+    if w_mm <= 0.0 or l_mm <= 0.0:
+        return None
+
+    # Direction OUT of the body = floor → entry (the skill drills back in
+    # -axis_dir with direction="into", matching its documented contract).
+    dx = float(entry[0]) - float(origin[0])
+    dy = float(entry[1]) - float(origin[1])
+    dz = float(entry[2]) - float(origin[2])
+    mag = _math.sqrt(dx * dx + dy * dy + dz * dz)
+    if mag < 1e-6:
+        return None
+    out_dir = (dx / mag, dy / mag, dz / mag)
+
+    depth = float(pocket.get("pocket_entry_depth_mm") or fallback_depth or 0.0)
+    # Same 200 mm cap as the legacy pocket path (pass-19/21/24c verdict —
+    # the cap stays until proven removable; entry_depth_mm is body-clipped
+    # by construction so this rarely binds).
+    if depth > 200.0 * dimension_scale:
+        depth = 200.0 * dimension_scale
+    if depth <= 0.0:
+        return None
+
+    ex = float(entry[0]) + shift[0]
+    ey = float(entry[1]) + shift[1]
+    ez = float(entry[2]) + shift[2]
+
+    # Centre-outside-slab guard — mirrors the legacy emission's rejection
+    # of detector artefacts from neighbouring solids (multi-body STEPs).
+    # Falling through to the legacy path keeps its degenerate handling.
+    if bbox is not None:
+        try:
+            body_l = float(bbox[3]) - float(bbox[0])
+            body_w = float(bbox[4]) - float(bbox[1])
+            _margin = 0.5 * dimension_scale
+            if (
+                abs(ex) > body_l * 0.5 + _margin
+                or abs(ey) > body_w * 0.5 + _margin
+            ):
+                return None
+        except Exception:
+            pass
+
+    # footprint_angle_deg was measured about the CANONICAL axis (largest
+    # |component| positive — classify_pockets._fp_canon_axis). The skill
+    # rotates about the axis we PASS (out_dir); when that is anti-parallel
+    # to the canonical axis the rotation sense flips, so negate.
+    angle = float(pocket.get("footprint_angle_deg") or 0.0)
+    if angle != 0.0:
+        comps = (abs(out_dir[0]), abs(out_dir[1]), abs(out_dir[2]))
+        k = comps.index(max(comps))
+        if out_dir[k] < 0.0:
+            angle = -angle
+
+    return _new_step(sid, "extrude_pocket_world", {
+        "world_origin": [ex, ey, ez],
+        "axis_dir": [out_dir[0], out_dir[1], out_dir[2]],
+        "length_mm": l_mm,
+        "width_mm": w_mm,
+        "depth_mm": depth,
+        "direction": "into",
+        "kind": skill_kind,
+        "angle_deg": angle,
+    })
+
+
 def _pocket_step(
     idx: int,
     pocket: dict,
@@ -538,6 +664,20 @@ def _pocket_step(
     ox = float(origin[0]) + shift[0]
     oy = float(origin[1]) + shift[1]
     oz = float(origin[2]) + shift[2]
+
+    # COMPLEX-CAD pass-26 (2026-06-11, A10/P9): footprint-true emission —
+    # BOX MODE ONLY (shift != identity). Placed BEFORE the deep-circular
+    # hole heuristic so a classified circular footprint takes the
+    # entry-anchored circular cut instead of the axis_origin-anchored
+    # proxy. preserve_brep emission below stays byte-identical (this block
+    # is unreachable when shift == (0,0,0)).
+    if shift != (0.0, 0.0, 0.0):
+        _fp_step = _footprint_true_pocket_step(
+            sid, pocket, top_d, depth,
+            bbox=bbox, shift=shift, dimension_scale=dimension_scale,
+        )
+        if _fp_step is not None:
+            return _fp_step
 
     # Circular pockets whose depth dominates → treat as a raw hole.
     if top_d > 0 and depth / max(top_d, 1e-3) >= 1.5:

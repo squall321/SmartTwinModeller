@@ -325,6 +325,395 @@ def _components(seeds, pairs, faces=None, area_ratio_floor=0.0):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Footprint classification + entry anchor (pass-26, 2026-06-11, A10/P9)
+#
+# SIBLING-FIELD CONTRACT (pass-23 pattern, pass-18/22 lesson): everything in
+# this section emits NEW fields next to the existing ones. ``axis_origin``
+# (floor centroid) is the IMMUTABLE round-trip identity that preserve_brep
+# self-match depends on — never read-modify-write it here.
+
+#: anti-parallel / parallel wall pairing gate — cos(2°).
+_FP_PAIR_COS = 0.99939
+#: a planar wall's normal must be ⊥ pocket axis within ~3°.
+_FP_WALL_AXIS_DOT_MAX = 0.05
+#: a cylindrical wall's axis must be ∥ pocket axis (cos ≈ 11° guard).
+_FP_CYL_AXIS_DOT_MIN = 0.98
+
+
+def _fp_canon_axis(n: tuple[float, float, float]) -> tuple[float, float, float]:
+    """Flip ``n`` so its largest-|component| is positive. Sign-stable
+    canonical hemisphere — plan_from_feature_catalog applies the SAME rule
+    so ``footprint_angle_deg`` (measured about this axis) round-trips even
+    when the emission-side axis points the other way."""
+    comps = (abs(n[0]), abs(n[1]), abs(n[2]))
+    k = comps.index(max(comps))
+    if n[k] < 0.0:
+        return (-n[0], -n[1], -n[2])
+    return (n[0], n[1], n[2])
+
+
+def _fp_inplane_frame(
+    n: tuple[float, float, float],
+) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    """(u, v) orthonormal in-plane frame for axis ``n`` — the SAME
+    Gram-Schmidt rule as extrude_pocket_world._build_world_prism (project
+    world +X, or +Y when n is X-dominant) so the angle convention matches
+    the cutting tool's local frame exactly."""
+    if abs(n[0]) < 0.9:
+        ref = (1.0, 0.0, 0.0)
+    else:
+        ref = (0.0, 1.0, 0.0)
+    dot = ref[0] * n[0] + ref[1] * n[1] + ref[2] * n[2]
+    ux = ref[0] - dot * n[0]
+    uy = ref[1] - dot * n[1]
+    uz = ref[2] - dot * n[2]
+    umag = math.sqrt(ux * ux + uy * uy + uz * uz)
+    if umag < 1e-9:
+        ux, uy, uz, umag = 0.0, 1.0, 0.0, 1.0
+    u = (ux / umag, uy / umag, uz / umag)
+    v = (
+        n[1] * u[2] - n[2] * u[1],
+        n[2] * u[0] - n[0] * u[2],
+        n[0] * u[1] - n[1] * u[0],
+    )
+    return u, v
+
+
+def _fp_norm_angle_deg(deg: float) -> float:
+    """Normalize to (-90, 90] — a rectangle/slot footprint has 180° symmetry."""
+    a = math.fmod(deg, 180.0)
+    if a > 90.0:
+        a -= 180.0
+    elif a <= -90.0:
+        a += 180.0
+    return a
+
+
+def _footprint_entry_fields(faces, comp, axis_origin, axis_dir, top_d):
+    """Classify the pocket's in-plane footprint from its WALL faces and
+    compute the entry anchor. Returns a dict of SIBLING fields only:
+
+        footprint_kind      "circular" | "rectangular" | "slot" | "freeform"
+        footprint_width_mm  float | None   (circular: == footprint_length_mm)
+        footprint_length_mm float | None   (>= width by convention)
+        footprint_angle_deg float | None   in-plane rotation of the LENGTH
+                                           direction about the CANONICAL
+                                           pocket axis, in (-90, 90]
+        pocket_entry_origin [x, y, z] | None — top-plane entry centroid
+                                           (pass-23 sibling-field pattern)
+        pocket_entry_depth_mm float | None — axial span entry→floor; body-
+                                           clipped by construction (faces
+                                           live on the body)
+
+    NAMING (pass-26 hard lesson, 2026-06-11): the fields are pocket-prefixed
+    — NOT the holes' literal ``entry_origin`` / ``entry_depth_mm`` —
+    because feature_fidelity_diff._xyz_of PREFERS the exact key
+    ``entry_origin`` for spatial pairing. First spot-check round with the
+    unprefixed name: as1_pe_203 preserve_brep 1.0 → 0.774 (freeform
+    span-derived entries don't round-trip on a cut-modified body) and
+    as1_pe_203 box pockets 12 → 5 paired (orig-side freeform pockets have
+    floor-anchored coords while regen-side clean rect cuts carry top-plane
+    entries — asymmetric values for the same cavity). The prefixed name is
+    invisible to the diff's exact-key lookup, so pairing keeps using the
+    immutable floor-centroid ``axis_origin`` on both sides, while the
+    box-mode planner still gets its entry anchor.
+
+    Wall taxonomy:
+      circular     — exactly one coaxial cylindrical wall group, no planar
+                     walls.
+      rectangular  — 4 planar wall sides in 2 anti-parallel pairs (within
+                     ~2°), pairs mutually perpendicular, no axis-parallel
+                     cylinder walls.
+      slot         — 2 anti-parallel planar walls + 2 cylinder cap groups
+                     whose radius ≈ gap/2 placed along the wall direction.
+      freeform     — everything else (planner keeps the legacy square
+                     proxy, behaviour unchanged).
+
+    Fillet residue (torus faces / cylinders whose axis is ⊥ the pocket
+    axis) is tolerated — it decorates the walls without changing the
+    footprint. Cones / spheres / generic surfaces force freeform.
+    """
+    out: dict[str, Any] = {
+        "footprint_kind": "freeform",
+        "footprint_width_mm": None,
+        "footprint_length_mm": None,
+        "footprint_angle_deg": None,
+        "pocket_entry_origin": None,
+        "pocket_entry_depth_mm": None,
+    }
+    o = (float(axis_origin[0]), float(axis_origin[1]), float(axis_origin[2]))
+    nx, ny, nz = (float(axis_dir[0]), float(axis_dir[1]), float(axis_dir[2]))
+    nmag = math.sqrt(nx * nx + ny * ny + nz * nz)
+    if nmag < 1e-9:
+        return out
+    n = _fp_canon_axis((nx / nmag, ny / nmag, nz / nmag))
+    u, v = _fp_inplane_frame(n)
+
+    def _proj(p) -> float:
+        return (
+            (p[0] - o[0]) * n[0] + (p[1] - o[1]) * n[1] + (p[2] - o[2]) * n[2]
+        )
+
+    def _inplane(p) -> tuple[float, float]:
+        dx, dy, dz = p[0] - o[0], p[1] - o[1], p[2] - o[2]
+        return (
+            dx * u[0] + dy * u[1] + dz * u[2],
+            dx * v[0] + dy * v[1] + dz * v[2],
+        )
+
+    from phone_designer.skills._resolvers import (
+        _face_area,
+        _face_center,
+        _face_normal_at_center,
+    )
+
+    wall_planes: list[tuple[tuple[float, float], tuple[float, float], float]] = []
+    # each: (unit 2D normal, 2D rep point, area)
+    wall_cyls: list[tuple[tuple[float, float], float]] = []  # (2D center, radius)
+    floor_projs: list[float] = []
+    span_lo = float("inf")
+    span_hi = float("-inf")
+    blocking = False  # cone / sphere / generic surface → freeform
+    n_cyl_faces = 0  # any cylinder ⇒ _classify_one derived axis from cyls
+
+    for fi in comp:
+        f = faces[fi]
+        kind = _surface_kind(f)
+        if kind == "plane":
+            fn = _face_normal_at_center(f)
+            if fn == (0.0, 0.0, 0.0):
+                blocking = True
+                continue
+            d = fn[0] * n[0] + fn[1] * n[1] + fn[2] * n[2]
+            mn, mx = _face_bbox(f)
+            for corner in (mn, mx):
+                pr = _proj(corner)
+                span_lo = min(span_lo, pr)
+                span_hi = max(span_hi, pr)
+            if abs(d) >= 0.85:
+                floor_projs.append(_proj(_face_center(f)))
+                continue
+            if abs(d) > _FP_WALL_AXIS_DOT_MAX:
+                # tilted plane (chamfer ring, draft) — tolerated, no wall.
+                continue
+            n2 = (
+                fn[0] * u[0] + fn[1] * u[1] + fn[2] * u[2],
+                fn[0] * v[0] + fn[1] * v[1] + fn[2] * v[2],
+            )
+            m2 = math.sqrt(n2[0] * n2[0] + n2[1] * n2[1])
+            if m2 < 1e-9:
+                continue
+            wall_planes.append((
+                (n2[0] / m2, n2[1] / m2),
+                _inplane(_face_center(f)),
+                max(_face_area(f), 1e-9),
+            ))
+        elif kind == "cylinder":
+            n_cyl_faces += 1
+            info = _cylinder_info(f)
+            if info is None:
+                blocking = True
+                continue
+            loc, cdir, r = info
+            cmag = math.sqrt(cdir[0] ** 2 + cdir[1] ** 2 + cdir[2] ** 2)
+            if cmag < 1e-9:
+                continue
+            adot = abs(
+                (cdir[0] * n[0] + cdir[1] * n[1] + cdir[2] * n[2]) / cmag
+            )
+            mn, mx = _face_bbox(f)
+            for corner in (mn, mx):
+                pr = _proj(corner)
+                span_lo = min(span_lo, pr)
+                span_hi = max(span_hi, pr)
+            if adot >= _FP_CYL_AXIS_DOT_MIN:
+                wall_cyls.append((_inplane(loc), float(r)))
+            # else: floor-edge fillet residue — tolerated.
+        elif kind == "torus":
+            # fillet ring residue — tolerated; contributes to the span only.
+            mn, mx = _face_bbox(f)
+            for corner in (mn, mx):
+                pr = _proj(corner)
+                span_lo = min(span_lo, pr)
+                span_hi = max(span_hi, pr)
+        else:
+            # cone / sphere / generic — footprint is not prismatic.
+            blocking = True
+
+    # ── entry anchor (computed for EVERY pocket, freeform included) ────────
+    cx = cy = 0.0  # in-plane footprint centre, default = axis_origin
+    have_span = span_hi > span_lo and math.isfinite(span_lo)
+    entry_e: float | None = None
+    if have_span:
+        if n_cyl_faces == 0 and floor_projs:
+            # Planar-floor pocket: axis_origin IS the largest floor's
+            # centroid, i.e. proj 0 by construction. The entry is the span
+            # end FARTHEST from it. (pass-26 fix: stepped pockets have
+            # floor rings at BOTH span ends — the previous nearest-floor
+            # rule tied and returned the floor end itself, collapsing the
+            # entry onto axis_origin and disabling footprint-true emission
+            # on every as1-oc-214 rectangular pocket.)
+            entry_e = span_hi if abs(span_hi) >= abs(span_lo) else span_lo
+        elif floor_projs:
+            # Cylinder-derived axis (axis_origin's axial position is the
+            # OCCT parametric location, not the floor): entry is the span
+            # end AWAY from the nearest floor.
+            d_lo = min(abs(fp - span_lo) for fp in floor_projs)
+            d_hi = min(abs(fp - span_hi) for fp in floor_projs)
+            entry_e = span_hi if d_lo <= d_hi else span_lo
+        else:
+            entry_e = span_lo  # through pocket — deterministic end pick
+
+    # ── side grouping (merge co-planar wall fragments) ─────────────────────
+    sides: list[dict[str, Any]] = []  # {dir:(x,y), offset_sum, area_sum}
+    for d2, p2, area in wall_planes:
+        merged = False
+        for s in sides:
+            if d2[0] * s["dir"][0] + d2[1] * s["dir"][1] >= _FP_PAIR_COS:
+                s["offset_sum"] += (
+                    (p2[0] * s["dir"][0] + p2[1] * s["dir"][1]) * area
+                )
+                s["area_sum"] += area
+                merged = True
+                break
+        if not merged:
+            sides.append({
+                "dir": d2,
+                "offset_sum": (p2[0] * d2[0] + p2[1] * d2[1]) * area,
+                "area_sum": area,
+            })
+    for s in sides:
+        s["offset"] = s["offset_sum"] / s["area_sum"]
+
+    # ── coaxial cylinder-fragment merging (classify_edge_blends idea) ──────
+    pos_tol = max(0.1, 0.02 * max(float(top_d or 0.0), 1.0))
+    cyl_groups: list[dict[str, Any]] = []  # {cx, cy, r, count}
+    for c2, r in wall_cyls:
+        merged = False
+        for g in cyl_groups:
+            if (
+                abs(r - g["r"]) <= max(0.05, 0.02 * max(g["r"], 1e-9))
+                and math.hypot(c2[0] - g["cx"], c2[1] - g["cy"]) <= pos_tol
+            ):
+                k = g["count"]
+                g["cx"] = (g["cx"] * k + c2[0]) / (k + 1)
+                g["cy"] = (g["cy"] * k + c2[1]) / (k + 1)
+                g["r"] = (g["r"] * k + r) / (k + 1)
+                g["count"] = k + 1
+                merged = True
+                break
+        if not merged:
+            cyl_groups.append({"cx": c2[0], "cy": c2[1], "r": r, "count": 1})
+
+    # ── anti-parallel side pairing ─────────────────────────────────────────
+    pairs: list[dict[str, float]] = []  # {dir, sep, center} along dir
+    used: set[int] = set()
+    paired_ok = True
+    for i in range(len(sides)):
+        if i in used:
+            continue
+        partner = -1
+        for j in range(i + 1, len(sides)):
+            if j in used:
+                continue
+            dd = (
+                sides[i]["dir"][0] * sides[j]["dir"][0]
+                + sides[i]["dir"][1] * sides[j]["dir"][1]
+            )
+            if dd <= -_FP_PAIR_COS:
+                partner = j
+                break
+        if partner < 0:
+            paired_ok = False
+            break
+        used.add(i)
+        used.add(partner)
+        # plane i: dot(p, di) = oi; plane j in i's frame: dot(p, di) = -oj.
+        oi = sides[i]["offset"]
+        oj = sides[partner]["offset"]
+        pairs.append({
+            "dx": sides[i]["dir"][0],
+            "dy": sides[i]["dir"][1],
+            "sep": abs(oi + oj),
+            "center": (oi - oj) / 2.0,
+        })
+
+    # ── decision tree ──────────────────────────────────────────────────────
+    if not blocking:
+        if not sides and len(cyl_groups) == 1 and wall_cyls:
+            g = cyl_groups[0]
+            d_fp = float(top_d) if float(top_d or 0.0) > 0.0 else 2.0 * g["r"]
+            out["footprint_kind"] = "circular"
+            out["footprint_width_mm"] = round(d_fp, 4)
+            out["footprint_length_mm"] = round(d_fp, 4)
+            out["footprint_angle_deg"] = 0.0
+            cx, cy = g["cx"], g["cy"]
+        elif paired_ok and len(pairs) == 2 and len(sides) == 4 and not cyl_groups:
+            p1, p2 = pairs
+            perp = abs(p1["dx"] * p2["dx"] + p1["dy"] * p2["dy"])
+            if perp <= _FP_WALL_AXIS_DOT_MAX and p1["sep"] > 0 and p2["sep"] > 0:
+                if p1["sep"] >= p2["sep"]:
+                    big, small = p1, p2
+                else:
+                    big, small = p2, p1
+                out["footprint_kind"] = "rectangular"
+                out["footprint_length_mm"] = round(big["sep"], 4)
+                out["footprint_width_mm"] = round(small["sep"], 4)
+                out["footprint_angle_deg"] = round(
+                    _fp_norm_angle_deg(
+                        math.degrees(math.atan2(big["dy"], big["dx"]))
+                    ), 4,
+                )
+                cx = p1["center"] * p1["dx"] + p2["center"] * p2["dx"]
+                cy = p1["center"] * p1["dy"] + p2["center"] * p2["dy"]
+        elif paired_ok and len(pairs) == 1 and len(sides) == 2 and len(cyl_groups) == 2:
+            gap = pairs[0]["sep"]
+            g1, g2 = cyl_groups
+            r_tol = max(0.15, 0.12 * gap * 0.5)
+            cap_dx = g2["cx"] - g1["cx"]
+            cap_dy = g2["cy"] - g1["cy"]
+            cap_dist = math.hypot(cap_dx, cap_dy)
+            if (
+                gap > 0.0
+                and abs(g1["r"] - gap * 0.5) <= r_tol
+                and abs(g2["r"] - gap * 0.5) <= r_tol
+                and cap_dist > max(0.1, 0.25 * gap)
+            ):
+                slot_dir = (cap_dx / cap_dist, cap_dy / cap_dist)
+                # slot axis must run ALONG the walls (⊥ the pair normal).
+                along = abs(
+                    slot_dir[0] * pairs[0]["dx"] + slot_dir[1] * pairs[0]["dy"]
+                )
+                if along <= 0.10:
+                    out["footprint_kind"] = "slot"
+                    out["footprint_width_mm"] = round(gap, 4)
+                    out["footprint_length_mm"] = round(
+                        cap_dist + g1["r"] + g2["r"], 4,
+                    )
+                    out["footprint_angle_deg"] = round(
+                        _fp_norm_angle_deg(
+                            math.degrees(math.atan2(slot_dir[1], slot_dir[0]))
+                        ), 4,
+                    )
+                    cx = (g1["cx"] + g2["cx"]) / 2.0
+                    cy = (g1["cy"] + g2["cy"]) / 2.0
+
+    # pass-26 (2026-06-11): the pocket-prefixed key names keep these values
+    # OUT of feature_fidelity_diff._xyz_of's exact-key preference list (see
+    # the NAMING note in the docstring) — pairing keeps using axis_origin
+    # on both sides, so emitting for every kind (freeform included) is
+    # safe and gives the planner maximal anchor coverage.
+    if entry_e is not None:
+        out["pocket_entry_origin"] = [
+            round(o[0] + cx * u[0] + cy * v[0] + entry_e * n[0], 4),
+            round(o[1] + cx * u[1] + cy * v[1] + entry_e * n[1], 4),
+            round(o[2] + cx * u[2] + cy * v[2] + entry_e * n[2], 4),
+        ]
+        out["pocket_entry_depth_mm"] = round(span_hi - span_lo, 4)
+    return out
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Per-pocket classifier
 
 
@@ -507,7 +896,7 @@ def _classify_one(faces, comp, body_bbox):
         mn, mx = body_bbox
         depth = max(mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2])
 
-    return {
+    desc = {
         "type": ptype,
         "axis_origin": [round(c, 4) for c in axis_origin],
         "axis_dir": [round(c, 4) for c in axis_dir],
@@ -516,6 +905,25 @@ def _classify_one(faces, comp, body_bbox):
         "depth_mm": round(depth, 4),
         "face_indices": sorted(comp),
     }
+    # COMPLEX-CAD pass-26 (2026-06-11, A10/P9): footprint + entry SIBLING
+    # fields. axis_origin above stays the untouched floor-centroid identity
+    # (pass-18 revert / pass-23 lesson). Defensive try/except: an OCCT probe
+    # failure on a degenerate corpus shell must never break pocket detection
+    # itself — the sibling fields just degrade to freeform/None.
+    try:
+        desc.update(
+            _footprint_entry_fields(faces, comp, axis_origin, axis_dir, top_d)
+        )
+    except Exception:
+        desc.update({
+            "footprint_kind": "freeform",
+            "footprint_width_mm": None,
+            "footprint_length_mm": None,
+            "footprint_angle_deg": None,
+            "pocket_entry_origin": None,
+            "pocket_entry_depth_mm": None,
+        })
+    return desc
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -684,6 +1092,20 @@ class ClassifyPockets(SkillBase):
                 "bottom_d_mm": desc["bottom_d_mm"],
                 "depth_mm": desc["depth_mm"],
                 "face_indices": desc["face_indices"],
+                # COMPLEX-CAD pass-26 (2026-06-11, A10/P9): footprint +
+                # entry sibling fields (pass-23 pattern — axis_origin above
+                # is untouched). Consumed by plan_from_feature_catalog's
+                # BOX-MODE footprint-true emission only. Entry keys are
+                # pocket-prefixed ON PURPOSE — see the NAMING note on
+                # _footprint_entry_fields (the holes' literal entry_origin
+                # key is preferred by feature_fidelity_diff._xyz_of and
+                # regressed both pb self-match and box pairing).
+                "footprint_kind": desc.get("footprint_kind", "freeform"),
+                "footprint_width_mm": desc.get("footprint_width_mm"),
+                "footprint_length_mm": desc.get("footprint_length_mm"),
+                "footprint_angle_deg": desc.get("footprint_angle_deg"),
+                "pocket_entry_origin": desc.get("pocket_entry_origin"),
+                "pocket_entry_depth_mm": desc.get("pocket_entry_depth_mm"),
             })
 
         return SkillResult(

@@ -2,7 +2,7 @@
  "schema": 1,
  "mode": "preserve_brep",
  "subset": "root",
- "generated_at": "2026-06-11T03:30:00+00:00",
+ "generated_at": "2026-06-11T07:00:00+00:00",
  "records": {
   "kicad__Buzzer_15x7.5RM7.6.step": {
    "file": "kicad__Buzzer_15x7.5RM7.6.step",
@@ -32,7 +32,7 @@
    },
    "volume_delta_pct": -1.398,
    "error": null,
-   "duration_s": 9.9,
+   "duration_s": 7.2,
    "plan_steps": 4,
    "executor_outcome": "PASS"
   },
@@ -49,7 +49,7 @@
    },
    "volume_delta_pct": null,
    "error": null,
-   "duration_s": 6.8,
+   "duration_s": 6.2,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -81,7 +81,7 @@
    },
    "volume_delta_pct": -4.388,
    "error": null,
-   "duration_s": 12.2,
+   "duration_s": 8.6,
    "plan_steps": 6,
    "executor_outcome": "FAIL"
   },
@@ -113,7 +113,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 7.5,
+   "duration_s": 7.3,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -140,7 +140,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 7.9,
+   "duration_s": 7.0,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -167,7 +167,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 6.7,
+   "duration_s": 7.0,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -226,7 +226,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 7.2,
+   "duration_s": 6.7,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -258,7 +258,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 7.1,
+   "duration_s": 7.0,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -290,7 +290,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 6.7,
+   "duration_s": 7.1,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -322,7 +322,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 7.9,
+   "duration_s": 6.6,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -354,7 +354,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 7.0,
+   "duration_s": 7.1,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -386,7 +386,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 7.8,
+   "duration_s": 6.5,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -413,7 +413,7 @@
    },
    "volume_delta_pct": -7.507,
    "error": null,
-   "duration_s": 12.2,
+   "duration_s": 7.7,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
@@ -445,7 +445,7 @@
    },
    "volume_delta_pct": -1.482,
    "error": null,
-   "duration_s": 7.4,
+   "duration_s": 6.8,
    "plan_steps": 6,
    "executor_outcome": "PASS"
   },
@@ -467,14 +467,14 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 9.6,
+   "duration_s": 11.5,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
   "kicad__SOT-89.step": {
    "file": "kicad__SOT-89.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.9286,
+   "match_ratio": 0.8571,
    "per_kind": {
     "holes": {
      "a": 1,
@@ -484,7 +484,7 @@
     "pockets": {
      "a": 5,
      "b": 5,
-     "matched": 5
+     "matched": 4
     },
     "ribs": {
      "a": 1,
@@ -502,9 +502,9 @@
      "matched": 0
     }
    },
-   "volume_delta_pct": -0.235,
+   "volume_delta_pct": -0.228,
    "error": null,
-   "duration_s": 7.3,
+   "duration_s": 7.1,
    "plan_steps": 2,
    "executor_outcome": "PASS"
   },
@@ -536,7 +536,7 @@
    },
    "volume_delta_pct": -0.935,
    "error": null,
-   "duration_s": 10.2,
+   "duration_s": 10.9,
    "plan_steps": 3,
    "executor_outcome": "PASS"
   },
@@ -595,7 +595,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 9.2,
+   "duration_s": 11.6,
    "plan_steps": 2,
    "executor_outcome": "PASS"
   },
@@ -627,7 +627,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 8.1,
+   "duration_s": 7.9,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -664,7 +664,7 @@
    },
    "volume_delta_pct": -33.24,
    "error": null,
-   "duration_s": 13.5,
+   "duration_s": 13.1,
    "plan_steps": 7,
    "executor_outcome": "PASS"
   },
@@ -706,7 +706,7 @@
    },
    "volume_delta_pct": -40.579,
    "error": null,
-   "duration_s": 10.4,
+   "duration_s": 13.4,
    "plan_steps": 7,
    "executor_outcome": "PASS"
   },
@@ -743,7 +743,7 @@
    },
    "volume_delta_pct": -0.781,
    "error": null,
-   "duration_s": 6.9,
+   "duration_s": 6.8,
    "plan_steps": 2,
    "executor_outcome": "FAIL"
   },
@@ -770,7 +770,7 @@
    },
    "volume_delta_pct": -66.832,
    "error": null,
-   "duration_s": 8.1,
+   "duration_s": 9.6,
    "plan_steps": 2,
    "executor_outcome": "PASS"
   },
@@ -807,7 +807,7 @@
    },
    "volume_delta_pct": -3.354,
    "error": null,
-   "duration_s": 11.3,
+   "duration_s": 13.1,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
@@ -829,7 +829,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 13.7,
+   "duration_s": 17.0,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -871,7 +871,7 @@
    },
    "volume_delta_pct": -1.096,
    "error": null,
-   "duration_s": 11.5,
+   "duration_s": 14.1,
    "plan_steps": 5,
    "executor_outcome": "PASS"
   },
@@ -903,7 +903,7 @@
    },
    "volume_delta_pct": -0.435,
    "error": null,
-   "duration_s": 11.6,
+   "duration_s": 14.3,
    "plan_steps": 5,
    "executor_outcome": "PASS"
   },
@@ -935,7 +935,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 9.0,
+   "duration_s": 10.2,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -962,7 +962,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 8.1,
+   "duration_s": 9.2,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -999,7 +999,7 @@
    },
    "volume_delta_pct": -0.269,
    "error": null,
-   "duration_s": 13.2,
+   "duration_s": 16.2,
    "plan_steps": 6,
    "executor_outcome": "PASS"
   },
@@ -1026,7 +1026,7 @@
    },
    "volume_delta_pct": -0.081,
    "error": null,
-   "duration_s": 35.0,
+   "duration_s": 40.1,
    "plan_steps": 22,
    "executor_outcome": "PASS"
   },
@@ -1063,7 +1063,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 8.6,
+   "duration_s": 9.1,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1090,7 +1090,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 9.3,
+   "duration_s": 9.6,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1122,7 +1122,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 15.4,
+   "duration_s": 16.8,
    "plan_steps": 4,
    "executor_outcome": "PASS"
   },
@@ -1154,7 +1154,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 16.4,
+   "duration_s": 18.3,
    "plan_steps": 4,
    "executor_outcome": "PASS"
   },
@@ -1181,7 +1181,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 9.2,
+   "duration_s": 10.1,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1218,7 +1218,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 11.9,
+   "duration_s": 13.2,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1250,7 +1250,7 @@
    },
    "volume_delta_pct": -0.051,
    "error": null,
-   "duration_s": 18.3,
+   "duration_s": 17.7,
    "plan_steps": 6,
    "executor_outcome": "PASS"
   },
@@ -1287,7 +1287,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 12.0,
+   "duration_s": 14.3,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1319,7 +1319,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 23.4,
+   "duration_s": 26.7,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1351,7 +1351,7 @@
    },
    "volume_delta_pct": -0.042,
    "error": null,
-   "duration_s": 16.7,
+   "duration_s": 19.5,
    "plan_steps": 6,
    "executor_outcome": "PASS"
   },
@@ -1373,7 +1373,7 @@
    },
    "volume_delta_pct": -0.062,
    "error": null,
-   "duration_s": 24.7,
+   "duration_s": 29.2,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
@@ -1405,7 +1405,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 38.4,
+   "duration_s": 40.8,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1442,7 +1442,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 19.6,
+   "duration_s": 19.0,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1474,7 +1474,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 42.0,
+   "duration_s": 40.9,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
@@ -1511,7 +1511,7 @@
    },
    "volume_delta_pct": -13.269,
    "error": null,
-   "duration_s": 46.9,
+   "duration_s": 44.9,
    "plan_steps": 34,
    "executor_outcome": "PASS"
   },
@@ -1543,7 +1543,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 65.3,
+   "duration_s": 54.8,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
@@ -1585,7 +1585,7 @@
    },
    "volume_delta_pct": -1.752,
    "error": null,
-   "duration_s": 141.5,
+   "duration_s": 128.3,
    "plan_steps": 57,
    "executor_outcome": "PASS"
   },
@@ -1659,7 +1659,7 @@
    },
    "volume_delta_pct": -100.687,
    "error": null,
-   "duration_s": 601.4,
+   "duration_s": 610.4,
    "plan_steps": 143,
    "executor_outcome": "FAIL"
   },
@@ -1691,7 +1691,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 368.3,
+   "duration_s": 126.8,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
@@ -1728,7 +1728,7 @@
    },
    "volume_delta_pct": 0.0,
    "error": null,
-   "duration_s": 90.2,
+   "duration_s": 53.0,
    "plan_steps": 2,
    "executor_outcome": "PASS"
   },
@@ -1765,7 +1765,7 @@
    },
    "volume_delta_pct": -0.532,
    "error": null,
-   "duration_s": 152.5,
+   "duration_s": 121.3,
    "plan_steps": 15,
    "executor_outcome": "PASS"
   }
