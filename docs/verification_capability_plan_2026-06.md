@@ -16,6 +16,26 @@
 > 컷 잔여면이 regen 에서 fillet 으로 오분류 (Ventilator 31→54),
 > default-on 은 self-match 하드 제약 위반. 잔여: cut-residue 필터 후
 > default-on, A9/A10=P9, export PMI 수정, KR600/RC_Buggy 타임아웃).
+>
+> **Wave 4 완료 (2026-06-11):**
+> A3-fix ✅ **default-on 출하** — 근본 원인은 불리언 분할 파편 수
+> 불안정성 (R0.8 torus orig 2면 vs regen 14면); 동일면 파편 병합 +
+> union 각도 게이트 + stub 게이트. preserve_brep 35 PERFECT + 55/55
+> ≥0.5 유지, 12 개선 / 5 정직 하락 (regen 컷이 orig fillet 을 실제
+> 파괴하는 손실이 처음 측정됨), box 는 fillet 미복원이 정직 반영
+> (linkrods 0.833→0.5) — baseline 갱신.
+> A9 ✅ extract_quality_report + result_grade(measured|estimate).
+> PMI ✅ export 가 실제 AP242 GDT 엔티티 출력 (controller-init 순서 +
+> AddShape assembly-label 버그 2건 수정; STEP body 라운드트립 증명).
+> A10=P9 ✅ pocket footprint sibling 필드 + box 전용 footprint-true
+> emission (as1-oc-214 에 20×15 true 컷). entry_origin 키 충돌
+> (diff 의 exact-key 선호) 을 에이전트가 자가 발견, pocket-prefix 로
+> 회피. 200mm 클램프 3차 재시도 — as1_pe_203 pockets 17/18 freeform
+> 이라 또 revert (pass-26 verdict).
+> 잔여 known limits: freeform footprint 폴리곤 (클램프 해제의 최종
+> 선행 조건), KR600/RC_Buggy 는 900s 에도 타임아웃 (대형 어셈블리
+> 성능 — baseline 에 timeout 으로 기록), SOT-89 는 사전 존재
+> 플레이크 (0.1mm 포켓 depth 지터; baseline 보수 바닥값 0.8571).
 
 9-agent 병렬 감사(스킬 인벤토리 / 테스트 인프라 / RE 파이프라인 / 파라메트릭
 변형 / 코퍼스 / executor 신뢰층 + 3개 설계 에이전트) 결과를 종합한 실행
