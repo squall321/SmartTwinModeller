@@ -25,9 +25,20 @@
 >   FREEFORM 진짜 loft 단면 복원 (circle fallback byte-identical) ·
 >   REPORT 헤드리스 단면 PNG (render_views opt-in, GL작동) ·
 >   PERF boss/rib face-pair fast-path (deep-equal).
-> - **다음: Phase 3** — corpus-regress --workers 병렬, compare-pairs 게이트,
->   generate_variant_family, HTML 리포트 렌더러, freeform 코퍼스 fixture.
->   KR600/RC_Buggy 는 700s 에도 timeout (KNOWN-GAP, 148 distinct 부품).
+> - **Phase 3 완료** (6 커밋, 1 신규 스킬, corpus 양 모드 0 회귀):
+>   HARNESS `corpus-regress --workers`(기본 1=serial byte-identical;
+>   N>1 은 speedup, timeout-경계 파일은 경합으로 거짓 timeout 가능 —
+>   정직 caveat 코드 명시) + **`compare-regress` 비교 회귀 게이트**
+>   (3쌍 identical/variant/unrelated, sign-flip self-proof) ·
+>   VARIANTS `generate_variant_family`(linkrods 4변형 monotone) +
+>   normalize 5번째 관계-일관성 pass · REPORT 프로덕션 HTML +
+>   golden-snapshot 게이트 · FREEFORM 전용 corpus 레인 box_freeform.json
+>   (swept_channel 320× win, rounded_plate 9.3× tighter but guard 가
+>   match_ratio 로 revert — guard-metric 수정 Phase 4 큐).
+> - **다음: Phase 4 (어려운 프런티어, XL)** — fit_bspline_surface_patch
+>   (open-shell 편차 리포트), 진짜 sweep path+profile, registration ICP 강화,
+>   SOLID-aware 분할+캐시(KR600/RC_Buggy), revert-guard 를 hausdorff 기준으로,
+>   PDF 스파이크. 각자 정직한 fallback.
 
 설계 원칙 (전 기둥 공통, 23-pass + Wave1~4 의 교훈 계승):
 1. corpus-regress 하니스로 게이트 — 인라인 sweep 금지.
