@@ -7,9 +7,17 @@ baseline-tracked runner:
   * Each file is processed in its OWN SUBPROCESS with a hard 300 s timeout —
     one hung OCCT call cannot kill the sweep (proven watchdog pattern
     ported from ``run_corpus_re.py``).
-  * The sweep is SERIAL by design: ``PlanFromFeatureCatalog`` always
-    writes ``plans/reconstructed_plan.yaml`` (no output-path arg), so the
-    plan file is shared mutable state and parallel workers would race.
+  * The sweep defaults to SERIAL (``workers=1``) — byte-identical to the
+    original single-threaded behaviour. phase-3 (2026-06-14): an OPTIONAL
+    process pool (``workers=N>1``) fans the per-file subprocesses across
+    cores. Historically the sweep had to be serial because
+    ``PlanFromFeatureCatalog`` always wrote the shared
+    ``plans/reconstructed_plan.yaml``; the Phase-0 ``plan_out_path`` arg now
+    lets each concurrent worker target a DISTINCT plan file so they never
+    race. Results are collected then DETERMINISTICALLY re-sorted to the input
+    file order, so the per-file records, the output JSON and the regression
+    verdict are all worker-count-INDEPENDENT (``--workers 1`` == ``--workers
+    N``, same records, only re-ordered back to source order).
   * Per-file pipeline (the canonical RE round-trip):
       ImportStep → ExtractFeatureCatalog → PlanFromFeatureCatalog
       (base_step_kind=mode) → load plans/reconstructed_plan.yaml →
@@ -211,9 +219,20 @@ def _new_record(file: str, mode: str) -> dict[str, Any]:
     }
 
 
-def _worker_pipeline(step_path: str, mode: str) -> dict[str, Any]:
+def _worker_pipeline(
+    step_path: str, mode: str, plan_out_path: str | None = None
+) -> dict[str, Any]:
     """Full RE round-trip on one STEP file. Never raises — failures land
-    in ``record['error']``."""
+    in ``record['error']``.
+
+    phase-3 (2026-06-14): ``plan_out_path`` — when None (serial / default)
+    the plan is written to the shared ``plans/reconstructed_plan.yaml`` and
+    loaded back from there, byte-identical to the original single-threaded
+    pipeline. When set (a concurrent worker), the plan is written to that
+    DISTINCT path via ``PlanFromFeatureCatalog``'s Phase-0 ``plan_out_path``
+    arg and loaded back from there — so parallel workers never race the
+    shared default. The resulting record is otherwise identical regardless of
+    which path was used (the plan file is an intermediate, not an output)."""
     t0 = time.perf_counter()
     record = _new_record(Path(step_path).name, mode)
     try:
@@ -240,10 +259,19 @@ def _worker_pipeline(step_path: str, mode: str) -> dict[str, Any]:
             record["skipped"] = cat.get("reason")
             return record
 
-        PlanFromFeatureCatalog().apply(
-            body, {"catalog": cat, "base_step_kind": mode}
-        )
-        plan = load_plan(_repo_root() / "plans" / "reconstructed_plan.yaml")
+        plan_args: dict[str, Any] = {"catalog": cat, "base_step_kind": mode}
+        if plan_out_path is not None:
+            # Concurrent worker: write to a distinct plan file so parallel
+            # workers don't race plans/reconstructed_plan.yaml. Load back from
+            # exactly where it was written.
+            plan_args["plan_out_path"] = plan_out_path
+            PlanFromFeatureCatalog().apply(body, plan_args)
+            plan = load_plan(Path(plan_out_path))
+        else:
+            # Serial / default: shared plan path — byte-identical to the
+            # original single-threaded pipeline.
+            PlanFromFeatureCatalog().apply(body, plan_args)
+            plan = load_plan(_repo_root() / "plans" / "reconstructed_plan.yaml")
         record["plan_steps"] = len(plan.steps)
 
         initial = body if mode == "preserve_brep" else None
@@ -315,9 +343,15 @@ def _worker_pipeline(step_path: str, mode: str) -> dict[str, Any]:
 
 
 def _worker_main(argv: list[str]) -> int:
-    """``python -m phone_designer.corpus.regress --worker <step> <mode> <out>``."""
-    step_path, mode, out_json = argv
-    record = _worker_pipeline(step_path, mode)
+    """``python -m phone_designer.corpus.regress --worker <step> <mode> <out>
+    [<plan_out>]``.
+
+    The optional 4th token is the per-worker plan path (phase-3, 2026-06-14).
+    Absent -> shared plans/reconstructed_plan.yaml (byte-identical serial
+    behaviour)."""
+    step_path, mode, out_json = argv[:3]
+    plan_out_path = argv[3] if len(argv) >= 4 else None
+    record = _worker_pipeline(step_path, mode, plan_out_path=plan_out_path)
     Path(out_json).write_text(
         json.dumps(record, ensure_ascii=False), encoding="utf-8"
     )
@@ -332,11 +366,19 @@ def run_one(
     path: Path | str,
     mode: str,
     timeout_s: int = PER_FILE_TIMEOUT_S,
+    plan_out_path: str | None = None,
 ) -> dict[str, Any]:
     """Run the per-file pipeline in an isolated subprocess.
 
     ``subprocess.run(timeout=...)`` kills the child on expiry, so a hung
     OCCT call costs at most ``timeout_s`` seconds of the sweep.
+
+    phase-3 (2026-06-14): ``plan_out_path`` — when set, the worker writes its
+    reconstructed plan to that DISTINCT file instead of the shared
+    ``plans/reconstructed_plan.yaml``. The parallel sweep gives each
+    concurrent worker its own path so they never race the shared default.
+    When None (serial / default), the worker uses the shared path —
+    byte-identical to the original behaviour.
     """
     if mode not in MODES:
         raise ValueError(f"unknown mode: {mode!r} (expected one of {MODES})")
@@ -362,6 +404,8 @@ def run_one(
             mode,
             out_json,
         ]
+        if plan_out_path is not None:
+            cmd.append(plan_out_path)
         try:
             proc = subprocess.run(
                 cmd,
@@ -395,32 +439,144 @@ def run_one(
             pass
 
 
+def _effective_workers(requested: int, n_files: int) -> int:
+    """Resolve the worker count actually used. Capped at
+    ``min(cpu-2, n_files)`` and never below 1 (phase-3, 2026-06-14).
+
+    ``requested <= 1`` always yields 1 (serial). A high request is clamped to
+    leave 2 cores for the OS / parent so the machine stays responsive.
+
+    HONEST CAVEAT (phase-3, 2026-06-15): ``--workers N>1`` is a best-effort
+    SPEEDUP, NOT a verdict-identical substitute for serial. The per-file
+    ``--timeout-s`` is a wall-clock watchdog, and N concurrent workers share
+    CPU, so a file sitting near the timeout boundary serially can spuriously
+    TIME OUT under contention (measured: pythonocc__11752 runs 689 s serial,
+    just under the 700 s cap, but exceeds it under ``--workers 4``). Verdicts
+    are byte-identical to serial ONLY for files that finish with margin. The
+    AUTHORITATIVE gate is therefore ``--workers 1`` (the default); use
+    ``--workers N`` for fast iteration on the small-file bulk, and raise
+    ``--timeout-s`` proportionally if a boundary file flags a false timeout."""
+    if requested <= 1 or n_files <= 1:
+        return 1
+    cpu = os.cpu_count() or 1
+    cap = max(1, min(cpu - 2, n_files))
+    return max(1, min(requested, cap))
+
+
 def run_sweep(
     mode: str,
     subset: str,
     timeout_s: int = PER_FILE_TIMEOUT_S,
     log: Callable[[str], None] = print,
+    workers: int = 1,
 ) -> list[dict[str, Any]]:
-    """Serial sweep over a subset. Returns the per-file records (the
-    ``file`` key is the corpus-relative path)."""
+    """Sweep over a subset. Returns the per-file records (the ``file`` key is
+    the corpus-relative path), ALWAYS in ``discover_files`` order.
+
+    ``workers=1`` (default) is the original serial path — byte-identical.
+    ``workers>1`` (phase-3, 2026-06-14) fans the per-file subprocesses across
+    a ``ProcessPoolExecutor`` (capped at ``min(cpu-2, n_files)``); each
+    concurrent worker writes its plan to a DISTINCT file so they don't race
+    ``plans/reconstructed_plan.yaml``. Results are collected then re-sorted to
+    the input file order, so the returned list is worker-count-INDEPENDENT."""
     files = discover_files(subset)
-    log(
-        f"[corpus-regress] mode={mode} subset={subset}: {len(files)} file(s), "
-        f"serial, {timeout_s}s/file cap"
-    )
-    records: list[dict[str, Any]] = []
-    for i, (rel, p) in enumerate(files, 1):
-        log(f"[{i:3d}/{len(files)}] {rel} ...")
-        rec = run_one(p, mode, timeout_s=timeout_s)
-        rec["file"] = rel
-        records.append(rec)
-        err = rec.get("error")
+    eff_workers = _effective_workers(workers, len(files))
+
+    if eff_workers <= 1:
         log(
-            f"          -> match={rec.get('match_ratio')} "
-            f"vol_delta={rec.get('volume_delta_pct')}% "
-            f"err={err[:80] if err else None} ({rec.get('duration_s')}s)"
+            f"[corpus-regress] mode={mode} subset={subset}: {len(files)} "
+            f"file(s), serial, {timeout_s}s/file cap"
         )
-    return records
+        records: list[dict[str, Any]] = []
+        for i, (rel, p) in enumerate(files, 1):
+            log(f"[{i:3d}/{len(files)}] {rel} ...")
+            rec = run_one(p, mode, timeout_s=timeout_s)
+            rec["file"] = rel
+            records.append(rec)
+            err = rec.get("error")
+            log(
+                f"          -> match={rec.get('match_ratio')} "
+                f"vol_delta={rec.get('volume_delta_pct')}% "
+                f"err={err[:80] if err else None} ({rec.get('duration_s')}s)"
+            )
+        return records
+
+    return _run_sweep_parallel(
+        mode, files, timeout_s=timeout_s, log=log, workers=eff_workers
+    )
+
+
+def _parallel_worker(
+    args: tuple[int, str, str, str, int]
+) -> tuple[int, str, dict[str, Any]]:
+    """ProcessPoolExecutor task. Each invocation runs ONE file's isolated
+    subprocess with its OWN distinct plan path so concurrent workers never
+    race plans/reconstructed_plan.yaml. Returns (index, rel_key, record) so
+    the parent can re-sort to the input order deterministically."""
+    idx, rel, path, mode, timeout_s = args
+    # Distinct per-task plan file (the key to parallelizing without the
+    # shared-plan race). Indexed by the task ordinal so it is unique and
+    # reproducible; deleted after the worker has loaded it.
+    plan_dir = Path(tempfile.gettempdir())
+    plan_out = str(plan_dir / f"corpus_regress_plan_{os.getpid()}_{idx}.yaml")
+    try:
+        rec = run_one(path, mode, timeout_s=timeout_s, plan_out_path=plan_out)
+    finally:
+        try:
+            os.unlink(plan_out)
+        except OSError:
+            pass
+    rec["file"] = rel
+    return idx, rel, rec
+
+
+def _collect_in_order(
+    results_by_index: dict[int, dict[str, Any]], n_files: int
+) -> list[dict[str, Any]]:
+    """DETERMINISTIC re-sort of pool results back to the input file order.
+    Pulled out as a pure helper so the worker-count-independence guarantee is
+    unit-testable without spawning a process pool (phase-3, 2026-06-14)."""
+    return [results_by_index[i] for i in range(n_files)]
+
+
+def _run_sweep_parallel(
+    mode: str,
+    files: list[tuple[str, Path]],
+    timeout_s: int,
+    log: Callable[[str], None],
+    workers: int,
+) -> list[dict[str, Any]]:
+    """Process-pool sweep. Collects records as they complete then re-sorts to
+    the input ``files`` order so the result is identical to the serial sweep
+    (only faster)."""
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+
+    log(
+        f"[corpus-regress] mode={mode}: {len(files)} file(s), "
+        f"{workers} workers (cap min(cpu-2, n_files)), {timeout_s}s/file cap"
+    )
+    tasks = [
+        (idx, rel, str(p), mode, timeout_s)
+        for idx, (rel, p) in enumerate(files)
+    ]
+    results: dict[int, dict[str, Any]] = {}
+    done = 0
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        futs = {pool.submit(_parallel_worker, t): t[0] for t in tasks}
+        for fut in as_completed(futs):
+            idx, rel, rec = fut.result()
+            results[idx] = rec
+            done += 1
+            err = rec.get("error")
+            log(
+                f"[{done:3d}/{len(files)}] {rel} "
+                f"-> match={rec.get('match_ratio')} "
+                f"vol_delta={rec.get('volume_delta_pct')}% "
+                f"err={err[:80] if err else None} ({rec.get('duration_s')}s)"
+            )
+    # DETERMINISTIC re-sort back to the input file order — the output is
+    # worker-count-INDEPENDENT.
+    return _collect_in_order(results, len(files))
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -532,11 +688,11 @@ def compare_to_baseline(
 
 
 if __name__ == "__main__":  # worker entry
-    if len(sys.argv) == 5 and sys.argv[1] == "--worker":
+    if len(sys.argv) in (5, 6) and sys.argv[1] == "--worker":
         sys.exit(_worker_main(sys.argv[2:]))
     print(
         "usage: python -m phone_designer.corpus.regress "
-        "--worker <step_path> <mode> <out_json>",
+        "--worker <step_path> <mode> <out_json> [<plan_out_path>]",
         file=sys.stderr,
     )
     sys.exit(2)

@@ -729,6 +729,14 @@ def corpus_regress(
         None, "--timeout-s",
         help="파일당 subprocess 타임아웃 (기본 300s)",
     ),
+    workers: int = typer.Option(
+        1, "--workers",
+        help="병렬 worker 수 (기본 1=직렬, byte-identical). N>1 이면 "
+             "ProcessPoolExecutor 로 파일별 subprocess 를 분산 — 각 worker 는 "
+             "고유 plan 파일을 사용해 plans/reconstructed_plan.yaml race 회피. "
+             "결과는 입력 순서로 재정렬되어 worker 수와 무관하게 동일. "
+             "상한 min(cpu-2, n_files).",
+    ),
 ):
     """Tracked corpus regression — RE round-trip 을 baseline 과 비교.
 
@@ -758,7 +766,7 @@ def corpus_regress(
 
     for m in modes:
         records = regress.run_sweep(
-            m, subset, timeout_s=eff_timeout, log=typer.echo
+            m, subset, timeout_s=eff_timeout, log=typer.echo, workers=workers
         )
         payload: dict[str, Any] = {
             "mode": m, "subset": subset, "records": records,
@@ -807,6 +815,101 @@ def corpus_regress(
         typer.echo(f">>> json: {json_out}")
 
     raise typer.Exit(code=1 if any_regression else 0)
+
+
+@app.command("compare-regress")
+def compare_regress(
+    update_baseline: bool = typer.Option(
+        False, "--update-baseline",
+        help="corpus/baselines/compare_pairs.json 재작성 (비교 생략)",
+    ),
+    init_manifest: bool = typer.Option(
+        False, "--init-manifest",
+        help="corpus/oem/compare_pairs.json 기본 pair manifest 생성 후 종료",
+    ),
+    json_out: Path = typer.Option(
+        None, "--json-out", help="(선택) sweep 결과 + 비교 JSON 출력 경로"
+    ),
+    timeout_s: int = typer.Option(
+        None, "--timeout-s",
+        help="pair 당 subprocess 타임아웃 (기본 600s)",
+    ),
+):
+    """COMPARE-pairs regression gate — compare_parts 를 baseline 과 비교.
+
+    corpus/oem/compare_pairs.json 의 각 pair 를 격리된 subprocess 에서
+    compare_parts 로 비교, classification / similarity / rmsd 를 기록.
+    스케일 변형 pair 는 OCCT BRepBuilderAPI_Transform 으로 즉석 생성하므로
+    큰 STEP 을 commit 하지 않아도 재현 가능. 소스 corpus 파일이 없는 pair 는
+    skip (requires_oem-style).
+
+    exit 0 = baseline 대비 회귀 없음
+    exit 1 = coarse-family flip / 신규 error / similarity 0.05 초과 하락 /
+             rmsd tol 초과 상승
+    exit 2 = manifest / baseline 없음
+    """
+    import json
+
+    from phone_designer.corpus import compare_regress as cr
+
+    if init_manifest:
+        path = cr.write_default_manifest()
+        typer.echo(f">>> manifest written: {path}")
+        raise typer.Exit(code=0)
+
+    eff_timeout = timeout_s or cr.PER_PAIR_TIMEOUT_S
+    try:
+        records = cr.run_sweep(timeout_s=eff_timeout, log=typer.echo)
+    except FileNotFoundError as exc:
+        typer.echo(f"[error] {exc}", err=True)
+        raise typer.Exit(code=2)
+
+    payload: dict[str, Any] = {"records": records}
+
+    if update_baseline:
+        path = cr.save_baseline(records)
+        typer.echo(f">>> baseline written: {path}")
+        if json_out is not None:
+            json_out.parent.mkdir(parents=True, exist_ok=True)
+            json_out.write_text(
+                json.dumps(payload, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            typer.echo(f">>> json: {json_out}")
+        raise typer.Exit(code=0)
+
+    baseline = cr.load_baseline()
+    if baseline is None:
+        typer.echo(
+            f"[error] no baseline at {cr.baseline_path()} — run with "
+            f"--update-baseline first",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+
+    cmp = cr.compare_to_baseline(records, baseline)
+    payload["comparison"] = cmp
+    for r in cmp["regressions"]:
+        typer.echo(f"REGRESSION {r['id']}: {r['reason']}", err=True)
+    for p in cmp["new_pairs"]:
+        typer.echo(f"info: new pair (not in baseline): {p}")
+    for p in cmp["skipped"]:
+        typer.echo(f"info: skipped (source absent): {p}")
+    for p in cmp["missing_pairs"]:
+        typer.echo(f"info: in baseline but not run: {p}")
+    typer.echo(
+        f">>> {len(records)} pair(s): {len(cmp['regressions'])} regression(s)"
+    )
+
+    if json_out is not None:
+        json_out.parent.mkdir(parents=True, exist_ok=True)
+        json_out.write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        typer.echo(f">>> json: {json_out}")
+
+    raise typer.Exit(code=1 if cmp["regressions"] else 0)
 
 
 @app.command()

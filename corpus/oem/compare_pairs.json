@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "comment": "COMPARE-pairs gate manifest. Scaled variants are generated on the fly from the committed corpus parts (see _scale_export) so no large STEPs are committed. expected_label is informational (the seeded baseline records the actual label); the gate keys on coarse-family flips vs the baseline.",
+  "pairs": [
+    {
+      "id": "facerec_self_identical",
+      "file_a": "pythonocc__face_recognition_sample_part.step",
+      "file_b": "pythonocc__face_recognition_sample_part.step",
+      "expected_label": "identical"
+    },
+    {
+      "id": "facerec_1.5x_variant",
+      "file_a": "pythonocc__face_recognition_sample_part.step",
+      "file_b": "pythonocc__face_recognition_sample_part.step",
+      "scale_b": 1.5,
+      "expected_label": "parametric_variant",
+      "expected_scale": 1.5
+    },
+    {
+      "id": "facerec_vs_splinecage_unrelated",
+      "file_a": "pythonocc__face_recognition_sample_part.step",
+      "file_b": "pythonocc__splinecage.step",
+      "expected_label": "unrelated"
+    }
+  ]
+}
