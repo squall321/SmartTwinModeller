@@ -16,8 +16,17 @@
 >   COMPARE `register_bodies`+`feature_change_classify` (rmsd 0.0mm 복원) ·
 >   REPORT `dfm_verdict`+`emit_quality_report` (measured/estimate 등급 HTML) ·
 >   VARIANTS `identify_key_dimensions` · PERF assembly 인스턴스 dedup+pool.
-> - **다음: Phase 2** — compare_parts 매크로, 진짜 loft 단면 복원,
->   apply_variant_drivers, 단면 PNG, base_profile default-on(비용 관리 후).
+> - **Phase 2 완료** (6 커밋, 3 신규 스킬, corpus 양 모드 0 회귀):
+>   COMPARE **`compare_parts`** 매크로 — 두 STEP → registration + 변경분류
+>   + Hausdorff 히트맵 + 질량델타 + PMI diff + 유사도/family 분류 (헤드라인
+>   산출물; A-vs-A identical, 1.5×-scaled→scaled-family scale≈1.5) ·
+>   VARIANTS `recover_design_relations`+`apply_variant_drivers`
+>   (housing_length 1.5×→1.497, counterbore 전파) ·
+>   FREEFORM 진짜 loft 단면 복원 (circle fallback byte-identical) ·
+>   REPORT 헤드리스 단면 PNG (render_views opt-in, GL작동) ·
+>   PERF boss/rib face-pair fast-path (deep-equal).
+> - **다음: Phase 3** — corpus-regress --workers 병렬, compare-pairs 게이트,
+>   generate_variant_family, HTML 리포트 렌더러, freeform 코퍼스 fixture.
 >   KR600/RC_Buggy 는 700s 에도 timeout (KNOWN-GAP, 148 distinct 부품).
 
 설계 원칙 (전 기둥 공통, 23-pass + Wave1~4 의 교훈 계승):
