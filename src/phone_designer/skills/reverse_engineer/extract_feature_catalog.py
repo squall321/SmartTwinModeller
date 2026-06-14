@@ -187,6 +187,79 @@ def _cone_in_any_hole(cx: float, cy: float, holes: list) -> bool:
     return False
 
 
+def _loop_span2d(sketch: dict) -> tuple[float, float] | None:
+    """Max 2D extent (span_u, span_v) of an executable loop sketch dict.
+
+    Handles the three loop kinds ``recover_section_loop`` emits (polygon /
+    bspline_closed / composite). Used to gate a recovered loft cross-section
+    against the loft's circle-diameter estimate so the body's whole-slab
+    outline (a far larger loop) is rejected and the feature stays on its
+    circle fallback (byte-identity preserved).
+    """
+    pts: list[tuple[float, float]] = []
+    kind = sketch.get("kind")
+    if kind == "polygon":
+        pts = [tuple(p) for p in sketch.get("vertices", [])]
+    elif kind == "bspline_closed":
+        pts = [tuple(p) for p in sketch.get("fit_points", [])]
+    elif kind == "composite":
+        for seg in sketch.get("segments", []):
+            if "start" in seg and "end" in seg:
+                pts.append(tuple(seg["start"]))
+                pts.append(tuple(seg["end"]))
+            elif "points" in seg:
+                pts.extend(tuple(p) for p in seg["points"])
+    if not pts:
+        return None
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    return (max(xs) - min(xs), max(ys) - min(ys))
+
+
+def _recover_loft_profile(shape, cx, cy, z, diam_estimate):
+    """PILLAR FREEFORM (phase-2, 2026-06-14): recover ONE real loft cross-section.
+
+    Cut the body at world plane ``(cx, cy, z)`` with +Z normal via the shared
+    ``_section_curve.recover_section_loop`` so the returned loop's 2D coords are
+    RELATIVE to the loft centre ``(cx, cy)`` (``to2d`` subtracts the plane
+    origin). The loft emitter then re-centres it with the SAME ``center_xy`` it
+    already passes for the circle estimate.
+
+    Returns the executable sketch dict ONLY when the recovered loop's max 2D
+    span is within ±50 % of the loft's circle-diameter estimate — this rejects
+    the body's whole-slab outline (a much larger loop that the global
+    largest-by-area picker would otherwise return). On any miss / skip / span
+    mismatch / failure it returns ``None`` so the feature carries NO profile key
+    and the emitter uses the circle EXACTLY as today (catalog byte-identical).
+    """
+    try:
+        from phone_designer.skills.inspect._section_curve import (
+            recover_section_loop,
+        )
+
+        rec = recover_section_loop(shape, (cx, cy, z), (0.0, 0.0, 1.0))
+        if rec.get("skipped") or rec.get("empty"):
+            return None
+        sketch = rec.get("sketch")
+        if not sketch:
+            return None
+        span = _loop_span2d(sketch)
+        if span is None:
+            return None
+        max_span = max(span)
+        d = float(diam_estimate or 0.0)
+        if d <= 1e-6 or max_span <= 1e-6:
+            return None
+        # Span-vs-diameter gate: a true loft profile section is comparable to
+        # the cone's bbox-extent diameter estimate; the slab outline is far
+        # larger and falls outside the band → reject (circle fallback kept).
+        if abs(max_span - d) / d > 0.5:
+            return None
+        return sketch
+    except Exception:
+        return None
+
+
 def _detect_swept_loft_revolve(body, bosses, base_z_max, holes=None):
     """Heuristic detection of sweep / loft / revolve features by surface type.
 
@@ -364,7 +437,7 @@ def _detect_swept_loft_revolve(body, bosses, base_z_max, holes=None):
         # detected hole on the body.
         if _cone_in_any_hole(cx, cy, holes):
             continue
-        loft_features.append({
+        loft_feat = {
             "id": ci,
             "bbox": [round(c, 4) for c in bb],
             "anchor_z": round(anchor_z, 4),
@@ -375,7 +448,21 @@ def _detect_swept_loft_revolve(body, bosses, base_z_max, holes=None):
             "kind": "boss",   # cone above base plane ⇒ lofted boss
             "_half_angle_rad": round(half, 6),
             "_ref_radius_mm": round(ref_r, 4),
-        })
+        }
+        # PILLAR FREEFORM (phase-2, 2026-06-14): recover the TWO real loft
+        # cross-sections at the anchor (lower) and top (upper) z and store them
+        # ALONGSIDE the circle estimates. The emitter PREFERS these when present
+        # and falls back to the circle otherwise. The keys are added ONLY when a
+        # consistent section is recovered (span ≈ circle diameter) — a miss / a
+        # slab-sized loop leaves the feature on its circle so the catalog (and
+        # every corpus baseline) stays byte-identical.
+        _lower_prof = _recover_loft_profile(shape, cx, cy, anchor_z, top_d)
+        if _lower_prof is not None:
+            loft_feat["lower_profile"] = _lower_prof
+        _upper_prof = _recover_loft_profile(shape, cx, cy, zmax, bot_d)
+        if _upper_prof is not None:
+            loft_feat["upper_profile"] = _upper_prof
+        loft_features.append(loft_feat)
 
     # ── revolve features: surface-of-revolution (annular grooves) ───────────
     for ri, (fi, f) in enumerate(revol_faces):

@@ -957,6 +957,38 @@ def _sweep_pocket_step(idx: int, feat: dict, dimension_scale: float = 1.0) -> di
     })
 
 
+def _loft_profile_sketch(
+    profile: dict | None,
+    circle_diam: float,
+    cx: float,
+    cy: float,
+    dimension_scale: float = 1.0,
+) -> dict:
+    """PILLAR FREEFORM (phase-2, 2026-06-14): build a loft-section sketch dict.
+
+    PREFER the recovered real cross-section ``profile`` (a polygon /
+    bspline_closed / composite loop emitted by ``_section_curve`` whose 2D
+    coords are RELATIVE to the loft centre) when present, re-centred at the
+    loft's ``(cx, cy)`` and scaled by ``dimension_scale`` so a scaled-catalog
+    variant lands correctly. Falls back to the historic ``circle`` sketch (BYTE
+    IDENTICAL to today) when no profile was recovered. The recovered loop is the
+    EXACT executable dict ``_sketch_to_solid`` consumes, so the loft skill's
+    ``_build_planar_face`` builds the real wire instead of a circle.
+    """
+    if profile:
+        sketch = _scale_sketch_dict(profile, float(dimension_scale))
+        sketch = dict(sketch)
+        sketch["center_x_mm"] = float(cx)
+        sketch["center_y_mm"] = float(cy)
+        return sketch
+    return {
+        "kind": "circle",
+        "diameter_mm": circle_diam,
+        "center_x_mm": float(cx),
+        "center_y_mm": float(cy),
+    }
+
+
 def _loft_boss_step(idx: int, feat: dict, dimension_scale: float = 1.0) -> dict:
     """Emit a ``loft_boss_between_sketches`` step from a loft_features entry."""
     sid = f"s_loft_boss_{idx}"
@@ -965,20 +997,17 @@ def _loft_boss_step(idx: int, feat: dict, dimension_scale: float = 1.0) -> dict:
     upper_d = float(feat.get("upper_diameter_mm") or 4.0 * dimension_scale)
     height = float(feat.get("height_mm") or 4.0 * dimension_scale)
     cx, cy = feat.get("center_xy") or [0.0, 0.0]
+    # PILLAR FREEFORM (phase-2, 2026-06-14): prefer the recovered real sections.
     return _new_step(sid, "loft_boss_between_sketches", {
         "face_selector": _DEFAULT_FACE_SELECTOR,
-        "lower_sketch": {
-            "kind": "circle",
-            "diameter_mm": lower_d,
-            "center_x_mm": float(cx),
-            "center_y_mm": float(cy),
-        },
-        "upper_sketch": {
-            "kind": "circle",
-            "diameter_mm": upper_d,
-            "center_x_mm": float(cx),
-            "center_y_mm": float(cy),
-        },
+        "lower_sketch": _loft_profile_sketch(
+            feat.get("lower_profile"), lower_d, float(cx), float(cy),
+            dimension_scale,
+        ),
+        "upper_sketch": _loft_profile_sketch(
+            feat.get("upper_profile"), upper_d, float(cx), float(cy),
+            dimension_scale,
+        ),
         "height_mm": height,
     })
 
@@ -991,20 +1020,17 @@ def _loft_pocket_step(idx: int, feat: dict, dimension_scale: float = 1.0) -> dic
     lower_d = float(feat.get("lower_diameter_mm") or 4.0 * dimension_scale)
     depth = float(feat.get("height_mm") or 4.0 * dimension_scale)
     cx, cy = feat.get("center_xy") or [0.0, 0.0]
+    # PILLAR FREEFORM (phase-2, 2026-06-14): prefer the recovered real sections.
     return _new_step(sid, "loft_pocket_between_sketches", {
         "face_selector": _DEFAULT_FACE_SELECTOR,
-        "upper_sketch": {
-            "kind": "circle",
-            "diameter_mm": upper_d,
-            "center_x_mm": float(cx),
-            "center_y_mm": float(cy),
-        },
-        "lower_sketch": {
-            "kind": "circle",
-            "diameter_mm": lower_d,
-            "center_x_mm": float(cx),
-            "center_y_mm": float(cy),
-        },
+        "upper_sketch": _loft_profile_sketch(
+            feat.get("upper_profile"), upper_d, float(cx), float(cy),
+            dimension_scale,
+        ),
+        "lower_sketch": _loft_profile_sketch(
+            feat.get("lower_profile"), lower_d, float(cx), float(cy),
+            dimension_scale,
+        ),
         "depth_mm": depth,
     })
 
@@ -2066,57 +2092,221 @@ def _score_reconstruction(
         return None
 
 
+def _classify_base_topology(body: Any, bbox: tuple | None) -> str:
+    """PILLAR FREEFORM (phase-2, 2026-06-14): classify the base body topology.
+
+    Returns one of ``"prismatic"`` / ``"revolved"`` / ``"box"`` from the body's
+    face surface-type area inventory + a single-dominant-rotational-axis test.
+    Pure geometric ratios + axis cosines, NEVER per-file. Read-only.
+
+      * ``revolved`` — solids-of-revolution faces (cylinder + cone + surface-of-
+        revolution) dominate the area AND share ONE dominant axis (cos 18°).
+        A lathe-style part (screw shaft, bottle, collar) — a revolve base from
+        the recovered meridian (or the existing revolved primitive) fits it far
+        tighter than a box.
+      * ``prismatic`` — a constant cross-section sweeps along one axis
+        (``detect_outer_silhouette_profile`` passes). A rounded plate / D-shaped
+        chassis whose true outline a box bbox over-covers.
+      * ``box`` — neither test fires (generic / cubic). Default; box base kept.
+
+    This is ONLY a label. The authoritative accept/reject is the full-recon A/B
+    revert-guard (``accept_freeform_base``): a non-box base is kept ONLY when the
+    full regen's match_ratio is not worse AND geometry_deviation hausdorff is
+    STRICTLY better. The classifier just orders which candidate base to A/B.
+    """
+    if body is None:
+        return "box"
+    try:
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepGProp import BRepGProp
+        from OCP.GeomAbs import (
+            GeomAbs_Cone, GeomAbs_Cylinder, GeomAbs_SurfaceOfRevolution,
+        )
+        from OCP.GProp import GProp_GProps
+
+        from phone_designer.skills._resolvers import _all_faces
+
+        shape = body.wrapped if hasattr(body, "wrapped") else body
+        faces = _all_faces(shape)
+        if not faces:
+            return "box"
+
+        total_area = 0.0
+        rev_area = 0.0
+        rev_axes: list[tuple[float, float, float]] = []
+        for f in faces:
+            try:
+                surf = BRepAdaptor_Surface(f)
+                kind_int = surf.GetType()
+                props = GProp_GProps()
+                BRepGProp.SurfaceProperties_s(f, props)
+                a = float(props.Mass())
+                total_area += a
+                ax = None
+                if kind_int == GeomAbs_Cylinder:
+                    ax = surf.Cylinder().Axis().Direction()
+                elif kind_int == GeomAbs_Cone:
+                    ax = surf.Cone().Axis().Direction()
+                elif kind_int == GeomAbs_SurfaceOfRevolution:
+                    ax = surf.AxeOfRevolution().Direction()
+                if ax is not None:
+                    rev_area += a
+                    rev_axes.append((ax.X(), ax.Y(), ax.Z()))
+            except Exception:
+                continue
+
+        if total_area > 0.0 and rev_area / total_area > 0.5 and rev_axes:
+            # Single dominant rotational axis? Reference the largest-area axis;
+            # all rotational faces must be ~parallel (cos 18°) for a clean
+            # solid of revolution. A mixed multi-axis body falls through to the
+            # prismatic / box tests.
+            ref = rev_axes[0]
+            aligned = True
+            for ax in rev_axes:
+                dot = abs(ax[0] * ref[0] + ax[1] * ref[1] + ax[2] * ref[2])
+                if dot < 0.95:
+                    aligned = False
+                    break
+            if aligned:
+                return "revolved"
+    except Exception:
+        pass
+
+    # Prismatic: constant cross-section along one axis (silhouette detector).
+    try:
+        from phone_designer.skills.inspect.extract_outer_silhouette_profile import (
+            detect_outer_silhouette_profile,
+        )
+        shape = body.wrapped if hasattr(body, "wrapped") else body
+        prof = detect_outer_silhouette_profile(shape)
+        if prof.get("prismatic") and prof.get("sketch"):
+            return "prismatic"
+    except Exception:
+        pass
+
+    return "box"
+
+
+def _revolved_base_step_args(
+    body: Any,
+    base_l: float, base_w: float, base_h: float,
+    bbox: tuple | None,
+    dimension_scale: float = 1.0,
+) -> tuple[str, dict] | None:
+    """Build the (skill, args) for a REVOLVED base candidate — or ``None``.
+
+    Reuses the existing topology primitive selector (``_pick_base_shape``),
+    which already emits a cylinder / cone / sphere / torus create-skill solid of
+    revolution from the live body's face inventory (radii ×``dimension_scale``).
+    No new @skill: these ARE revolve bases. Returns ``None`` when the selector
+    falls back to box (no clean revolved primitive recoverable).
+    """
+    if body is None:
+        return None
+    try:
+        skill_name, args = _pick_base_shape(
+            body, base_l, base_w, base_h, bbox,
+            dimension_scale=dimension_scale,
+        )
+        if skill_name == "box":
+            return None
+        return (skill_name, args)
+    except Exception:
+        return None
+
+
+def _accept_alt_base(
+    box_plan: dict,
+    alt_skill: str,
+    alt_args: dict,
+    body: Any,
+    bbox: tuple | None,
+) -> dict | None:
+    """Score a sibling plan whose ``s_base`` is swapped to ``alt_skill`` against
+    the box plan. Returns the swapped plan ONLY when its full-recon match_ratio
+    is not worse AND its hausdorff is STRICTLY better — else ``None``.
+
+    Shared core of the multi-candidate A/B revert-guard (prismatic-profile and
+    revolved-primitive candidates both flow through here).
+    """
+    import copy
+
+    alt_plan = copy.deepcopy(box_plan)
+    steps = alt_plan.get("steps") or []
+    swapped = False
+    for st in steps:
+        if str(st.get("id", "")).startswith("s_base"):
+            st["skill"] = alt_skill
+            st["args"] = alt_args
+            swapped = True
+            break
+    if not swapped:
+        return None
+
+    box_score = _score_reconstruction(box_plan, body, bbox)
+    alt_score = _score_reconstruction(alt_plan, body, bbox)
+    if box_score is None or alt_score is None:
+        return None
+    box_match, box_haus = box_score
+    alt_match, alt_haus = alt_score
+    if alt_match >= box_match and alt_haus < box_haus:
+        return alt_plan
+    return None
+
+
 def accept_freeform_base(
     box_plan: dict,
     body: Any,
     bbox: tuple | None,
     dimension_scale: float = 1.0,
+    base_l: float | None = None,
+    base_w: float | None = None,
+    base_h: float | None = None,
 ) -> dict | None:
     """PILLAR FREEFORM revert-guard (authoritative, full-reconstruction A/B).
 
-    Given the already-built box-mode ``box_plan``, build a sibling plan whose
-    ``s_base`` step is swapped to ``extrude_profile_world`` (the recovered swept
-    outer silhouette), execute BOTH, and compare each full regen against the
-    ORIGINAL body. KEEP the profile plan ONLY when its overall match_ratio is
-    not worse than the box AND its hausdorff is strictly better. Any other
-    outcome (no profile recoverable, equal/worse match, equal/worse hausdorff,
-    any execution error) returns ``None`` → the caller keeps the box plan. This
+    Given the already-built box-mode ``box_plan``, classify the body topology
+    (``_classify_base_topology``) and try the matching non-box base candidate as
+    a sibling plan whose ``s_base`` step is swapped:
+
+      * ``prismatic`` → ``extrude_profile_world`` (recovered swept silhouette);
+      * ``revolved``  → the revolved primitive (cylinder / cone / sphere / torus
+        solid of revolution from ``_revolved_base_step_args``).
+
+    Execute BOTH the box and the candidate, compare each FULL regen against the
+    ORIGINAL body, and KEEP the candidate ONLY when its overall match_ratio is
+    not worse than the box AND its hausdorff is STRICTLY better. Any other
+    outcome (no candidate, equal/worse match, equal/worse hausdorff, any
+    execution error) returns ``None`` → the caller keeps the box plan. This
     makes the feature incapable of regressing match_ratio or hausdorff.
 
-    Returns the profile ``Plan``-dict to use, or ``None`` to keep the box plan.
+    Returns the candidate ``Plan``-dict to use, or ``None`` to keep the box plan.
     """
     if body is None or bbox is None:
         return None
     try:
+        topo = _classify_base_topology(body, bbox)
+
+        # 1. Revolved bodies (lathe-style) → revolved-primitive base candidate.
+        if topo == "revolved" and None not in (base_l, base_w, base_h):
+            rev = _revolved_base_step_args(
+                body, base_l, base_w, base_h, bbox, dimension_scale,
+            )
+            if rev is not None:
+                kept = _accept_alt_base(box_plan, rev[0], rev[1], body, bbox)
+                if kept is not None:
+                    return kept
+
+        # 2. Prismatic bodies → recovered swept-silhouette extrude candidate.
+        #    (Also the fallback when a revolved candidate failed its A/B gate —
+        #    a part can pass both tests; the prismatic profile may still win.)
         prof_args = _profile_base_step_args(body, bbox, dimension_scale)
-        if prof_args is None:
-            return None
-
-        # Build the sibling plan: copy box_plan, swap the s_base step skill+args.
-        import copy
-
-        prof_plan = copy.deepcopy(box_plan)
-        steps = prof_plan.get("steps") or []
-        swapped = False
-        for st in steps:
-            if str(st.get("id", "")).startswith("s_base"):
-                st["skill"] = "extrude_profile_world"
-                st["args"] = prof_args
-                swapped = True
-                break
-        if not swapped:
-            return None
-
-        box_score = _score_reconstruction(box_plan, body, bbox)
-        prof_score = _score_reconstruction(prof_plan, body, bbox)
-        if box_score is None or prof_score is None:
-            return None
-        box_match, box_haus = box_score
-        prof_match, prof_haus = prof_score
-
-        # KEEP profile ONLY if match not worse AND hausdorff strictly better.
-        if prof_match >= box_match and prof_haus < box_haus:
-            return prof_plan
+        if prof_args is not None:
+            kept = _accept_alt_base(
+                box_plan, "extrude_profile_world", prof_args, body, bbox,
+            )
+            if kept is not None:
+                return kept
         return None
     except Exception:
         return None
@@ -3483,9 +3673,19 @@ class PlanFromFeatureCatalog(SkillBase):
                     _guard_bbox = _body_bbox(body)
             else:
                 _guard_bbox = _body_bbox(body)
+            # PILLAR FREEFORM (phase-2, 2026-06-14): base dims for the revolved-
+            # primitive candidate, derived from the guard bbox spans (the same
+            # extents the box base uses). None when no bbox is available.
+            _base_l = _base_w = _base_h = None
+            if isinstance(_guard_bbox, (list, tuple)) and len(_guard_bbox) >= 6:
+                _gb = [float(c) for c in _guard_bbox[:6]]
+                _base_l = _gb[3] - _gb[0]
+                _base_w = _gb[4] - _gb[1]
+                _base_h = _gb[5] - _gb[2]
             prof_plan = accept_freeform_base(
                 plan, body, _guard_bbox,
                 dimension_scale=args.dimension_scale,
+                base_l=_base_l, base_w=_base_w, base_h=_base_h,
             )
             if prof_plan is not None:
                 plan = prof_plan
