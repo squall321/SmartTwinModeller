@@ -147,6 +147,52 @@ def _volume_mm3(body: Any) -> float | None:
         return None
 
 
+def _geometry_deviation_inprocess(
+    regen_body: Any,
+    orig_body: Any,
+    frame_translation_mm: tuple[float, float, float] | None,
+) -> dict[str, float]:
+    """phase-0 (2026-06-13): hausdorff / rms / p95 (mm) between the regen
+    body and the ORIGINAL imported body, using the in-process OCCT shapes
+    (no STEP round-trip).
+
+    ``frame_translation_mm`` (box mode) is the world->box shift; we apply it
+    to the ORIGINAL (world-frame) body so both shapes live in the box frame
+    before tessellation. For preserve_brep both share the frame -> pass None.
+
+    Reuses geometry_deviation's own tessellation + bidirectional directed
+    deviation so the metric is identical to the standalone skill.
+    """
+    import numpy as np
+
+    from phone_designer.skills.inspect import geometry_deviation as _gd
+
+    regen_shape = regen_body.wrapped if hasattr(regen_body, "wrapped") else regen_body
+    orig_shape = orig_body.wrapped if hasattr(orig_body, "wrapped") else orig_body
+    if frame_translation_mm is not None:
+        dx, dy, dz = frame_translation_mm
+        if dx or dy or dz:
+            orig_shape = _gd._translate(orig_shape, dx, dy, dz)
+
+    deflection = 0.2
+    _gd._tessellate(regen_shape, deflection)
+    _gd._tessellate(orig_shape, deflection)
+    regen_verts, regen_tris = _gd._triangle_soup(regen_shape)
+    orig_verts, orig_tris = _gd._triangle_soup(orig_shape)
+
+    max_pts = 50000
+    d_r2o, _ = _gd._directed_deviation(
+        regen_verts, _gd._TriGrid(orig_tris), orig_verts, max_pts)
+    d_o2r, _ = _gd._directed_deviation(
+        orig_verts, _gd._TriGrid(regen_tris), regen_verts, max_pts)
+    all_d = np.concatenate([d_r2o, d_o2r])
+    return {
+        "hausdorff_mm": round(float(all_d.max()), 6),
+        "rms_mm": round(float(np.sqrt(np.mean(all_d * all_d))), 6),
+        "p95_mm": round(float(np.percentile(all_d, 95.0)), 6),
+    }
+
+
 def _new_record(file: str, mode: str) -> dict[str, Any]:
     return {
         "file": file,
@@ -154,6 +200,12 @@ def _new_record(file: str, mode: str) -> dict[str, Any]:
         "match_ratio": None,
         "per_kind": None,
         "volume_delta_pct": None,
+        # phase-0 (2026-06-13): geometric ground-truth deviation between the
+        # regen body and the ORIGINAL imported body. Info-only / recorded —
+        # NOT yet a regression trigger (a later phase makes hausdorff a gate).
+        "hausdorff_mm": None,
+        "rms_mm": None,
+        "p95_mm": None,
         "error": None,
         "duration_s": None,
     }
@@ -205,6 +257,9 @@ def _worker_pipeline(step_path: str, mode: str) -> dict[str, Any]:
         regen_cat = ExtractFeatureCatalog().apply(regen, {}).extras[
             "feature_catalog"
         ]
+        # phase-0 (2026-06-13): world→box shift, reused below for the
+        # geometry_deviation frame fix. None in preserve_brep (shared frame).
+        frame_shift: tuple[float, float, float] | None = None
         if mode == "box":
             # Map the box-local regen catalog back into world coords —
             # the world→box shift comes from the ORIGINAL catalog's
@@ -214,6 +269,7 @@ def _worker_pipeline(step_path: str, mode: str) -> dict[str, Any]:
                 cx = (float(bb[0]) + float(bb[3])) / 2.0
                 cy = (float(bb[1]) + float(bb[4])) / 2.0
                 zmin = float(bb[2])
+                frame_shift = (-cx, -cy, -zmin)
                 regen_cat["frame_translation_mm"] = [-cx, -cy, -zmin]
 
         fid = FeatureFidelityDiff().apply(
@@ -237,6 +293,20 @@ def _worker_pipeline(step_path: str, mode: str) -> dict[str, Any]:
             record["volume_delta_pct"] = round(
                 (vol_regen - vol_orig) / vol_orig * 100.0, 3
             )
+
+        # phase-0 (2026-06-13): geometric ground-truth deviation between the
+        # regen body and the ORIGINAL imported body. Wrapped independently so
+        # a single OCCT/tessellation hiccup records null deviation rather than
+        # failing the whole sweep. Info-only — NOT a regression trigger yet.
+        try:
+            dev = _geometry_deviation_inprocess(regen, body, frame_shift)
+            record["hausdorff_mm"] = dev["hausdorff_mm"]
+            record["rms_mm"] = dev["rms_mm"]
+            record["p95_mm"] = dev["p95_mm"]
+        except Exception:
+            record["hausdorff_mm"] = None
+            record["rms_mm"] = None
+            record["p95_mm"] = None
     except Exception as exc:
         record["error"] = f"{type(exc).__name__}: {str(exc)[:300]}"
     finally:
@@ -396,6 +466,12 @@ def compare_to_baseline(
         baseline match degrading to None also counts as a drop).
     New files (not in baseline) and files missing from the corpus are
     informational only.
+
+    phase-0 (2026-06-13): hausdorff_mm / rms_mm / p95_mm are RECORDED on
+    each per-file record but are deliberately NOT read here — they are
+    info-only and not yet a regression trigger (a later phase promotes
+    hausdorff to a gate). This keeps old baselines that lack those columns
+    from spuriously flagging.
     """
     base_records: dict[str, dict] = baseline.get("records") or {}
     regressions: list[dict[str, Any]] = []

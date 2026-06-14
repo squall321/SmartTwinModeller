@@ -38,8 +38,12 @@ extras schema:
         "sample_counts": {"body_to_ref": int, "ref_to_body": int},
         "fallback_fraction": float,              # nearest-vertex fallbacks
         "linear_deflection_mm": float,
-        "align": str,
+        "align": str,                            # 'none'|'bbox_center'|'rigid'
         "reference_step_path": str,
+        # phase-0 (2026-06-13), present only when region_centroids is given:
+        "per_region": [                          # one record per centroid
+            {"centroid": [x,y,z], "max_mm": float, "rms_mm": float, "n": int},
+        ],
      }}
 
 body 는 변경하지 않는다 (post ``body_present``).
@@ -97,6 +101,39 @@ def _translate(shape, dx: float, dy: float, dz: float):
 
     trsf = gp_Trsf()
     trsf.SetTranslation(gp_Vec(dx, dy, dz))
+    return BRepBuilderAPI_Transform(shape, trsf, True).Shape()
+
+
+def _apply_trsf(shape, matrix: list):
+    """phase-0 (2026-06-13): apply a rigid 4x4 (or 12-float affine) row-major
+    transform to ``shape`` via gp_Trsf + BRepBuilderAPI_Transform.
+
+    Accepts either a 4x4 nested list (16 values, last row ignored — must be
+    [0,0,0,1] for a true rigid motion) or a flat 12-/16-float affine
+    ``[r00,r01,r02,t0, r10,r11,r12,t1, r20,r21,r22,t2 (,0,0,0,1)]``. Mirrors
+    ``_translate`` (copy=True, no in-place mutation of the input shape).
+    """
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+    from OCP.gp import gp_Trsf
+
+    flat: list[float] = []
+    for row in matrix:
+        if isinstance(row, (list, tuple)):
+            flat.extend(float(x) for x in row)
+        else:
+            flat.append(float(row))
+    if len(flat) not in (12, 16):
+        raise ValueError(
+            "geometry_deviation: transform_4x4 must be a 4x4 row-major matrix "
+            f"or a flat 12/16-float affine, got {len(flat)} values"
+        )
+    r = flat[:12]  # first three rows [R | t], row-major
+    trsf = gp_Trsf()
+    trsf.SetValues(
+        r[0], r[1], r[2], r[3],
+        r[4], r[5], r[6], r[7],
+        r[8], r[9], r[10], r[11],
+    )
     return BRepBuilderAPI_Transform(shape, trsf, True).Shape()
 
 
@@ -345,6 +382,51 @@ def _directed_deviation(
     return dists, int(len(fb_idx))
 
 
+def _per_region_breakdown(
+    sample_pts: np.ndarray,
+    sample_dists: np.ndarray,
+    centroids: np.ndarray,
+) -> list[dict[str, Any]]:
+    """phase-0 (2026-06-13): bucket sampled deviation points by nearest
+    feature centroid and summarize each bucket.
+
+    ``sample_pts`` (S,3) are the world-frame source points, ``sample_dists``
+    (S,) their deviations, ``centroids`` (R,3). Returns one record per
+    centroid (in input order) — buckets with no samples report 0 counts.
+    """
+    if len(sample_pts) == 0 or len(centroids) == 0:
+        return [
+            {"centroid": [float(c[0]), float(c[1]), float(c[2])],
+             "max_mm": 0.0, "rms_mm": 0.0, "n": 0}
+            for c in centroids
+        ]
+    # nearest centroid per sample point (squared distance, no sqrt needed).
+    diff = sample_pts[:, None, :] - centroids[None, :, :]
+    nearest = np.argmin((diff * diff).sum(-1), axis=1)
+    out: list[dict[str, Any]] = []
+    for r in range(len(centroids)):
+        mask = nearest == r
+        n = int(mask.sum())
+        if n:
+            dr = sample_dists[mask]
+            mx = round(float(dr.max()), 6)
+            rms = round(float(np.sqrt(np.mean(dr * dr))), 6)
+        else:
+            mx = 0.0
+            rms = 0.0
+        out.append({
+            "centroid": [
+                float(centroids[r, 0]),
+                float(centroids[r, 1]),
+                float(centroids[r, 2]),
+            ],
+            "max_mm": mx,
+            "rms_mm": rms,
+            "n": n,
+        })
+    return out
+
+
 @skill(
     name="geometry_deviation",
     category="inspect",
@@ -378,10 +460,26 @@ class GeometryDeviation(SkillBase):
             default=50000, ge=100, le=1_000_000,
             description="Per-direction cap on sampled mesh vertices.",
         )
-        align: Literal["none", "bbox_center"] = Field(
+        align: Literal["none", "bbox_center", "rigid"] = Field(
             default="none",
             description="bbox_center translates the reference so both bbox "
-                        "centers coincide (box-local rebuild vs world frame).",
+                        "centers coincide (box-local rebuild vs world frame). "
+                        "rigid (phase-0) applies transform_4x4 to the reference "
+                        "before tessellation.",
+        )
+        transform_4x4: list | None = Field(
+            default=None,
+            description="phase-0 (2026-06-13): rigid 4x4 row-major matrix (or "
+                        "flat 12/16-float affine) applied to the REFERENCE shape "
+                        "when align='rigid'. Ignored for other align modes.",
+        )
+        region_centroids: list | None = Field(
+            default=None,
+            description="phase-0 (2026-06-13): optional list of feature "
+                        "centroids ([x,y,z], ...). When provided, sampled "
+                        "deviation points are bucketed by nearest centroid and "
+                        "summarized in extras['geometry_deviation']['per_region']. "
+                        "Absent -> the key is omitted (back-compat).",
         )
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
@@ -399,6 +497,13 @@ class GeometryDeviation(SkillBase):
             bc = _bbox_center(shape)
             rc = _bbox_center(ref)
             ref = _translate(ref, bc[0] - rc[0], bc[1] - rc[1], bc[2] - rc[2])
+        elif args.align == "rigid":
+            # phase-0 (2026-06-13): apply the supplied rigid transform to the
+            # reference before tessellation.
+            if not args.transform_4x4:
+                raise ValueError(
+                    "geometry_deviation: align='rigid' requires transform_4x4")
+            ref = _apply_trsf(ref, args.transform_4x4)
 
         # (a) exact BRep properties — independent of tessellation.
         vol_body, area_body = _gprop_volume_area(shape)
@@ -438,6 +543,22 @@ class GeometryDeviation(SkillBase):
         for key in ("volume_delta_pct", "surface_area_delta_pct"):
             if report[key] is not None:
                 report[key] = round(report[key], 6)
+
+        # phase-0 (2026-06-13): optional per-region deviation breakdown.
+        # Re-derive the subsampled source points deterministically (same
+        # _subsample as _directed_deviation) and bucket both directions'
+        # samples by nearest feature centroid.
+        if args.region_centroids:
+            centroids = np.asarray(
+                [[float(c[0]), float(c[1]), float(c[2])]
+                 for c in args.region_centroids],
+                dtype=float,
+            )
+            b2r_pts = _subsample(body_verts, args.max_sample_points)
+            r2b_pts = _subsample(ref_verts, args.max_sample_points)
+            region_pts = np.concatenate([b2r_pts, r2b_pts])
+            report["per_region"] = _per_region_breakdown(
+                region_pts, all_d, centroids)
 
         return SkillResult(
             body=body,

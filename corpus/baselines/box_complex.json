@@ -2,7 +2,7 @@
  "schema": 1,
  "mode": "box",
  "subset": "complex",
- "generated_at": "2026-06-11T07:00:00+00:00",
+ "generated_at": "2026-06-13T00:00:00+00:00",
  "records": {
   "complex/occt__screw.step": {
    "file": "complex/occt__screw.step",
@@ -26,8 +26,11 @@
     }
    },
    "volume_delta_pct": 292.635,
+   "hausdorff_mm": 9.149198,
+   "rms_mm": 1.975161,
+   "p95_mm": 3.595216,
    "error": null,
-   "duration_s": 6.2,
+   "duration_s": 6.1,
    "plan_steps": 2,
    "executor_outcome": "PASS"
   },
@@ -53,8 +56,11 @@
     }
    },
    "volume_delta_pct": 238.483,
+   "hausdorff_mm": 1009.310478,
+   "rms_mm": 150.600337,
+   "p95_mm": 409.061923,
    "error": null,
-   "duration_s": 13.2,
+   "duration_s": 13.8,
    "plan_steps": 23,
    "executor_outcome": "PASS"
   },
@@ -75,8 +81,11 @@
     }
    },
    "volume_delta_pct": 228.677,
+   "hausdorff_mm": 33.0,
+   "rms_mm": 18.817697,
+   "p95_mm": 32.172924,
    "error": null,
-   "duration_s": 13.6,
+   "duration_s": 13.5,
    "plan_steps": 9,
    "executor_outcome": "PASS"
   },
@@ -117,8 +126,11 @@
     }
    },
    "volume_delta_pct": 98.639,
+   "hausdorff_mm": 568.95507,
+   "rms_mm": 41.512852,
+   "p95_mm": 55.656167,
    "error": null,
-   "duration_s": 187.0,
+   "duration_s": 205.2,
    "plan_steps": 148,
    "executor_outcome": "PASS"
   },
@@ -154,8 +166,11 @@
     }
    },
    "volume_delta_pct": 239.9,
+   "hausdorff_mm": 0.626352,
+   "rms_mm": 0.186526,
+   "p95_mm": 0.412099,
    "error": null,
-   "duration_s": 27.3,
+   "duration_s": 29.3,
    "plan_steps": 3,
    "executor_outcome": "PASS"
   },
@@ -186,8 +201,11 @@
     }
    },
    "volume_delta_pct": 271.512,
+   "hausdorff_mm": 19.630608,
+   "rms_mm": 4.611542,
+   "p95_mm": 8.798393,
    "error": null,
-   "duration_s": 55.3,
+   "duration_s": 58.5,
    "plan_steps": 9,
    "executor_outcome": "PASS"
   },
@@ -197,8 +215,11 @@
    "match_ratio": null,
    "per_kind": null,
    "volume_delta_pct": null,
-   "error": "TIMEOUT after 900s",
-   "duration_s": 900.0
+   "hausdorff_mm": null,
+   "rms_mm": null,
+   "p95_mm": null,
+   "error": "TIMEOUT after 300s",
+   "duration_s": 300.0
   },
   "complex/pythonocc__RC_Buggy_2_front_suspension.stp": {
    "file": "complex/pythonocc__RC_Buggy_2_front_suspension.stp",
@@ -206,8 +227,11 @@
    "match_ratio": null,
    "per_kind": null,
    "volume_delta_pct": null,
-   "error": "TIMEOUT after 900s",
-   "duration_s": 900.0
+   "hausdorff_mm": null,
+   "rms_mm": null,
+   "p95_mm": null,
+   "error": "TIMEOUT after 300s",
+   "duration_s": 300.2
   }
  }
 }
