@@ -1909,11 +1909,225 @@ def _write_body_as_step(body: Any, plan_name: str) -> str | None:
         return None
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# PILLAR FREEFORM (phase-1, 2026-06-14): outer-silhouette base + revert-guard.
+
+
+def _scale_sketch_dict(sketch: dict, s: float) -> dict:
+    """Return a copy of an executable sketch dict with every 2D coord ×``s``.
+
+    Used so a scaled-catalog variant (dimension_scale != 1.0) gets a base
+    profile in the catalog's scale. Identity (returns the same coords) at 1.0.
+    Handles the three loop kinds recover_section_loop emits.
+    """
+    if s == 1.0:
+        return sketch
+    out = dict(sketch)
+    kind = sketch.get("kind")
+    if kind == "polygon":
+        out["vertices"] = [(x * s, y * s) for (x, y) in sketch["vertices"]]
+    elif kind == "bspline_closed":
+        out["fit_points"] = [(x * s, y * s) for (x, y) in sketch["fit_points"]]
+    elif kind == "composite":
+        new_segs = []
+        for seg in sketch["segments"]:
+            ns = dict(seg)
+            if "start" in seg and "end" in seg:
+                ns["start"] = (seg["start"][0] * s, seg["start"][1] * s)
+                ns["end"] = (seg["end"][0] * s, seg["end"][1] * s)
+                if "radius" in seg:
+                    ns["radius"] = seg["radius"] * s
+            elif "points" in seg:
+                ns["points"] = [(p[0] * s, p[1] * s) for p in seg["points"]]
+            new_segs.append(ns)
+        out["segments"] = new_segs
+    return out
+
+
+def _hausdorff_inproc(shape_a, shape_b, deflection_mm: float = 0.5,
+                      max_pts: int = 20000) -> float | None:
+    """In-process Hausdorff (mm) between two OCCT shapes — reuses
+    geometry_deviation's tessellation + bidirectional directed deviation so
+    the metric is identical to the standalone skill. Returns None on failure.
+    """
+    try:
+        import numpy as np
+
+        from phone_designer.skills.inspect import geometry_deviation as _gd
+
+        _gd._tessellate(shape_a, deflection_mm)
+        _gd._tessellate(shape_b, deflection_mm)
+        av, at = _gd._triangle_soup(shape_a)
+        bv, bt = _gd._triangle_soup(shape_b)
+        d1, _ = _gd._directed_deviation(av, _gd._TriGrid(bt), bv, max_pts)
+        d2, _ = _gd._directed_deviation(bv, _gd._TriGrid(at), av, max_pts)
+        return float(np.concatenate([d1, d2]).max())
+    except Exception:
+        return None
+
+
+def _profile_base_step_args(
+    body: Any,
+    bbox: tuple | None,
+    dimension_scale: float = 1.0,
+) -> dict | None:
+    """Recover the outer silhouette and emit ``extrude_profile_world`` args in
+    the (possibly scaled) catalog/box frame — or ``None`` when the body is not
+    prismatic. Pure candidate construction: NO accept/reject decision here
+    (that is the full-reconstruction A/B revert-guard in ``accept_freeform_base``).
+
+    The args carry ``box_shift`` (world→box) + dimension_scaled geometry so the
+    profile base lands in the same box frame the placeholder box would occupy;
+    identical to the live geometry at dimension_scale=1.0.
+    """
+    if body is None or bbox is None:
+        return None
+    try:
+        from phone_designer.skills.inspect.extract_outer_silhouette_profile import (
+            detect_outer_silhouette_profile,
+        )
+
+        shape = body.wrapped if hasattr(body, "wrapped") else body
+        prof = detect_outer_silhouette_profile(shape)
+        if not prof.get("prismatic") or not prof.get("sketch"):
+            return None
+
+        xmin, ymin, zmin, xmax, ymax, zmax = (float(v) for v in bbox)
+        cx = (xmin + xmax) * 0.5
+        cy = (ymin + ymax) * 0.5
+        s = float(dimension_scale)
+        so = prof["section_origin_world"]
+        return {
+            "sketch": _scale_sketch_dict(prof["sketch"], s),
+            "height_mm": float(prof["height_mm"]) * s,
+            "axis": prof["axis"],
+            "u_axis": list(prof["in_plane_axes"]["u"]),
+            "section_origin_world": [so[0] * s, so[1] * s, so[2] * s],
+            # world→box shift from the scaled catalog bbox (matches _build_plan).
+            "box_shift": [-cx * s, -cy * s, -zmin * s],
+        }
+    except Exception:
+        return None
+
+
+def _score_reconstruction(
+    plan_dict: dict,
+    orig_body: Any,
+    bbox: tuple | None,
+) -> tuple[float, float] | None:
+    """Execute ``plan_dict`` and score it against the original body.
+
+    Returns ``(match_ratio, hausdorff_mm)`` in the box frame, mirroring the
+    corpus harness (FeatureFidelityDiff overall_match_ratio + the in-process
+    geometry deviation with the world→box frame shift). Returns ``None`` when
+    the round-trip fails — the A/B caller then keeps the box base.
+    """
+    try:
+        from phone_designer.plan.executor import PlanExecutor
+        from phone_designer.plan.model import Plan
+        from phone_designer.skills.reverse_engineer.extract_feature_catalog import (
+            ExtractFeatureCatalog,
+        )
+        from phone_designer.skills.reverse_engineer.feature_fidelity_diff import (
+            FeatureFidelityDiff,
+        )
+
+        plan = Plan(**plan_dict)
+        result = PlanExecutor(plan).run(initial_body=None)
+        regen = result.final_body
+        if regen is None:
+            return None
+
+        orig_cat = ExtractFeatureCatalog().apply(orig_body, {}).extras["feature_catalog"]
+        regen_cat = ExtractFeatureCatalog().apply(regen, {}).extras["feature_catalog"]
+        frame_shift = None
+        if bbox is not None:
+            xmin, ymin, zmin, xmax, ymax, _zmax = (float(v) for v in bbox)
+            cx = (xmin + xmax) / 2.0
+            cy = (ymin + ymax) / 2.0
+            frame_shift = (-cx, -cy, -zmin)
+            regen_cat["frame_translation_mm"] = list(frame_shift)
+
+        fid = FeatureFidelityDiff().apply(
+            regen, {"catalog_a": orig_cat, "catalog_b": regen_cat}
+        ).extras["feature_fidelity"]
+        match = float(fid.get("overall_match_ratio") or 0.0)
+
+        from phone_designer.skills.inspect import geometry_deviation as _gd
+        regen_shape = regen.wrapped if hasattr(regen, "wrapped") else regen
+        orig_shape = orig_body.wrapped if hasattr(orig_body, "wrapped") else orig_body
+        if frame_shift is not None and any(frame_shift):
+            orig_shape = _gd._translate(orig_shape, *frame_shift)
+        haus = _hausdorff_inproc(regen_shape, orig_shape)
+        if haus is None:
+            return None
+        return (match, haus)
+    except Exception:
+        return None
+
+
+def accept_freeform_base(
+    box_plan: dict,
+    body: Any,
+    bbox: tuple | None,
+    dimension_scale: float = 1.0,
+) -> dict | None:
+    """PILLAR FREEFORM revert-guard (authoritative, full-reconstruction A/B).
+
+    Given the already-built box-mode ``box_plan``, build a sibling plan whose
+    ``s_base`` step is swapped to ``extrude_profile_world`` (the recovered swept
+    outer silhouette), execute BOTH, and compare each full regen against the
+    ORIGINAL body. KEEP the profile plan ONLY when its overall match_ratio is
+    not worse than the box AND its hausdorff is strictly better. Any other
+    outcome (no profile recoverable, equal/worse match, equal/worse hausdorff,
+    any execution error) returns ``None`` → the caller keeps the box plan. This
+    makes the feature incapable of regressing match_ratio or hausdorff.
+
+    Returns the profile ``Plan``-dict to use, or ``None`` to keep the box plan.
+    """
+    if body is None or bbox is None:
+        return None
+    try:
+        prof_args = _profile_base_step_args(body, bbox, dimension_scale)
+        if prof_args is None:
+            return None
+
+        # Build the sibling plan: copy box_plan, swap the s_base step skill+args.
+        import copy
+
+        prof_plan = copy.deepcopy(box_plan)
+        steps = prof_plan.get("steps") or []
+        swapped = False
+        for st in steps:
+            if str(st.get("id", "")).startswith("s_base"):
+                st["skill"] = "extrude_profile_world"
+                st["args"] = prof_args
+                swapped = True
+                break
+        if not swapped:
+            return None
+
+        box_score = _score_reconstruction(box_plan, body, bbox)
+        prof_score = _score_reconstruction(prof_plan, body, bbox)
+        if box_score is None or prof_score is None:
+            return None
+        box_match, box_haus = box_score
+        prof_match, prof_haus = prof_score
+
+        # KEEP profile ONLY if match not worse AND hausdorff strictly better.
+        if prof_match >= box_match and prof_haus < box_haus:
+            return prof_plan
+        return None
+    except Exception:
+        return None
+
+
 def _pick_base_shape(
     body: Any,
     base_l: float, base_w: float, base_h: float,
     bbox: tuple | None,
     dimension_scale: float = 1.0,
+    base_profile_mode: str = "off",
 ) -> tuple[str, dict]:
     """Pick (skill_name, args) for the base step.
 
@@ -2153,6 +2367,14 @@ def _pick_base_shape(
             })
     except Exception:
         pass
+    # PILLAR FREEFORM (phase-1, 2026-06-14): the swept-outer-silhouette base is
+    # NOT chosen here. _pick_base_shape only sizes the box; the authoritative
+    # profile-vs-box decision is the full-reconstruction A/B revert-guard in
+    # PlanFromFeatureCatalog._apply (base_profile_mode="auto"), which keeps the
+    # profile base ONLY when the FULL regen's match_ratio is not worse AND its
+    # hausdorff is strictly better. base_profile_mode is unused in this sizing
+    # function (kept on the signature so callers can pass it uniformly).
+    _ = base_profile_mode
     return ("box", {"length_mm": base_l, "width_mm": base_w, "height_mm": base_h})
 
 
@@ -2162,6 +2384,7 @@ def _build_plan(
     base_step_kind: BaseStepKind = "box",
     plan_name: str = "reconstructed_plan",
     dimension_scale: float = 1.0,
+    base_profile_mode: str = "off",
 ) -> dict:
     # COMPLEX-CAD pass-25 (2026-06-10, plan item P5): ``dimension_scale``
     # is the caller-declared uniform scale of the CATALOG relative to the
@@ -2436,6 +2659,7 @@ def _build_plan(
         picked_skill, picked_args = _pick_base_shape(
             body, base_l, base_w, base_h, bbox,
             dimension_scale=dimension_scale,
+            base_profile_mode=base_profile_mode,
         )
         steps.append(_new_step("s_base", picked_skill, picked_args))
 
@@ -3203,6 +3427,16 @@ class PlanFromFeatureCatalog(SkillBase):
         # file without racing on the shared default. This adds NO
         # parallelism on its own — it only makes the path injectable.
         plan_out_path: str | None = None
+        # PILLAR FREEFORM (phase-1, 2026-06-14): recover the TRUE swept outer
+        # silhouette (rounded plate / D-shaped chassis) for the box-mode base
+        # instead of a bbox rectangle. Gated behind an explicit flag so the
+        # DEFAULT path is byte-identical to today (corpus baselines safe).
+        #   "off"  (default) — never attempt; emit the historic box base.
+        #   "auto"           — attempt, with the accept_freeform_base
+        #                       revert-guard: keep the profile ONLY when its
+        #                       base-solid hausdorff beats the box, else box.
+        # Only affects base_step_kind="box"; preserve_brep/import_step ignore it.
+        base_profile_mode: Literal["off", "auto"] = "off"
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
         import pathlib
@@ -3229,7 +3463,32 @@ class PlanFromFeatureCatalog(SkillBase):
             base_step_kind=args.base_step_kind,
             # COMPLEX-CAD pass-25 (2026-06-10, P5).
             dimension_scale=args.dimension_scale,
+            # PILLAR FREEFORM (phase-1, 2026-06-14).
+            base_profile_mode=args.base_profile_mode,
         )
+
+        # PILLAR FREEFORM (phase-1, 2026-06-14): authoritative profile-vs-box
+        # revert-guard. Only in box mode + base_profile_mode="auto". Builds a
+        # sibling plan with the recovered swept-silhouette base, executes BOTH,
+        # and keeps the profile plan ONLY when the FULL regen's match_ratio is
+        # not worse AND its hausdorff is strictly better — else keeps the box
+        # plan. At the "off" default this block is skipped entirely so the
+        # emitted plan is byte-identical to today.
+        if args.base_profile_mode == "auto" and args.base_step_kind == "box":
+            _bb = (catalog or {}).get("initial_bbox_mm")
+            if isinstance(_bb, (list, tuple)) and len(_bb) >= 6:
+                try:
+                    _guard_bbox = tuple(float(c) for c in _bb[:6])
+                except Exception:
+                    _guard_bbox = _body_bbox(body)
+            else:
+                _guard_bbox = _body_bbox(body)
+            prof_plan = accept_freeform_base(
+                plan, body, _guard_bbox,
+                dimension_scale=args.dimension_scale,
+            )
+            if prof_plan is not None:
+                plan = prof_plan
 
         # Cache for chained calls.
         PlanFromFeatureCatalog._LAST_CATALOG = catalog
