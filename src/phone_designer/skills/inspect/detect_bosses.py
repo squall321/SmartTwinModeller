@@ -161,13 +161,131 @@ def _cone_info(face) -> tuple[float, tuple[float, float, float]] | None:
 # Edge-concavity infrastructure (kept for detect_ribs reuse / future heuristics)
 
 
+def _edge_owners_facepair(shape, edges, faces) -> dict[int, list[int]]:
+    """PILLAR-PERF (phase-2, 2026-06-14): build the edge_idx → [face_idx, …]
+    adjacency map in ONE OCCT pass, mirroring classify_pockets._shared_face_pairs.
+
+    The legacy ``_classify_edges`` body computed this map with a hand-rolled
+    O(F · E_per_face · E) ``IsSame`` triple loop — the dominant cost on dense
+    imported CAD. We replace ONLY the map-construction method, not the result:
+    ``OCP.TopExp.MapShapesAndUniqueAncestors`` walks the shape once to build
+    edge → incident-faces, and ``TopTools_IndexedMapOfShape`` resolves each
+    edge / face back to its ``_all_edges`` / ``_all_faces`` 0-based index
+    (both built from the same ``IsSame`` de-dup, so indices line up exactly).
+
+    Byte-identity contract: each owner list is sorted ascending by face index,
+    reproducing the legacy outer ``for fi, face in enumerate(faces)`` append
+    order; edges with no incident face never appear (legacy never seeded an
+    empty list either). The adaptive ``_edge_owners`` dispatcher decides when
+    to use this vs ``_edge_owners_legacy`` (env ``PD_DISABLE_FACEPAIR=1``
+    forces legacy for A/B reference checks).
+    """
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
+    from OCP.TopExp import TopExp
+    from OCP.TopTools import (
+        TopTools_IndexedDataMapOfShapeListOfShape,
+        TopTools_IndexedMapOfShape,
+    )
+
+    # edge / face shape → 0-based index into _all_edges / _all_faces. These
+    # IndexedMaps de-dup by IsSame exactly like _resolvers, so FindIndex on a
+    # MapShapesAndUniqueAncestors owner yields the matching enumerate() index.
+    edge_idx_map = TopTools_IndexedMapOfShape()
+    for e in edges:
+        edge_idx_map.Add(e)
+    face_idx_map = TopTools_IndexedMapOfShape()
+    for f in faces:
+        face_idx_map.Add(f)
+
+    edge_faces = TopTools_IndexedDataMapOfShapeListOfShape()
+    TopExp.MapShapesAndUniqueAncestors_s(
+        shape, TopAbs_EDGE, TopAbs_FACE, edge_faces,
+    )
+
+    edge_owners: dict[int, list[int]] = {}
+    n = edge_faces.Extent()
+    for i in range(1, n + 1):
+        edge_sh = edge_faces.FindKey(i)
+        ei1 = edge_idx_map.FindIndex(edge_sh)
+        if ei1 <= 0:
+            continue
+        ei = ei1 - 1
+        owners: list[int] = []
+        for fsh in edge_faces.FindFromIndex(i):
+            fi1 = face_idx_map.FindIndex(fsh)
+            if fi1 <= 0:
+                continue
+            fi = fi1 - 1
+            if fi not in owners:
+                owners.append(fi)
+        if owners:
+            # ascending face-index order == legacy enumerate(faces) append order
+            owners.sort()
+            edge_owners[ei] = owners
+    return edge_owners
+
+
+def _edge_owners_legacy(shape, edges, faces) -> dict[int, list[int]]:
+    """Pre-optimization edge_idx → [face_idx, …] map via the hand-rolled
+    O(F · E_per_face · E) ``IsSame`` triple loop. Retained verbatim as the
+    byte-identity reference and the small-body fast path (its constant factor
+    beats the OCCT IndexedMap construction below ~``_FACEPAIR_MIN_FACES``)."""
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    edge_owners: dict[int, list[int]] = {}
+    for fi, face in enumerate(faces):
+        fit = TopExp_Explorer(face, TopAbs_EDGE)
+        while fit.More():
+            fe = TopoDS.Edge_s(fit.Current())
+            for ei, e in enumerate(edges):
+                if e.IsSame(fe):
+                    owners = edge_owners.setdefault(ei, [])
+                    if fi not in owners:
+                        owners.append(fi)
+                    break
+            fit.Next()
+    return edge_owners
+
+
+#: PILLAR-PERF (phase-2, 2026-06-14) crossover. The single-pass ancestor map
+#: carries a fixed ``TopTools_IndexedMapOfShape`` build cost that the legacy
+#: ``IsSame`` loop's tiny constant factor undercuts on small bodies (measured
+#: on corpus: bracket 40F / as1-oc-214 160F → legacy faster; Ventilator 305F
+#: ≈ break-even; 11752 1018F → fast 2.0x; KR600 4123F → fast 9.7x as the
+#: legacy loop's O(F·E²) blows past 2 min). 400 sits just above the measured
+#: crossover so we never regress the small preserve_brep-baseline bodies while
+#: capturing the explosive-growth regime. Override with PHONE_DESIGNER_FACEPAIR_MIN.
+_FACEPAIR_MIN_FACES = 400
+
+
+def _edge_owners(shape, edges, faces) -> dict[int, list[int]]:
+    """Adaptive edge_idx → [face_idx, …] adjacency map. Both branches are
+    proven byte-identical (tests/skills/test_detect_bosses_facepair.py); this
+    only picks the faster construction for the body's size.
+
+    ``PD_DISABLE_FACEPAIR=1`` forces the legacy loop (A/B reference);
+    ``PHONE_DESIGNER_FACEPAIR_MIN`` overrides the crossover face count."""
+    import os
+
+    if os.environ.get("PD_DISABLE_FACEPAIR"):
+        return _edge_owners_legacy(shape, edges, faces)
+    try:
+        threshold = int(os.environ.get("PHONE_DESIGNER_FACEPAIR_MIN",
+                                       _FACEPAIR_MIN_FACES))
+    except (TypeError, ValueError):
+        threshold = _FACEPAIR_MIN_FACES
+    if len(faces) < threshold:
+        return _edge_owners_legacy(shape, edges, faces)
+    return _edge_owners_facepair(shape, edges, faces)
+
+
 def _classify_edges(shape):
     """Return (labels, edge_owners, edges, faces) where ``labels`` maps
     edge_idx → 'convex' | 'concave' | 'tangent'. Used by detect_ribs."""
     from OCP.BRepClass3d import BRepClass3d_SolidClassifier
-    from OCP.TopAbs import TopAbs_EDGE, TopAbs_IN
-    from OCP.TopExp import TopExp_Explorer
-    from OCP.TopoDS import TopoDS
+    from OCP.TopAbs import TopAbs_IN
     from OCP.gp import gp_Pnt
 
     from phone_designer.skills._resolvers import _all_edges, _all_faces
@@ -182,18 +300,11 @@ def _classify_edges(shape):
     faces = _all_faces(shape)
     classifier = BRepClass3d_SolidClassifier(shape)
 
-    edge_owners: dict[int, list[int]] = {}
-    for fi, face in enumerate(faces):
-        fit = TopExp_Explorer(face, TopAbs_EDGE)
-        while fit.More():
-            fe = TopoDS.Edge_s(fit.Current())
-            for ei, e in enumerate(edges):
-                if e.IsSame(fe):
-                    owners = edge_owners.setdefault(ei, [])
-                    if fi not in owners:
-                        owners.append(fi)
-                    break
-            fit.Next()
+    # PILLAR-PERF (phase-2, 2026-06-14): adaptive one-pass ancestor map replaces
+    # the O(F·E²) IsSame triple loop on dense imported CAD; small bodies keep
+    # the legacy loop (faster constant factor). Output is byte-identical either
+    # way. PD_DISABLE_FACEPAIR forces legacy for A/B reference checks.
+    edge_owners = _edge_owners(shape, edges, faces)
 
     labels: dict[int, str] = {}
     for idx, edge in enumerate(edges):
