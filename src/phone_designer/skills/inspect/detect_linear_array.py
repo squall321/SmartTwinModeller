@@ -73,6 +73,31 @@ def _feature_positions(body: Any, feature_kind: str) -> list[tuple[float, float,
     return []
 
 
+# phase-0 (2026-06-14): detector-output reuse for the catalog array loop.
+# extract_feature_catalog re-ran ClassifyHoles/ClassifyPockets/DetectBosses
+# ~7x per catalog (once per (kind, linear|circular) pair) only to recover the
+# same axis_origin / center positions it had already detected. The catalog can
+# now FEED those positions via the instance attr ``_precomputed_positions``
+# (a dict {feature_kind: [pos, ...]}). When absent / None — or when the private
+# env flag ``PD_DISABLE_POS_REUSE`` is set (test escape hatch) — the detector
+# re-extracts exactly as before, so standalone behavior is byte-identical.
+def _disable_pos_reuse() -> bool:
+    import os
+    return bool(os.environ.get("PD_DISABLE_POS_REUSE"))
+
+
+def _resolve_positions(
+    self_obj: Any, body: Any, feature_kind: str
+) -> list[tuple[float, float, float]]:
+    if not _disable_pos_reuse():
+        pre = getattr(self_obj, "_precomputed_positions", None)
+        if pre is not None and feature_kind in pre:
+            fed = pre[feature_kind]
+            if fed is not None:
+                return [tuple(p) for p in fed]
+    return _feature_positions(body, feature_kind)
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Linear-array detection
 
@@ -263,7 +288,9 @@ class DetectLinearArray(SkillBase):
         min_count: int = Field(default=3, ge=3, le=1000)
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
-        positions = _feature_positions(body, args.feature_kind)
+        # phase-0 (2026-06-14): reuse catalog-fed positions when available;
+        # otherwise re-extract exactly as before (byte-identical standalone).
+        positions = _resolve_positions(self, body, args.feature_kind)
         runs = _find_linear_runs(positions, args.min_count)
         for r in runs:
             r["feature_kind"] = args.feature_kind

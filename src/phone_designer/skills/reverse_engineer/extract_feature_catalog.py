@@ -702,6 +702,38 @@ class ExtractFeatureCatalog(SkillBase):
             bosses = _bosses_filtered
 
         # ── detect_*_array (linear + circular) ─────────────────────────────
+        # phase-0 (2026-06-14) SPEED: the linear + circular array detectors
+        # each re-run ClassifyHoles / ClassifyPockets / DetectBosses internally
+        # (via their _feature_positions helper) to recover feature centres —
+        # 2 detectors × 3 kinds = 6 re-detections per catalog, on top of the
+        # ones already run above. They all extract from the SAME `body` at the
+        # SAME point in the pipeline, so the result is identical across the six
+        # calls. We extract each kind's positions ONCE here (using the
+        # detectors' own _feature_positions, at the exact mutation point the
+        # first re-extraction happens today) and FEED them to every array call
+        # via the detector's `_precomputed_positions` attr. When the attr is
+        # absent/None the detector re-extracts exactly as before — so standalone
+        # behavior is byte-identical, and the catalog output stays byte-identical
+        # too (we reproduce the detector's own extraction, not the early
+        # pre-mutation classify pass, which can differ by OCCT sub-mm bbox-cache
+        # drift). NOTE: we deliberately do NOT reuse the `holes`/`pockets`/
+        # `bosses` lists detected earlier — those were classified before the
+        # other detectors widened OCCT's optimal-bbox cache, which shifts
+        # classify_holes' _standardize_entry result by ~0.01 mm; the array
+        # detectors today see the post-mutation value, and we must match it.
+        from phone_designer.skills.inspect.detect_linear_array import (
+            _feature_positions as _lin_feature_positions,
+        )
+        _precomp_positions: dict[str, list] = {}
+        for _kind in ("hole", "pocket", "boss"):
+            try:
+                _precomp_positions[_kind] = _lin_feature_positions(body, _kind)
+            except Exception:
+                # Mirror the detector's own behavior on extraction failure:
+                # leave the kind unset so the detector re-extracts (and hits
+                # the same exception / too_big path) standalone.
+                pass
+
         patterns: list[dict] = []
         lin_total = 0.0
         circ_total = 0.0
@@ -710,7 +742,9 @@ class ExtractFeatureCatalog(SkillBase):
         for kind in ("hole", "pocket", "boss"):
             t0 = time.perf_counter()
             try:
-                lin_res = DetectLinearArray().apply(
+                _lin_det = DetectLinearArray()
+                _lin_det._precomputed_positions = _precomp_positions
+                lin_res = _lin_det.apply(
                     body, {"feature_kind": kind, "min_count": 3},
                 )
             except Exception as exc:
@@ -727,7 +761,9 @@ class ExtractFeatureCatalog(SkillBase):
 
             t0 = time.perf_counter()
             try:
-                circ_res = DetectCircularArray().apply(
+                _circ_det = DetectCircularArray()
+                _circ_det._precomputed_positions = _precomp_positions
+                circ_res = _circ_det.apply(
                     body, {"feature_kind": kind, "min_count": 4},
                 )
             except Exception as exc:
