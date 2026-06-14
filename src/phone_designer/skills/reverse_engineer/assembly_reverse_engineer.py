@@ -95,6 +95,23 @@ class AssemblyReverseEngineer(SkillBase):
                         "components (they are real BREP shells, not bbox "
                         "placeholders); 'box' is supported but rarely useful.",
         )
+        # phase-0 (2026-06-13): injectable plan output directory. When None
+        # (default) each component's plan is written to the historic shared
+        # default plans/reconstructed_plan.yaml and loaded from there —
+        # byte-identical to pre-phase-0 behaviour. When set, each component
+        # writes to a DISTINCT file inside this directory
+        # (component_<index>_plan.yaml) so a future process-pool worker can
+        # plan each component without racing on the shared default file.
+        # This adds NO parallelism on its own — the loop still runs serially;
+        # it only makes the per-component path injectable.
+        plan_out_dir: str | None = Field(
+            default=None,
+            description="Directory for per-component plan YAMLs. None ⇒ the "
+                        "shared default plans/reconstructed_plan.yaml "
+                        "(current behaviour). When set, each component writes "
+                        "to <dir>/component_<index>_plan.yaml so distinct "
+                        "components never clobber each other.",
+        )
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
         from phone_designer.skills.repair.split_into_components import (
@@ -134,7 +151,12 @@ class AssemblyReverseEngineer(SkillBase):
         top_comps = comps[: args.top_n]
 
         # 2. Per-component RE.
-        plan_path = _plan_yaml_path()
+        # phase-0 (2026-06-13): default_plan_path is the historic shared
+        # file. When args.plan_out_dir is None we keep using it for every
+        # component (current behaviour, byte-identical). When set, each
+        # component targets a DISTINCT file under that directory so a future
+        # process-pool worker never races on the shared default.
+        default_plan_path = _plan_yaml_path()
         results: list[dict] = []
         weighted_match = 0.0
         total_weight = 0.0
@@ -168,9 +190,25 @@ class AssemblyReverseEngineer(SkillBase):
                     )
                     results.append(entry)
                     continue
+                # phase-0 (2026-06-13): pick this component's plan path.
+                # None ⇒ historic shared default (current behaviour). When a
+                # plan_out_dir is supplied, give each component a distinct
+                # file so they never clobber each other.
+                if args.plan_out_dir is None:
+                    plan_path = default_plan_path
+                    plan_out_path_arg = None
+                else:
+                    plan_path = (
+                        Path(args.plan_out_dir) / f"component_{i}_plan.yaml"
+                    )
+                    plan_out_path_arg = str(plan_path)
                 PlanFromFeatureCatalog().apply(
                     body_ref,
-                    {"catalog": cat, "base_step_kind": args.base_step_kind},
+                    {
+                        "catalog": cat,
+                        "base_step_kind": args.base_step_kind,
+                        "plan_out_path": plan_out_path_arg,
+                    },
                 )
                 plan = load_plan(plan_path)
                 entry["plan_steps"] = len(plan.steps)

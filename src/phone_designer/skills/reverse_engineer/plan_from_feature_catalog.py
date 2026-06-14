@@ -3194,6 +3194,15 @@ class PlanFromFeatureCatalog(SkillBase):
         # the live-body-measured base-shape dims in _pick_base_shape.
         # 1.0 ⇒ bit-identical plans to pre-P5 (corpus safety).
         dimension_scale: float = 1.0
+        # phase-0 (2026-06-13): injectable plan output path. When None the
+        # plan YAML is written to the historic default
+        # (plans/reconstructed_plan.yaml under the repo root) byte-identical
+        # to pre-phase-0 behaviour. When set, the plan is written THERE
+        # instead and the resolved path is surfaced in extras['plan_path']
+        # so a future process-pool worker can give each worker its own plan
+        # file without racing on the shared default. This adds NO
+        # parallelism on its own — it only makes the path injectable.
+        plan_out_path: str | None = None
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
         import pathlib
@@ -3225,24 +3234,44 @@ class PlanFromFeatureCatalog(SkillBase):
         # Cache for chained calls.
         PlanFromFeatureCatalog._LAST_CATALOG = catalog
 
-        # Write the YAML to plans/reconstructed_plan.yaml. The path is
-        # resolved relative to the repository root (4 levels up from this
-        # file: reverse_engineer → skills → phone_designer → src → repo).
-        root = pathlib.Path(__file__).resolve().parents[4]
-        plans_dir = root / "plans"
+        # Write the YAML plan to disk.
+        #
+        # Default (args.plan_out_path is None): write to
+        # plans/reconstructed_plan.yaml resolved relative to the repository
+        # root (4 levels up from this file: reverse_engineer → skills →
+        # phone_designer → src → repo). This path / content is byte-identical
+        # to pre-phase-0 behaviour.
+        #
+        # phase-0 (2026-06-13): when args.plan_out_path is set, write the
+        # plan there instead (creating parent dirs as needed) so a future
+        # process-pool worker can target its own file without racing on the
+        # shared default. The resolved path is surfaced in
+        # extras['plan_path'] so callers (e.g. assembly_reverse_engineer)
+        # can load_plan() from exactly where it was written.
+        _yaml_text = yaml.safe_dump(plan, sort_keys=False, allow_unicode=True)
+        if args.plan_out_path is None:
+            root = pathlib.Path(__file__).resolve().parents[4]
+            plans_dir = root / "plans"
+            out_path = plans_dir / "reconstructed_plan.yaml"
+        else:
+            out_path = pathlib.Path(args.plan_out_path)
         try:
-            plans_dir.mkdir(parents=True, exist_ok=True)
-            (plans_dir / "reconstructed_plan.yaml").write_text(
-                yaml.safe_dump(plan, sort_keys=False, allow_unicode=True),
-                encoding="utf-8",
-            )
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(_yaml_text, encoding="utf-8")
         except Exception:
             # Best-effort: a write failure must not break the skill (e.g.
             # read-only filesystems in CI sandboxes).
             pass
 
+        extras: dict[str, Any] = {"generated_plan": plan}
+        # Surface the resolved output path only when caller-supplied, so the
+        # default extras dict stays byte-identical to pre-phase-0 callers
+        # that compare extras keys.
+        if args.plan_out_path is not None:
+            extras["plan_path"] = str(out_path)
+
         return SkillResult(
             body=body,
             history=EntityHistoryMap(),
-            extras={"generated_plan": plan},
+            extras=extras,
         )
