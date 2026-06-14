@@ -1,0 +1,227 @@
+{
+  "dfm": {
+    "_meta": {
+      "processes_requested": [
+        "cnc_milling",
+        "injection_molding",
+        "3d_printing",
+        "fea_estimate"
+      ],
+      "unknown_processes": []
+    },
+    "processes": {
+      "3d_printing": {
+        "checks": [
+          {
+            "grade": "measured",
+            "id": "min_feature",
+            "limit": 0.4,
+            "measured": 0.6,
+            "reason": "",
+            "verdict": "pass"
+          }
+        ],
+        "grade": "measured",
+        "grade_limited": false,
+        "reasons": [],
+        "spec_source": "embedded_default",
+        "verdict": "pass"
+      },
+      "cnc_milling": {
+        "checks": [
+          {
+            "grade": "measured",
+            "id": "min_wall",
+            "limit": 0.5,
+            "measured": 0.6,
+            "reason": "0.6 mm wall within 1.5x of the 0.5 mm min",
+            "verdict": "marginal"
+          },
+          {
+            "grade": "measured",
+            "id": "topology",
+            "limit": null,
+            "measured": null,
+            "reason": "",
+            "verdict": "pass"
+          }
+        ],
+        "grade": "measured",
+        "grade_limited": false,
+        "reasons": [
+          "min wall 0.6 mm is marginal for CNC"
+        ],
+        "spec_source": "catalog:cnc_3axis",
+        "verdict": "marginal"
+      },
+      "fea_estimate": {
+        "checks": [
+          {
+            "grade": "estimate",
+            "id": "max_stress",
+            "limit": 150.0,
+            "measured": 184.5,
+            "reason": "estimate \u2014 capped to marginal",
+            "verdict": "marginal"
+          }
+        ],
+        "grade": "estimate",
+        "grade_limited": true,
+        "reasons": [
+          "stress estimate exceeds limit (estimate-capped)"
+        ],
+        "spec_source": "embedded_default",
+        "verdict": "marginal"
+      },
+      "injection_molding": {
+        "checks": [
+          {
+            "grade": "measured",
+            "id": "min_wall",
+            "limit": 0.8,
+            "measured": 0.6,
+            "reason": "0.6 mm < 0.8 mm min wall",
+            "verdict": "fail"
+          },
+          {
+            "grade": "measured",
+            "id": "draft",
+            "limit": 1.0,
+            "measured": 0.0,
+            "reason": "1 undercut wall has no draft",
+            "verdict": "fail"
+          }
+        ],
+        "grade": "measured",
+        "grade_limited": false,
+        "reasons": [
+          "min wall 0.6 mm below 0.8 mm molding minimum",
+          "1 undercut requires a side action"
+        ],
+        "spec_source": "catalog:injection_mold_pa",
+        "verdict": "fail"
+      }
+    }
+  },
+  "executive_summary": {
+    "key_metrics": [
+      {
+        "grade": "measured",
+        "label": "min wall",
+        "unit": "mm",
+        "value": 0.6
+      },
+      {
+        "grade": "measured",
+        "label": "undercuts",
+        "unit": "",
+        "value": 1
+      },
+      {
+        "grade": "measured",
+        "label": "mass",
+        "unit": "g",
+        "value": 41.2
+      },
+      {
+        "grade": "estimate",
+        "label": "max stress",
+        "unit": "MPa",
+        "value": 184.5
+      }
+    ],
+    "overall_dfm": "fail",
+    "overall_grade": "mixed"
+  },
+  "generated_at_placeholder": "<GENERATED_AT>",
+  "part_id": "synth_bracket",
+  "schema_version": "QualityReportV1",
+  "sections": [
+    {
+      "grade": "measured",
+      "id": "topology",
+      "metrics": [
+        {
+          "label": "valid",
+          "unit": "",
+          "value": true
+        },
+        {
+          "label": "free edges",
+          "unit": "",
+          "value": 0
+        },
+        {
+          "label": "face count",
+          "unit": "",
+          "value": 18
+        }
+      ],
+      "notes": [],
+      "status": "ok",
+      "title": "Topology Health"
+    },
+    {
+      "grade": "measured",
+      "id": "wall_thickness",
+      "metrics": [
+        {
+          "label": "min wall",
+          "unit": "mm",
+          "value": 0.6
+        },
+        {
+          "label": "mean wall",
+          "unit": "mm",
+          "value": 2.4
+        },
+        {
+          "label": "thin regions",
+          "unit": "",
+          "value": 2
+        }
+      ],
+      "notes": [],
+      "status": "ok",
+      "title": "Wall Thickness"
+    },
+    {
+      "grade": "estimate",
+      "id": "stress",
+      "metrics": [
+        {
+          "label": "max stress",
+          "unit": "MPa",
+          "value": 184.5
+        },
+        {
+          "label": "Kt",
+          "unit": "",
+          "value": 2.7
+        }
+      ],
+      "notes": [
+        "closed-form estimate \u2014 verify with FEA"
+      ],
+      "status": "ok",
+      "title": "Stress Concentration"
+    },
+    {
+      "grade": "measured",
+      "id": "mesh_quality",
+      "metrics": [],
+      "notes": [
+        "section guarded (face-count budget) \u2014 not measured"
+      ],
+      "status": "guarded",
+      "title": "Mesh Quality"
+    }
+  ],
+  "units": {
+    "angle": "deg",
+    "density": "g/cm^3",
+    "length": "mm",
+    "mass": "g",
+    "volume": "mm^3"
+  }
+}

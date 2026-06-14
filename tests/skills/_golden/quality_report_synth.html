@@ -1,0 +1,51 @@
+<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Quality Report — synth_bracket</title><style>
+:root{--ok:#1a7f37;--warn:#9a6700;--fail:#cf222e;--ink:#1f2328;
+--muted:#656d76;--line:#d0d7de;--bg:#ffffff;--soft:#f6f8fa;--accent:#0969da;
+--head:#0d1117}
+*{box-sizing:border-box}
+body{font:14px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+color:var(--ink);background:var(--bg);margin:0;padding:0}
+.wrap{max-width:980px;margin:0 auto;padding:28px 24px 48px}
+header.report{background:var(--head);color:#fff;margin:-28px -24px 20px;
+padding:22px 24px 18px;border-bottom:3px solid var(--accent)}
+header.report h1{font-size:23px;margin:0 0 6px;color:#fff;font-weight:650}
+header.report .meta{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;
+font-size:12px;color:#c9d1d9}
+header.report .meta .k{color:#8b949e}
+h2{font-size:16px;margin:26px 0 8px;border-bottom:1px solid var(--line);
+padding-bottom:5px;color:var(--ink)}
+h3{margin:16px 0 4px;font-size:14px;font-weight:600}
+.sub{color:var(--muted);font-size:12px;margin:0 0 14px}
+.units{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--muted);
+background:var(--soft);border:1px solid var(--line);border-radius:8px;
+padding:8px 12px;margin:0 0 6px}
+.units b{color:var(--ink);font-weight:600}
+.badge{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;
+border-radius:10px;border:1px solid var(--line);vertical-align:middle}
+.badge.measured{background:#ddf4ff;color:#0969da;border-color:#54aeff}
+.badge.estimate{background:#fff8c5;color:#7d4e00;border-color:#eac54f}
+.badge.mixed{background:#f3e8ff;color:#6e40c9;border-color:#c297ff}
+.chip{display:inline-block;font-size:12px;font-weight:700;padding:2px 10px;
+border-radius:12px;color:#fff;letter-spacing:.2px}
+.chip.pass{background:var(--ok)}.chip.marginal{background:var(--warn)}
+.chip.fail{background:var(--fail)}.chip.na,.chip.skipped{background:#8c959f}
+table{border-collapse:collapse;width:100%;margin:6px 0 4px}
+th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);
+font-size:13px}th{color:var(--muted);font-weight:600;background:var(--soft)}
+.kpi{display:flex;flex-wrap:wrap;gap:12px;margin:10px 0 6px}
+.kpi .card{border:1px solid var(--line);border-radius:8px;padding:10px 14px;
+min-width:130px;background:var(--soft)}
+.kpi .card .v{font-size:19px;font-weight:700;line-height:1.2}
+.kpi .card .l{font-size:11px;color:var(--muted);margin-top:3px}
+.note{color:var(--muted);font-size:12px;margin:2px 0}
+.reasons{margin:4px 0 4px 4px;padding-left:18px}
+.reasons li{font-size:12px;color:var(--ink);margin:1px 0}
+.proc{border:1px solid var(--line);border-radius:8px;padding:10px 12px;
+margin:8px 0;background:var(--bg)}
+.proc .hdr{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.proc .hdr strong{font-size:13px}
+.status-guarded,.status-error,.status-empty{color:var(--warn);font-size:12px;
+margin:2px 0}
+.foot{margin-top:30px;color:var(--muted);font-size:11px;line-height:1.6;
+border-top:1px solid var(--line);padding-top:10px}
+</style></head><body><div class='wrap'><header class='report'><h1>Quality Report &mdash; synth_bracket</h1><div class='meta'><span class='k'>schema</span> QualityReportV1<span class='k'>generated</span> &lt;GENERATED_AT&gt;<span class='k'>overall grade</span> <span class="badge mixed">mixed</span><span class='k'>DFM</span> <span class="chip fail">fail</span></div></header><h2>Executive Summary</h2><div class='units'><span><b>units</b></span><span><b>length</b> mm</span><span><b>angle</b> deg</span><span><b>mass</b> g</span><span><b>volume</b> mm^3</span><span><b>density</b> g/cm^3</span><span><b>tolerance</b> values rounded to 4 dp; geometric tolerance not asserted (report is descriptive, not a certified inspection)</span></div><div class='kpi'><div class='card'><div class='v'>0.6 mm</div><div class='l'>min wall <span class="badge measured">measured</span></div></div><div class='card'><div class='v'>1</div><div class='l'>undercuts <span class="badge measured">measured</span></div></div><div class='card'><div class='v'>41.2 g</div><div class='l'>mass <span class="badge measured">measured</span></div></div><div class='card'><div class='v'>184.5 MPa</div><div class='l'>max stress <span class="badge estimate">estimate</span></div></div></div><h2>Manufacturability (DFM)</h2><div class='proc'><div class='hdr'><strong>cnc_milling</strong> <span class="chip marginal">marginal</span> <span class="badge measured">measured</span> <span class='note'>catalog:cnc_3axis</span></div><ul class='reasons'><li>min wall 0.6 mm is marginal for CNC</li></ul><table><tr><th>check</th><th>verdict</th><th>grade</th><th>measured</th><th>limit</th><th>reason</th></tr><tr><td>min_wall</td><td><span class="chip marginal">marginal</span></td><td><span class="badge measured">measured</span></td><td>0.6</td><td>0.5</td><td>0.6 mm wall within 1.5x of the 0.5 mm min</td></tr><tr><td>topology</td><td><span class="chip pass">pass</span></td><td><span class="badge measured">measured</span></td><td></td><td></td><td></td></tr></table></div><div class='proc'><div class='hdr'><strong>injection_molding</strong> <span class="chip fail">fail</span> <span class="badge measured">measured</span> <span class='note'>catalog:injection_mold_pa</span></div><ul class='reasons'><li>min wall 0.6 mm below 0.8 mm molding minimum</li><li>1 undercut requires a side action</li></ul><table><tr><th>check</th><th>verdict</th><th>grade</th><th>measured</th><th>limit</th><th>reason</th></tr><tr><td>min_wall</td><td><span class="chip fail">fail</span></td><td><span class="badge measured">measured</span></td><td>0.6</td><td>0.8</td><td>0.6 mm &lt; 0.8 mm min wall</td></tr><tr><td>draft</td><td><span class="chip fail">fail</span></td><td><span class="badge measured">measured</span></td><td>0</td><td>1</td><td>1 undercut wall has no draft</td></tr></table></div><div class='proc'><div class='hdr'><strong>3d_printing</strong> <span class="chip pass">pass</span> <span class="badge measured">measured</span> <span class='note'>embedded_default</span></div><table><tr><th>check</th><th>verdict</th><th>grade</th><th>measured</th><th>limit</th><th>reason</th></tr><tr><td>min_feature</td><td><span class="chip pass">pass</span></td><td><span class="badge measured">measured</span></td><td>0.6</td><td>0.4</td><td></td></tr></table></div><div class='proc'><div class='hdr'><strong>fea_estimate</strong> <span class="chip marginal">marginal</span> <span class="badge estimate">estimate</span> <span class='note'>embedded_default</span> &middot; <span class='status-guarded'>estimate-limited</span></div><ul class='reasons'><li>stress estimate exceeds limit (estimate-capped)</li></ul><table><tr><th>check</th><th>verdict</th><th>grade</th><th>measured</th><th>limit</th><th>reason</th></tr><tr><td>max_stress</td><td><span class="chip marginal">marginal</span></td><td><span class="badge estimate">estimate</span></td><td>184.5</td><td>150</td><td>estimate — capped to marginal</td></tr></table></div><h2>Inspection Sections</h2><h3>Topology Health <span class="badge measured">measured</span></h3><table><tr><th>metric</th><th>value</th></tr><tr><td>valid</td><td>yes</td></tr><tr><td>free edges</td><td>0</td></tr><tr><td>face count</td><td>18</td></tr></table><h3>Wall Thickness <span class="badge measured">measured</span></h3><table><tr><th>metric</th><th>value</th></tr><tr><td>min wall</td><td>0.6 mm</td></tr><tr><td>mean wall</td><td>2.4 mm</td></tr><tr><td>thin regions</td><td>2</td></tr></table><h3>Stress Concentration <span class="badge estimate">estimate</span></h3><table><tr><th>metric</th><th>value</th></tr><tr><td>max stress</td><td>184.5 MPa</td></tr><tr><td>Kt</td><td>2.7</td></tr></table><div class='note'>closed-form estimate — verify with FEA</div><h3>Mesh Quality <span class="badge measured">measured</span></h3><div class='status-guarded'>status: guarded</div><div class='note'>section guarded (face-count budget) — not measured</div><div class='foot'>Generated by emit_quality_report (QualityReportV1). Measured = direct geometric measurement; estimate = heuristic/closed-form approximation &mdash; an estimate-graded section never reports a confident manufacturability pass. No 3D render in this report (headless/CI-safe).</div></div></body></html>
