@@ -5,6 +5,21 @@
 분석 후 리포트 · 주요 치수 변형 생성 · 유사 두 구조 상호 분석** 을
 하나의 단계화된 마스터 플랜으로.
 
+> **진행 상태 (2026-06-13):**
+> - **Phase 0 완료** (5 커밋, 전부 byte-identical 검증): geometry_deviation
+>   rigid+Hausdorff 게이트(즉시 as1_pe_203 의 숨은 200mm 클램프 오차 적발) ·
+>   plan_out_path · 검출기 출력 재사용(3-4× 속도, Ventilator 173→156s) ·
+>   component 시그니처 · section-curve 복원 헬퍼. corpus-regress 양 모드 0 회귀.
+> - **Phase 1 완료** (5 커밋, 12 신규 스킬, corpus 양 모드 0 회귀):
+>   FREEFORM `extract_outer_silhouette_profile`+`extrude_profile_world`
+>   (opt-in, A/B revert-guard — **11752 box 0.047→0.179, hausdorff 569→489**) ·
+>   COMPARE `register_bodies`+`feature_change_classify` (rmsd 0.0mm 복원) ·
+>   REPORT `dfm_verdict`+`emit_quality_report` (measured/estimate 등급 HTML) ·
+>   VARIANTS `identify_key_dimensions` · PERF assembly 인스턴스 dedup+pool.
+> - **다음: Phase 2** — compare_parts 매크로, 진짜 loft 단면 복원,
+>   apply_variant_drivers, 단면 PNG, base_profile default-on(비용 관리 후).
+>   KR600/RC_Buggy 는 700s 에도 timeout (KNOWN-GAP, 148 distinct 부품).
+
 설계 원칙 (전 기둥 공통, 23-pass + Wave1~4 의 교훈 계승):
 1. corpus-regress 하니스로 게이트 — 인라인 sweep 금지.
 2. preserve_brep 35/55 PERFECT 는 하드 제약 — 모든 변경의 바닥.
