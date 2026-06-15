@@ -35,10 +35,24 @@
 >   golden-snapshot 게이트 · FREEFORM 전용 corpus 레인 box_freeform.json
 >   (swept_channel 320× win, rounded_plate 9.3× tighter but guard 가
 >   match_ratio 로 revert — guard-metric 수정 Phase 4 큐).
-> - **다음: Phase 4 (어려운 프런티어, XL)** — fit_bspline_surface_patch
->   (open-shell 편차 리포트), 진짜 sweep path+profile, registration ICP 강화,
->   SOLID-aware 분할+캐시(KR600/RC_Buggy), revert-guard 를 hausdorff 기준으로,
->   PDF 스파이크. 각자 정직한 fallback.
+> - **Phase 4 완료 (XL 프런티어, 5 커밋, 3 신규 스킬, box 게이트 0 회귀):**
+>   **PERF SOLID-aware 분할+LOD+캐시 → KR600/RC_Buggy 가 드디어 완료**
+>   (700s timeout → RC_Buggy 144컴포넌트 277s / KR600 61컴포넌트 79s,
+>   100% coverage; coarse 컴포넌트는 match=None 으로 fake 안 함 — **대형
+>   어셈블리 KNOWN-GAP 해소**) ·
+>   FREEFORM revert-guard 를 **hausdorff 기준**으로 (rounded_plate 실루엣
+>   베이스 채택, box 2.523→0.272mm 9.3× win) + sweep 복원 + `fit_bspline_
+>   surface_patch`(Ventilator 솔리드화 실패 → open-shell 편차 리포트,
+>   정직한 fallback 예측대로) ·
+>   COMPARE registration ICP 강화 (608ZZ 57° <1% bbox, QFN 90° exact,
+>   해결불가 → confidence=low) + 잠복 feature-fit 버그 수정 ·
+>   VARIANTS `snap_to_standards`(8.4→M8) + `solve_driver_range`
+>   (linkrods [4.99,20.08], loft 은 None) ·
+>   REPORT PDF — 의존성 부재 정직 발견, print-optimized HTML 출하.
+> - **5-기둥 전부 Phase 0→4 완주.** 잔여 정직한 한계: B-spline watertight
+>   솔리드화는 OCCT 7.8 에서 불가(open-shell 리포트로 대체), --workers
+>   병렬은 timeout-경계 파일에서 거짓 timeout 가능(기본 serial 권위),
+>   11752 preserve_brep 668s 경계.
 
 설계 원칙 (전 기둥 공통, 23-pass + Wave1~4 의 교훈 계승):
 1. corpus-regress 하니스로 게이트 — 인라인 sweep 금지.
