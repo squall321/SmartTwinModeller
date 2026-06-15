@@ -97,6 +97,41 @@ def _shell_is_closed(shell) -> bool:
         return False
 
 
+def _solid_shell_count(solid) -> int:
+    """Number of shells in a solid (outer + each internal void). 1 = simple."""
+    try:
+        from OCP.TopAbs import TopAbs_SHELL
+        from OCP.TopExp import TopExp_Explorer
+        ex = TopExp_Explorer(solid, TopAbs_SHELL)
+        n = 0
+        while ex.More():
+            n += 1
+            ex.Next()
+        return n
+    except Exception:
+        return 1
+
+
+def _solid_is_closed(solid) -> bool:
+    """A solid's OUTER shell closed? BRepCheck on the first shell.
+
+    A genuine ``TopoDS_Solid`` from a STEP assembly is closed by construction;
+    we still run the checker on its outer shell so a malformed import is
+    reported honestly (closed=False) rather than assumed shut.
+    """
+    try:
+        from OCP.TopAbs import TopAbs_SHELL
+        from OCP.TopExp import TopExp_Explorer
+        from OCP.TopoDS import TopoDS
+        ex = TopExp_Explorer(solid, TopAbs_SHELL)
+        if not ex.More():
+            return False
+        outer = TopoDS.Shell_s(ex.Current())
+        return _shell_is_closed(outer)
+    except Exception:
+        return False
+
+
 @skill(
     name="split_into_components",
     category="repair",
@@ -130,6 +165,24 @@ class SplitIntoComponents(SkillBase):
             description="Hard cap on enumerated components. Mostly a "
                         "defensive guard against pathological inputs.",
         )
+        # pillar-perf (phase-4, 2026-06-15): SOLID-aware split. Default False
+        # keeps the historic per-SHELL enumeration (byte-identical to the
+        # mesh→BREP iPhone-teardown contract). True explodes the compound into
+        # its constituent SOLIDS instead — the right granularity for a STEP
+        # assembly whose leaves are solid bodies (a solid with an internal
+        # cavity owns TWO shells, so a shell-split over-counts and slices one
+        # physical body into two bogus components: RC_Buggy 211 solids → 293
+        # shells). When True the split falls back to the shell path if the
+        # body carries no solids (a pure open-shell mesh).
+        split_solids: bool = Field(
+            default=False,
+            description="Explode the compound into its constituent SOLIDS "
+                        "(one body per physical part) instead of enumerating "
+                        "shells. Right for STEP assemblies; the historic "
+                        "shell split (default) is right for mesh→BREP "
+                        "multi-shell inputs. Falls back to the shell split "
+                        "when the body has no solids.",
+        )
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
         from build123d import Part
@@ -143,31 +196,66 @@ class SplitIntoComponents(SkillBase):
         skipped_small = 0
         index = 0
 
-        it = TopExp_Explorer(shape, TopAbs_SHELL)
-        while it.More() and index < args.max_components:
-            shell = TopoDS.Shell_s(it.Current())
-            it.Next()
+        # SOLID-aware split (phase-4): one body per physical part. Fall back to
+        # the historic shell enumeration when the body has no solids.
+        split_mode = "shell"
+        if args.split_solids:
+            from phone_designer.skills.assembly._compound import (
+                iter_solid_components,
+            )
+            solids = list(iter_solid_components(shape))
+            if solids:
+                split_mode = "solid"
+                for solid in solids:
+                    if index >= args.max_components:
+                        break
+                    vol = _shell_volume_mm3(solid)
+                    if vol < float(args.min_volume_mm3):
+                        skipped_small += 1
+                        continue
+                    bbox = _shell_bbox(solid)
+                    # A solid is closed by construction; report True unless the
+                    # checker (run on its outer shell) disagrees.
+                    closed = _solid_is_closed(solid)
+                    components.append({
+                        "index": index,
+                        "body_ref": Part(solid),
+                        "shell_count": _solid_shell_count(solid),
+                        "closed": bool(closed),
+                        "bbox": (
+                            [round(c, 6) for c in bbox]
+                            if bbox is not None else None
+                        ),
+                        "volume_mm3": round(vol, 6),
+                    })
+                    index += 1
 
-            vol = _shell_volume_mm3(shell)
-            if vol < float(args.min_volume_mm3):
-                skipped_small += 1
-                continue
+        if split_mode == "shell":
+            it = TopExp_Explorer(shape, TopAbs_SHELL)
+            while it.More() and index < args.max_components:
+                shell = TopoDS.Shell_s(it.Current())
+                it.Next()
 
-            bbox = _shell_bbox(shell)
-            closed = _shell_is_closed(shell)
+                vol = _shell_volume_mm3(shell)
+                if vol < float(args.min_volume_mm3):
+                    skipped_small += 1
+                    continue
 
-            components.append({
-                "index": index,
-                "body_ref": Part(shell),
-                "shell_count": 1,
-                "closed": bool(closed),
-                "bbox": (
-                    [round(c, 6) for c in bbox]
-                    if bbox is not None else None
-                ),
-                "volume_mm3": round(vol, 6),
-            })
-            index += 1
+                bbox = _shell_bbox(shell)
+                closed = _shell_is_closed(shell)
+
+                components.append({
+                    "index": index,
+                    "body_ref": Part(shell),
+                    "shell_count": 1,
+                    "closed": bool(closed),
+                    "bbox": (
+                        [round(c, 6) for c in bbox]
+                        if bbox is not None else None
+                    ),
+                    "volume_mm3": round(vol, 6),
+                })
+                index += 1
 
         closed_count = sum(1 for c in components if c["closed"])
 
@@ -176,6 +264,7 @@ class SplitIntoComponents(SkillBase):
             "component_count": len(components),
             "closed_component_count": closed_count,
             "skipped_small": skipped_small,
+            "split_mode": split_mode,  # 'solid' | 'shell' (phase-4)
         }
         return SkillResult(
             body=body,

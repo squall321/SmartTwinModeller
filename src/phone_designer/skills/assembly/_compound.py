@@ -88,6 +88,47 @@ def iter_compound_components(shape, prior_names: list[str]):
         it.Next()
 
 
+def iter_solid_components(shape):
+    """SOLID-aware explode: yield every constituent ``TopoDS_Solid``.
+
+    pillar-perf (phase-4, 2026-06-15): a STEP assembly arrives as a single
+    ``TopoDS_Compound`` whose leaves are SOLIDs (one per physical body). The
+    historic ``split_into_components`` enumerates *shells* — but a solid with
+    an internal cavity owns TWO shells (outer + void), so a shell-split
+    over-counts and slices one physical body into two bogus "components"
+    (RC_Buggy: 211 solids → 293 shells). Splitting by SOLID gives one closed,
+    rigid-motion-coherent body per physical part, which is what dedup +
+    per-component RE actually want.
+
+    ``TopExp_Explorer(shape, TopAbs_SOLID)`` recurses through nested
+    sub-assembly compounds automatically, so a 40-top-level-kid compound of
+    sub-assemblies still yields all 211 leaf solids.
+
+    Yields:
+        ``TopoDS_Solid`` instances (already down-cast). Empty if the shape
+        carries no solids (e.g. a pure open-shell mesh → caller should fall
+        back to the shell split).
+    """
+    from OCP.TopAbs import TopAbs_SOLID
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    if shape is None:
+        return
+    ex = TopExp_Explorer(shape, TopAbs_SOLID)
+    while ex.More():
+        yield TopoDS.Solid_s(ex.Current())
+        ex.Next()
+
+
+def count_solids(shape) -> int:
+    """Number of constituent SOLIDs (cheap topology count, no geometry)."""
+    n = 0
+    for _ in iter_solid_components(shape):
+        n += 1
+    return n
+
+
 def build_compound(shapes: Iterable):
     """주어진 sub-shape list → 새 TopoDS_Compound."""
     from OCP.BRep import BRep_Builder

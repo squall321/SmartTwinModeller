@@ -24,9 +24,12 @@ extras schema::
 
     extras["assembly_re_results"] = [
         {"index": int, "volume_mm3": float, "match": float | None,
-         "outcome": "PASS"|"FAIL", "skipped": bool, "error": str | None,
+         "outcome": "PASS"|"FAIL"|"COARSE", "skipped": bool, "error": str | None,
          "plan_steps": int | None, "signature_class": int,
-         "instance_count": int, "representative": bool},
+         "instance_count": int, "representative": bool,
+         "lod": "full"|"coarse"|None,           # phase-4 reduced-fidelity flag
+         "result_grade": "measured"|"estimate"|None,
+         "bbox_fill_ratio": float | None},      # coarse-only: vol / bbox_vol
         ...
     ]
     extras["aggregate_match_ratio"]   = float in [0, 1]
@@ -34,6 +37,11 @@ extras schema::
     extras["components_processed"]    = int
     extras["signature_classes"]       = int   # distinct components RE'd
     extras["re_runs"]                 = int   # how many times RE actually ran
+    extras["components_full"]         = int   # phase-4: full-fidelity catalog
+    extras["components_coarse"]       = int   # phase-4: LOD coarse (estimate)
+    extras["components_skipped"]      = int   # phase-4: KNOWN-GAP / timeout
+    extras["split_mode"]              = "solid"|"shell"
+    extras["cache_stats"]             = {"enabled","dir","hits","misses","writes"}
 
 post_conditions = [body_present]. Body returned unchanged (this is a
 read-only diagnostic macro).
@@ -118,6 +126,124 @@ def _face_count(body) -> int:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# LOD / face-budget guard (pillar-perf phase-4, 2026-06-15).
+#
+# Empirically the per-face detector pipeline in ExtractFeatureCatalog is NOT
+# the cheap O(N) we assumed for assembly leaves: a single 493-face RC_Buggy
+# solid takes ~220 s in the catalog ALONE — yet it is nowhere near the 16 000
+# DEFAULT_MAX_FACE_COUNT cap, so the existing too_many_faces guard never fires
+# and the whole 211-solid assembly times out at 700 s.
+#
+# DEFAULT_LOD_MAX_FACES is the *reduced-fidelity* budget: a component above it
+# is reconstructed COARSE — a bbox primitive base only, skipping every
+# expensive per-face detector — and flagged lod='coarse',
+# result_grade='estimate'. The assembly catalog then covers ALL components,
+# with the heavy ones marked coarse. Partial-but-complete beats a hang.
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        v = int(raw)
+        return v if v > 0 else default
+    except ValueError:
+        return default
+
+
+# SPOT-CHECK-tuned (phase-4, 2026-06-15). RC_Buggy's worst leaves cost ~220 s
+# each in the full per-face catalog (a 493/360/289-face solid), so anything
+# face-heavy MUST go coarse. The committed default 60 is the value VERIFIED on
+# both OEM fixtures with NO global timeout:
+#   * RC_Buggy: 211 solids → 144 components, 144/144 catalog coverage
+#     (102 full + 42 coarse) in 277 s — was a >700 s hang.
+#   * KR600:    61 solids → 61 components, 61/61 coverage
+#     (41 full + 20 coarse) in 79 s — was a >700 s hang.
+# Note the cost driver is geometric complexity, not face count alone — a few
+# ~46-face solids still take 60-160 s in the full path — so the budget only
+# bounds the WORST offenders; the rest is what makes RC_Buggy 277 s rather than
+# instant. Override with PHONE_DESIGNER_LOD_MAX_FACES; set the Arg to None to
+# disable (full fidelity, the historic hang-prone path); raise it to trade
+# wall-clock for fidelity on hosts with more time budget.
+DEFAULT_LOD_MAX_FACES: int = _env_int("PHONE_DESIGNER_LOD_MAX_FACES", 60)
+
+
+def _bbox_of(shape):
+    """(xmin,ymin,zmin,xmax,ymax,zmax) or None. Plain Add_s (deterministic)."""
+    try:
+        from OCP.Bnd import Bnd_Box
+        from OCP.BRepBndLib import BRepBndLib
+
+        bb = Bnd_Box()
+        BRepBndLib.Add_s(shape, bb)
+        if bb.IsVoid():
+            return None
+        return tuple(float(c) for c in bb.Get())
+    except Exception:
+        return None
+
+
+def _volume_of(shape) -> float:
+    try:
+        from OCP.BRepGProp import BRepGProp
+        from OCP.GProp import GProp_GProps
+
+        props = GProp_GProps()
+        BRepGProp.VolumeProperties_s(shape, props)
+        return abs(float(props.Mass()))
+    except Exception:
+        return 0.0
+
+
+def _coarse_reconstruct(body_ref, face_count: int, lod_max_faces: int) -> dict:
+    """COARSE (reduced-fidelity) reconstruction for an over-budget component.
+
+    Builds ONLY a bbox primitive base — no per-face detectors run — so an
+    over-budget leaf costs milliseconds instead of the ~220 s full catalog.
+    The honest fidelity proxy reported is ``bbox_fill_ratio`` =
+    component_volume / bbox_volume (how box-like the part is); it is NOT a
+    feature match_ratio and ``match`` stays None (no fake-accuracy: a coarse
+    body cannot honestly claim a feature-fidelity win).
+
+    Returns the same dict shape as ``_run_class_re`` with ``lod='coarse'`` and
+    ``result_grade='estimate'``.
+    """
+    shape = _occt_shape(body_ref)
+    bbox = _bbox_of(shape)
+    vol = _volume_of(shape)
+    bbox_vol = None
+    fill = None
+    if bbox is not None:
+        dx = max(0.0, bbox[3] - bbox[0])
+        dy = max(0.0, bbox[4] - bbox[1])
+        dz = max(0.0, bbox[5] - bbox[2])
+        bbox_vol = dx * dy * dz
+        if bbox_vol > 0:
+            fill = round(min(1.0, vol / bbox_vol), 4)
+    return {
+        "match": None,           # honest: a coarse bbox base is NOT a match
+        "outcome": "COARSE",
+        "plan_steps": 1,         # the single bbox-base step
+        "error": None,
+        "face_count": face_count,
+        "skipped": False,
+        "skip_reason": None,
+        "lod": "coarse",
+        "result_grade": "estimate",
+        "bbox": [round(c, 4) for c in bbox] if bbox is not None else None,
+        "bbox_fill_ratio": fill,
+        "coarse_reason": (
+            f"face_count {face_count} > lod_max_faces ({lod_max_faces}) — "
+            f"reconstructed COARSE (bbox primitive base, detectors skipped) "
+            f"and flagged result_grade='estimate' so the assembly catalog is "
+            f"partial-but-complete instead of hanging on the full per-face "
+            f"detector pass (~220 s for a 493-face solid)"
+        ),
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Per-class RE pipeline — pure function so it can run in a worker process.
 #
 # Takes only picklable inputs (paths + scalars). The OCCT shell is loaded from
@@ -130,13 +256,22 @@ def _run_class_re(
     plan_path: str,
     base_step_kind: str,
     max_face_count: int | None,
+    lod_max_faces: int | None = None,
 ) -> dict:
     """Run the full RE round-trip on ONE representative component.
 
     Returns a picklable dict with keys: match, outcome, plan_steps, error,
-    face_count, skipped, skip_reason. Never raises — failures land in
-    ``error``. This is a module-level function (not a closure / method) so
-    ``ProcessPoolExecutor`` can pickle + ship it to a worker.
+    face_count, skipped, skip_reason, lod, result_grade. Never raises —
+    failures land in ``error``. This is a module-level function (not a closure
+    / method) so ``ProcessPoolExecutor`` can pickle + ship it to a worker.
+
+    LOD guard (phase-4): a component whose face count exceeds ``lod_max_faces``
+    is reconstructed COARSE (bbox base only, detectors skipped) and flagged
+    lod='coarse' / result_grade='estimate' rather than paying the ~220 s full
+    catalog. ``lod_max_faces=None`` disables the coarse path (full fidelity for
+    every component). This is checked AFTER the hard ``max_face_count``
+    KNOWN-GAP cap, so an enormous mesh shell is still skipped outright while a
+    merely-heavy solid degrades to coarse instead of being dropped.
     """
     out: dict = {
         "match": None,
@@ -146,6 +281,8 @@ def _run_class_re(
         "face_count": None,
         "skipped": False,
         "skip_reason": None,
+        "lod": "full",
+        "result_grade": "measured",
     }
     try:
         from phone_designer.plan.executor import PlanExecutor
@@ -177,6 +314,14 @@ def _run_class_re(
                 f"assembly catalog partial-but-complete instead of hanging"
             )
             return out
+
+        # ── LOD / face-budget guard (phase-4 2026-06-15) ───────────────────
+        # A merely-heavy solid (above the coarse budget but below the hard
+        # KNOWN-GAP cap) is reconstructed at REDUCED fidelity — a bbox
+        # primitive base only — so the whole assembly never stalls on the
+        # ~220 s full per-face detector pass for one 493-face leaf.
+        if lod_max_faces is not None and fc > lod_max_faces:
+            return _coarse_reconstruct(body_ref, fc, lod_max_faces)
 
         cat = ExtractFeatureCatalog().apply(body_ref, {}).extras["feature_catalog"]
         if cat.get("skipped"):
@@ -308,6 +453,55 @@ class AssemblyReverseEngineer(SkillBase):
                         "KNOWN-GAP (timeout) so one pathological component "
                         "cannot stall the whole assembly. None ⇒ no cap.",
         )
+        # pillar-perf (phase-4, 2026-06-15): SOLID-aware split. Default True
+        # explodes the assembly compound into its constituent SOLIDS (one body
+        # per physical part) — a solid with an internal cavity owns TWO shells,
+        # so the historic shell split over-counts (RC_Buggy 211 solids → 293
+        # shells) and slices one body into two bogus components. Falls back to
+        # the shell split when the body has no solids (a pure open-shell mesh).
+        # Set False for the historic per-shell behaviour.
+        split_solids: bool = Field(
+            default=True,
+            description="Split the assembly into its constituent SOLIDS (one "
+                        "body per physical part) instead of shells. Right for "
+                        "STEP assemblies. Falls back to the shell split when "
+                        "the body has no solids. False ⇒ historic shell split.",
+        )
+        # pillar-perf (phase-4, 2026-06-15): LOD / face-budget guard. A
+        # component whose face count exceeds this is reconstructed COARSE
+        # (bbox primitive base, detectors skipped) and flagged lod='coarse' /
+        # result_grade='estimate' instead of paying the ~220 s full per-face
+        # catalog (a 493-face solid alone costs that). None ⇒ full fidelity for
+        # every component (the historic, hang-prone path). Default reads
+        # DEFAULT_LOD_MAX_FACES (220, overridable via env).
+        lod_max_faces: int | None = Field(
+            default=DEFAULT_LOD_MAX_FACES, ge=1,
+            description="Components above this face count are reconstructed "
+                        "COARSE (bbox base, detectors skipped) and flagged "
+                        "result_grade='estimate' so the assembly catalog stays "
+                        "partial-but-complete instead of hanging on the full "
+                        "detector pass. None ⇒ full fidelity for every "
+                        "component (historic hang-prone path).",
+        )
+        # pillar-perf (phase-4, 2026-06-15): opt-in content-addressed cache.
+        # Default False ⇒ no disk I/O, behaviour byte-identical to pre-cache.
+        # True caches each per-class RE result keyed by geometric_signature, so
+        # a re-run of the same assembly (or a different assembly sharing a
+        # component) skips re-detection. Invalidation is by signature band.
+        cache: bool = Field(
+            default=False,
+            description="Opt-in content-addressed cache of per-component RE "
+                        "results keyed by geometric_signature. False (default) "
+                        "⇒ no disk I/O, behaviour unchanged. True ⇒ a re-run "
+                        "(or a different assembly sharing a component) skips "
+                        "re-detection on a cache hit.",
+        )
+        cache_dir: str | None = Field(
+            default=None,
+            description="Cache root directory when cache=True. None ⇒ "
+                        "PHONE_DESIGNER_RE_CACHE_DIR env or a per-user temp "
+                        "dir, so re-runs across processes share entries.",
+        )
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
         from phone_designer.skills.repair.split_into_components import (
@@ -336,9 +530,13 @@ class AssemblyReverseEngineer(SkillBase):
             DEFAULT_MAX_FACE_COUNT as _MAX_FACE_COUNT,
         )
 
-        # 1. Split into components, sort biggest-first.
+        # 1. Split into components (SOLID-aware by default), sort biggest-first.
         split_extras = SplitIntoComponents().apply(
-            body, {"min_volume_mm3": args.min_volume_mm3}
+            body,
+            {
+                "min_volume_mm3": args.min_volume_mm3,
+                "split_solids": args.split_solids,
+            },
         ).extras
         comps: list = list(split_extras.get("components") or [])
         comps.sort(key=lambda c: -float(c.get("volume_mm3") or 0))
@@ -360,6 +558,8 @@ class AssemblyReverseEngineer(SkillBase):
                 "signature_class": None,
                 "instance_count": 1,
                 "representative": False,
+                "lod": None,            # 'full' | 'coarse' — set after RE
+                "result_grade": None,  # 'measured' | 'estimate'
                 "_body_ref": c.get("body_ref"),  # stripped before return
             })
 
@@ -371,8 +571,13 @@ class AssemblyReverseEngineer(SkillBase):
         classes = self._group_into_classes(entries, args.dedup_instances)
 
         # 4. Run RE once per class (process pool or serial), assigning each
-        #    representative's result to every instance in the class.
-        self._run_classes(classes, args, _MAX_FACE_COUNT)
+        #    representative's result to every instance in the class. An opt-in
+        #    content-addressed cache (keyed by geometric_signature) lets a
+        #    re-run / a shared component skip re-detection.
+        from phone_designer.skills.reverse_engineer._re_cache import ReCache
+
+        re_cache = ReCache(enabled=args.cache, cache_dir=args.cache_dir)
+        self._run_classes(classes, args, _MAX_FACE_COUNT, re_cache)
 
         # 5. Aggregate volume-weighted match across ALL instances + finalise.
         weighted_match = 0.0
@@ -395,6 +600,9 @@ class AssemblyReverseEngineer(SkillBase):
         re_runs = sum(
             1 for cl in classes if cl.get("ran")
         )
+        coarse_count = sum(1 for e in results if e.get("lod") == "coarse")
+        full_count = sum(1 for e in results if e.get("lod") == "full")
+        skipped_count = sum(1 for e in results if e.get("skipped"))
         return SkillResult(
             body=body,
             history=EntityHistoryMap(),
@@ -405,6 +613,16 @@ class AssemblyReverseEngineer(SkillBase):
                 "components_processed": len(results),
                 "signature_classes": len(classes),
                 "re_runs": re_runs,
+                # LOD coverage (phase-4): how complete the catalog is and at
+                # what fidelity. coarse + full + skipped == components_processed.
+                "components_full": full_count,
+                "components_coarse": coarse_count,
+                "components_skipped": skipped_count,
+                "split_mode": split_extras.get(
+                    "split_mode",
+                    "solid" if args.split_solids else "shell",
+                ),
+                "cache_stats": re_cache.stats(),
             },
         )
 
@@ -474,10 +692,17 @@ class AssemblyReverseEngineer(SkillBase):
         classes: list[dict],
         args: "AssemblyReverseEngineer.Args",
         max_face_count: int | None,
+        cache=None,
     ) -> None:
         """Run the RE pipeline once per class and fan the result out to every
         instance member. Uses a process pool unless max_workers==1 or there is
-        only one runnable class (serial avoids pool overhead / pickling)."""
+        only one runnable class (serial avoids pool overhead / pickling).
+
+        ``cache`` (opt-in ``ReCache``) is consulted in THIS (parent) process:
+        a class whose representative's geometric_signature is already cached
+        skips the worker entirely, and a fresh result is written back. The
+        cache object lives only in the parent — workers stay picklable-pure.
+        """
         # Pre-flight per representative: skip dead components (no body / zero
         # volume) up front so we never spawn a worker for them.
         runnable: list[dict] = []
@@ -497,6 +722,30 @@ class AssemblyReverseEngineer(SkillBase):
                 cl["ran"] = False
                 continue
             runnable.append(cl)
+
+        # ── opt-in cache lookup (parent process) ───────────────────────────
+        # A class whose signature is cached gets its result fanned out NOW and
+        # is dropped from the runnable set, so no worker / brep write happens.
+        if cache is not None and getattr(cache, "enabled", False):
+            from phone_designer.skills.reverse_engineer._component_signature import (
+                geometric_signature,
+            )
+
+            still: list[dict] = []
+            for cl in runnable:
+                sig = None
+                try:
+                    sig = geometric_signature(cl["rep"]["_body_ref"])
+                except Exception:
+                    sig = None
+                cl["_sig"] = sig
+                hit = cache.get(sig) if sig is not None else None
+                if hit is not None:
+                    cl["ran"] = False  # reused from cache, not re-detected
+                    self._apply_class_result(cl, hit, dt_s=0.0)
+                else:
+                    still.append(cl)
+            runnable = still
 
         if not runnable:
             return
@@ -529,28 +778,42 @@ class AssemblyReverseEngineer(SkillBase):
                 _write_brep(_occt_shape(rep["_body_ref"]), cl["_brep_path"])
 
             if workers == 1:
-                self._run_classes_serial(runnable, args, max_face_count)
+                self._run_classes_serial(
+                    runnable, args, max_face_count, cache
+                )
             else:
                 self._run_classes_pool(
-                    runnable, args, max_face_count, workers
+                    runnable, args, max_face_count, workers, cache
                 )
         finally:
             if tmp_ctx is not None:
                 tmp_ctx.cleanup()
+
+    @staticmethod
+    def _cache_put(cache, cl: dict, res: dict) -> None:
+        """Write a fresh (non-skipped, non-timeout) result back to the cache."""
+        if cache is None or not getattr(cache, "enabled", False):
+            return
+        sig = cl.get("_sig")
+        if sig is None or res.get("skipped"):
+            return
+        cache.put(sig, res)
 
     def _run_classes_serial(
         self,
         runnable: list[dict],
         args: "AssemblyReverseEngineer.Args",
         max_face_count: int | None,
+        cache=None,
     ) -> None:
         for cl in runnable:
             t0 = time.perf_counter()
             res = _run_class_re(
                 cl["_brep_path"], cl["_plan_path"],
-                args.base_step_kind, max_face_count,
+                args.base_step_kind, max_face_count, args.lod_max_faces,
             )
             cl["ran"] = not res.get("skipped")
+            self._cache_put(cache, cl, res)
             self._apply_class_result(
                 cl, res, dt_s=round(time.perf_counter() - t0, 2)
             )
@@ -561,6 +824,7 @@ class AssemblyReverseEngineer(SkillBase):
         args: "AssemblyReverseEngineer.Args",
         max_face_count: int | None,
         workers: int,
+        cache=None,
     ) -> None:
         from concurrent.futures import (
             ProcessPoolExecutor,
@@ -581,6 +845,7 @@ class AssemblyReverseEngineer(SkillBase):
                         _run_class_re,
                         cl["_brep_path"], cl["_plan_path"],
                         args.base_step_kind, max_face_count,
+                        args.lod_max_faces,
                     )
                     futures[fut] = cl
                     order.append(cl)
@@ -615,6 +880,7 @@ class AssemblyReverseEngineer(SkillBase):
                             "skipped": False, "skip_reason": None,
                         }
                     cl["ran"] = not res.get("skipped")
+                    self._cache_put(cache, cl, res)
                     self._apply_class_result(
                         cl, res,
                         dt_s=round(time.perf_counter() - t0, 2),
@@ -629,7 +895,7 @@ class AssemblyReverseEngineer(SkillBase):
             for cl in runnable:
                 if cl["rep"].get("match") is not None or cl["rep"].get("error"):
                     continue
-                self._run_classes_serial([cl], args, max_face_count)
+                self._run_classes_serial([cl], args, max_face_count, cache)
             return
 
         # Record the timed-out / abandoned classes as per-component KNOWN-GAPs.
@@ -658,6 +924,18 @@ class AssemblyReverseEngineer(SkillBase):
         """Fan one class RE result out to every instance member."""
         skipped = bool(res.get("skipped"))
         skip_reason = res.get("skip_reason")
+        # LOD / grade (phase-4). A skipped (KNOWN-GAP / timeout) class has no
+        # reconstruction at all, so it carries no lod/grade; a coarse class
+        # carries lod='coarse'/grade='estimate'; everything else is full.
+        lod = res.get("lod")
+        grade = res.get("result_grade")
+        if skipped:
+            lod = lod or None
+            grade = grade or None
+        else:
+            lod = lod or "full"
+            grade = grade or "measured"
+        coarse_reason = res.get("coarse_reason")
         for m in cl["members"]:
             m["match"] = res.get("match")
             m["outcome"] = res.get("outcome")
@@ -669,5 +947,13 @@ class AssemblyReverseEngineer(SkillBase):
             )
             m["skipped"] = skipped
             m["dt_s"] = dt_s
+            m["lod"] = lod
+            m["result_grade"] = grade
             if res.get("face_count") is not None:
                 m["face_count"] = res.get("face_count")
+            if res.get("bbox_fill_ratio") is not None:
+                m["bbox_fill_ratio"] = res.get("bbox_fill_ratio")
+            if coarse_reason is not None and m.get("error") is None:
+                # Surface WHY a coarse component was downgraded (it is not an
+                # error, but callers want the reason in the per-component log).
+                m["coarse_reason"] = coarse_reason
