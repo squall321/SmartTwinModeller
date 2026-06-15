@@ -66,8 +66,17 @@ from phone_designer.skills._spec import SkillBase, SkillResult
 # imports (existing tests import render_html / _CSS from here).
 from phone_designer.skills.inspect._report_html import (  # noqa: F401
     _CSS,
+    _PRINT_CSS,
     _RENDER_CSS,
     render_html,
+)
+# Print-ready / PDF deliverable layer (phase-4, 2026-06-15). Dependency-free
+# print-optimized HTML is the honest PDF deliverable; a true .pdf is offered
+# ONLY when reportlab is already installed (it isn't, in this env). Imported
+# here so the additive print_ready arg has a single helper to call.
+from phone_designer.skills.inspect._report_pdf import (  # noqa: F401
+    build_pdf_deliverable,
+    pdf_capabilities,
 )
 
 
@@ -326,8 +335,11 @@ def build_report_v1(
             "(executive_summary + graded sections + DFM) as JSON, plus a "
             "self-contained dependency-free HTML string (inline CSS, "
             "measured/estimate badges, DFM pass/marginal/fail chips, "
-            "per-section tables). No 3D render this phase — headless/CI-safe. "
-            "Read-only — body unchanged.",
+            "per-section tables). Optional print_ready=True adds a "
+            "print-optimized (@media print) HTML deliverable + a PDF "
+            "descriptor — the honest, dependency-free 'Save as PDF from the "
+            "browser' path (a true .pdf only when reportlab is installed). "
+            "Headless/CI-safe. Read-only — body unchanged.",
     selector_kinds=[],
     history_rules={},
     produces_features=["quality_report_v1"],
@@ -373,6 +385,19 @@ class EmitQualityReport(SkillBase):
         max_section_views: int = Field(
             default=3, ge=0, le=3,
             description="Cap on rendered mid-plane cross-section views.",
+        )
+        print_ready: bool = Field(
+            default=False,
+            description="Emit a PRINT-OPTIMIZED self-contained HTML deliverable "
+                        "(@media print page breaks/margins/print-safe colours) "
+                        "as 'quality_report_print_html' plus a "
+                        "'quality_report_pdf' descriptor. This is the honest, "
+                        "dependency-free PDF path: open the HTML in any browser "
+                        "and 'Save as PDF'. A true .pdf (pdf_bytes) is produced "
+                        "ONLY when reportlab is already installed (it is not in "
+                        "this env); otherwise pdf_available=False and the "
+                        "print-HTML fallback is reported. Default OFF so the "
+                        "existing HTML + golden snapshot stay byte-identical.",
         )
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
@@ -429,6 +454,25 @@ class EmitQualityReport(SkillBase):
         extras: dict[str, Any] = {"quality_report_v1": report_v1}
         if args.include_html:
             extras["quality_report_html"] = render_html(report_v1, views)
+
+        # Print-ready / PDF deliverable (phase-4, 2026-06-15). Additive: only
+        # populated when explicitly requested, so the default extras (and the
+        # report-snapshot golden) are unchanged. The descriptor is HONEST —
+        # pdf_available is True only when a real engine (reportlab) is present;
+        # otherwise the print-optimized HTML IS the PDF deliverable (browser
+        # 'Save as PDF'). pdf_bytes (binary) is never JSON-serialized into the
+        # report; it lives on the extras descriptor for a caller that wants it.
+        if args.print_ready:
+            deliverable = build_pdf_deliverable(report_v1, views)
+            extras["quality_report_print_html"] = deliverable["print_html"]
+            extras["quality_report_pdf"] = {
+                "format": deliverable["format"],
+                "pdf_available": deliverable["pdf_available"],
+                "pdf_engine": deliverable["pdf_engine"],
+                "pdf_bytes": deliverable["pdf_bytes"],
+                "save_as_pdf_hint": deliverable["save_as_pdf_hint"],
+                "note": deliverable["note"],
+            }
 
         return SkillResult(
             body=body,

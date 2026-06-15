@@ -105,6 +105,37 @@ border-radius:6px;background:var(--soft)}
 .render-grid .render-fig{max-width:420px;flex:1 1 320px}
 """
 
+#: @media print stylesheet — appended to the inline <style> ONLY when
+#: ``print_ready=True`` (phase-4, 2026-06-15). This is the dependency-free "PDF
+#: deliverable": the existing self-contained HTML prints / "Save as PDF" cleanly
+#: from any browser. It NEVER touches screen rendering (everything is inside the
+#: print media query), so default-path output stays byte-identical to Phase-3.
+#:
+#:   * @page sets A4-ish margins; print-color-adjust:exact keeps the dark header
+#:     and the pass/marginal/fail chip colours (browsers strip backgrounds in
+#:     print by default — without this the verdict chips would lose their hue);
+#:   * page-break-inside:avoid on a section / proc / figure / table keeps a block
+#:     from being split across a page boundary, and break-after on each <h2>
+#:     opens DFM / Sections / Rendered Views on a fresh page;
+#:   * .render images are capped so a tall PNG does not overflow a printed page.
+_PRINT_CSS = """
+@media print{
+  @page{size:A4;margin:14mm 12mm}
+  html,body{background:#fff}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact;
+    color-adjust:exact}
+  .wrap{max-width:none;margin:0;padding:0}
+  header.report{margin:0 0 14px;border-radius:0}
+  h2{break-before:page;page-break-before:always}
+  h2:first-of-type{break-before:auto;page-break-before:auto}
+  h3,.proc,.kpi,.units,figure,.render-fig,table,tr,.card{
+    break-inside:avoid;page-break-inside:avoid}
+  .render,.render img,img.render{max-height:150mm}
+  a[href]:after{content:""}
+  .foot{break-before:avoid;page-break-before:avoid}
+}
+"""
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # small formatting helpers
@@ -347,6 +378,8 @@ def _render_sections(report_v1: dict[str, Any]) -> list[str]:
 def render_html(
     report_v1: dict[str, Any],
     views: dict[str, Any] | None = None,
+    *,
+    print_ready: bool = False,
 ) -> str:
     """Production self-contained HTML for a QualityReportV1 dict.
 
@@ -356,6 +389,15 @@ def render_html(
     as ``data:`` URIs (iso view in the exec summary, section/heatmap views in
     their own block). A non-'ok' render_status embeds a short skip note. The
     measured/estimate badges + DFM chips are render-path independent.
+
+    ``print_ready`` (phase-4, 2026-06-15): when True, a ``@media print``
+    stylesheet (``_PRINT_CSS``) is appended to the inline <style> so the file
+    prints / "Save as PDF" cleanly from any browser — page margins, page
+    breaks, print-safe colours. This is the dependency-free PDF deliverable
+    (weasyprint/reportlab are NOT installed; see ``_report_pdf``). Because the
+    extra rules live entirely inside ``@media print`` they do not change screen
+    rendering; the default ``print_ready=False`` output is byte-identical to
+    Phase-3 (the report-snapshot golden still matches).
     """
     es = dict(report_v1["executive_summary"])
     # Thread the report-level units into the exec-summary renderer without
@@ -373,8 +415,12 @@ def render_html(
     parts.append(
         f"<title>Quality Report — {_esc(report_v1['part_id'])}</title>"
     )
-    # Render CSS appended ONLY when images are embedded.
-    style = _CSS + (_RENDER_CSS if images else "")
+    # Render CSS appended ONLY when images are embedded; print CSS appended ONLY
+    # when print_ready (both live entirely inside their own media/scope so the
+    # default screen output is unchanged).
+    style = _CSS + (_RENDER_CSS if images else "") + (
+        _PRINT_CSS if print_ready else ""
+    )
     parts.append(f"<style>{style}</style></head><body><div class='wrap'>")
 
     parts += _render_header(report_v1, es)
