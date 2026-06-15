@@ -49,10 +49,21 @@
 >   VARIANTS `snap_to_standards`(8.4→M8) + `solve_driver_range`
 >   (linkrods [4.99,20.08], loft 은 None) ·
 >   REPORT PDF — 의존성 부재 정직 발견, print-optimized HTML 출하.
-> - **5-기둥 전부 Phase 0→4 완주.** 잔여 정직한 한계: B-spline watertight
->   솔리드화는 OCCT 7.8 에서 불가(open-shell 리포트로 대체), --workers
->   병렬은 timeout-경계 파일에서 거짓 timeout 가능(기본 serial 권위),
->   11752 preserve_brep 668s 경계.
+> - **5-기둥 전부 Phase 0→4 완주.**
+> - **Phase 4+ 정정 (2026-06-15): "B-spline watertight 솔리드화는 OCCT 7.8
+>   근본 한계" 주장은 틀렸다.** 직접 실험으로 반증: OCCT 7.8 은 B-spline
+>   솔리드를 만든다(ThruSections vol 7303); Phase-4 실패는 bspline 면 62%만
+>   골라 솔리드화한 불완전 면집합 문제. **완전한 면집합을 sew 하면 완벽히
+>   닫힌다** — Ventilator 305면 → 1셸 → ShapeFix → solid, 부피 30939
+>   (원본과 동일), hausdorff 0.05mm. 신규 `recover_freeform_solid` +
+>   `place_freeform_solid`: freeform 바디를 lossless 재솔리드(Ventilator
+>   box 19.63→0.0, 4 fixture 전부 0.0, 11752 66.7→11.1). **정직한 framing:
+>   imported 경계 re-solidify 지 parametric 재구성 아님**(면 재사용, win 은
+>   hausdorff). box-mode base_profile_mode='auto' 의 3번째 베이스 후보,
+>   hausdorff-revert 게이트, box corpus 0 회귀.
+> - 잔여 정직한 한계: parametric-from-catalog freeform(편집가능 트리 복원)은
+>   여전히 미해결(재솔리드는 그 대체가 아님); --workers 는 speedup(기본
+>   serial 권위); 11752 preserve_brep 696s 경계 파일(충분한 시간엔 0.8684).
 
 설계 원칙 (전 기둥 공통, 23-pass + Wave1~4 의 교훈 계승):
 1. corpus-regress 하니스로 게이트 — 인라인 sweep 금지.
