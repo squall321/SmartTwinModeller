@@ -81,9 +81,18 @@ def test_accept_alt_base_reverts_worse_hausdorff(monkeypatch):
 
 
 @pytest.mark.slow
-def test_rounded_plate_auto_keeps_profile_base():
-    """End-to-end: the shipping auto path keeps the profile base for
-    rounded_plate (hausdorff strictly better than box)."""
+def test_rounded_plate_auto_keeps_non_box_base():
+    """End-to-end: the shipping auto path keeps a NON-box base for rounded_plate
+    (hausdorff strictly better than box).
+
+    FREEFORM RE-SOLIDIFY (2026-06-15) UPDATE: rounded_plate's boundary now also
+    re-solidifies losslessly (hausdorff 0.0 mm vs the silhouette base's 0.27 mm),
+    so the geometrically-tightest candidate is the freeform-shell base
+    (``place_freeform_solid``), which correctly supersedes the silhouette
+    (``extrude_profile_world``) base it previously won with. The ITEM 1 intent —
+    keep a non-box base whose hausdorff strictly beats the box — is unchanged;
+    the winning candidate is just even tighter now. Either non-box base is the
+    honest pass; the freeform-shell is expected on this fixture today."""
     from phone_designer.skills.create.import_step import ImportStep
     from phone_designer.skills.reverse_engineer import (
         plan_from_feature_catalog as P,
@@ -110,7 +119,9 @@ def test_rounded_plate_auto_keeps_profile_base():
     base_step = next(
         s for s in kept["steps"] if str(s["id"]).startswith("s_base")
     )
-    assert base_step["skill"] == "extrude_profile_world"
+    # Any non-box base whose hausdorff beats the box is an honest pass; the
+    # tightest available (freeform-shell) is expected today.
+    assert base_step["skill"] in ("place_freeform_solid", "extrude_profile_world")
 
 
 # ──────────────────────────────────────────────────────────────────────────────

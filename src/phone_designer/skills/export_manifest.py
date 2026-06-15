@@ -18,6 +18,7 @@ import phone_designer.skills.compose.tag_face  # noqa: F401
 import phone_designer.skills.compose.union  # noqa: F401
 import phone_designer.skills.create.box  # noqa: F401
 import phone_designer.skills.create.extrude_profile_world  # noqa: F401
+import phone_designer.skills.create.place_freeform_solid  # noqa: F401
 import phone_designer.skills.create.disc_with_dome  # noqa: F401
 import phone_designer.skills.create.import_step  # noqa: F401
 import phone_designer.skills.create.rounded_slab  # noqa: F401
@@ -274,6 +275,7 @@ import phone_designer.skills.inspect.topology_health  # noqa: F401
 import phone_designer.skills.inspect.geometry_deviation  # noqa: F401
 import phone_designer.skills.inspect.validate_rebuilt_body  # noqa: F401
 import phone_designer.skills.inspect.fit_bspline_surface_patch  # noqa: F401
+import phone_designer.skills.inspect.recover_freeform_solid  # noqa: F401
 import phone_designer.skills.inspect.inspect_draft_angles  # noqa: F401
 import phone_designer.skills.inspect.classify_edge_blends  # noqa: F401
 import phone_designer.skills.inspect.measure_thread  # noqa: F401

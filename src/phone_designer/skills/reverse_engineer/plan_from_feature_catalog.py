@@ -2293,6 +2293,119 @@ def _accept_alt_base(
     return None
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# FREEFORM RE-SOLIDIFY (2026-06-15): re-solidified-boundary base candidate.
+#
+# Distinct from the silhouette (extrude_profile_world) and primitive (box /
+# cylinder / …) bases. It RE-SOLIDIFIES the body's own boundary faces into a
+# watertight solid (proven OCCT 7.8 recipe — recover_solid_from_boundary). The
+# recovered solid reproduces the TRUE outer geometry near-losslessly (hausdorff
+# ~0) because it reuses the original faces — so it is the FULL reconstruction of
+# the as-imported part, and the planner emits it as the WHOLE plan (base step
+# only). HONESTY GATE: because the boundary already carries every pocket / hole /
+# boss, re-cutting the subtractive feature steps would DOUBLE-COUNT — so the
+# accepted freeform-shell plan DROPS them and labels the base honestly as
+# 'freeform_shell (re-solidified boundary)'.
+
+
+def _freeform_shell_solidifies(body: Any, sew_tol_mm: float = 0.1) -> bool:
+    """True iff the body's COMPLETE boundary re-solidifies into a watertight
+    valid solid (proven recipe). Cheap gate run BEFORE the full A/B so we only
+    write a STEP + score when a solid is actually recoverable."""
+    if body is None:
+        return False
+    try:
+        from phone_designer.skills.inspect.recover_freeform_solid import (
+            recover_solid_from_boundary,
+        )
+        shape = body.wrapped if hasattr(body, "wrapped") else body
+        solid, _sewed, _shells, _fixed = recover_solid_from_boundary(
+            shape, sew_tol_mm,
+        )
+        return solid is not None
+    except Exception:
+        return False
+
+
+def _freeform_shell_base_step(
+    body: Any,
+    bbox: tuple | None,
+    plan_name: str,
+    sew_tol_mm: float = 0.1,
+) -> dict | None:
+    """Build the ``place_freeform_solid`` base STEP args — or ``None``.
+
+    Writes the body's as-imported boundary to a STEP under run_logs/_tmp/ (reused
+    via ``_write_body_as_step``) and returns a ``place_freeform_solid`` step that
+    re-solidifies it at runtime, landed in the box frame (``box_shift`` =
+    (-cx, -cy, -zmin)) so it coincides with the placeholder box base it replaces.
+    The step round-trips through the plan executor (path + tol + shift only).
+    """
+    if body is None:
+        return None
+    # Ensure the create skill is registered before the A/B executes the
+    # candidate plan (the executor resolves skills from the registry; a caller
+    # that imported only the planner would otherwise miss it).
+    try:
+        import phone_designer.skills.create.place_freeform_solid  # noqa: F401
+    except Exception:
+        return None
+    step_path = _write_body_as_step(body, plan_name)
+    if step_path is None:
+        return None
+    box_shift = _world_to_box_shift(bbox)
+    return _new_step("s_base", "place_freeform_solid", {
+        "path": step_path,
+        "sew_tol_mm": float(sew_tol_mm),
+        "box_shift": [float(box_shift[0]), float(box_shift[1]), float(box_shift[2])],
+    })
+
+
+def _accept_freeform_shell_base(
+    box_plan: dict,
+    freeform_step: dict,
+    body: Any,
+    bbox: tuple | None,
+    extra_baseline_haus: float | None = None,
+) -> dict | None:
+    """A/B the re-solidified-boundary base against the box base.
+
+    Builds a FULL-reconstruction candidate plan consisting of ONLY the freeform
+    base step (the boundary already carries every feature — re-cutting would
+    double-count; see the HONESTY GATE above), executes it + the box plan,
+    compares each FULL regen's geometry_deviation hausdorff vs the ORIGINAL
+    body, and KEEPS the freeform-shell plan ONLY when its hausdorff is STRICTLY
+    better than BOTH the box base AND (when supplied) the silhouette base
+    (``extra_baseline_haus``). Returns the candidate ``Plan``-dict or ``None``.
+
+    The candidate plan is labelled ``base_mechanism='freeform_shell'`` /
+    ``base_label='freeform_shell (re-solidified boundary)'`` so downstream
+    consumers can see this is a re-solidified boundary, NOT a parametric rebuild.
+    """
+    import copy
+
+    # FULL reconstruction = the freeform base alone (no subtractive steps).
+    alt_plan = copy.deepcopy(box_plan)
+    alt_plan["steps"] = [copy.deepcopy(freeform_step)]
+    alt_plan["base_mechanism"] = "freeform_shell"
+    alt_plan["base_label"] = "freeform_shell (re-solidified boundary)"
+
+    box_score = _score_reconstruction(box_plan, body, bbox)
+    alt_score = _score_reconstruction(alt_plan, body, bbox)
+    if box_score is None or alt_score is None:
+        return None
+    _box_match, box_haus = box_score
+    _alt_match, alt_haus = alt_score
+    # Strictly beat the box base.
+    if not (alt_haus < box_haus):
+        return None
+    # And the silhouette base too, when one was recovered (so the freeform-shell
+    # base is only chosen when it is the geometrically tightest candidate).
+    if extra_baseline_haus is not None and not (alt_haus < extra_baseline_haus):
+        return None
+    return alt_plan
+
+
 def accept_freeform_base(
     box_plan: dict,
     body: Any,
@@ -2321,6 +2434,14 @@ def accept_freeform_base(
     makes the feature incapable of regressing hausdorff: a worse-hausdorff
     candidate is always reverted to the box.
 
+    FREEFORM RE-SOLIDIFY (2026-06-15): a THIRD candidate — the re-solidified
+    boundary (``place_freeform_solid``) — is tried for non-prismatic / freeform
+    bodies whose COMPLETE boundary closes into a watertight solid. Because the
+    re-solidified solid reproduces the TRUE outer geometry near-losslessly, it
+    is emitted as the FULL reconstruction (base step ONLY — the boundary already
+    carries every feature, so re-cutting would double-count) and kept ONLY when
+    its hausdorff strictly beats BOTH the box base AND the silhouette base.
+
     Returns the candidate ``Plan``-dict to use, or ``None`` to keep the box plan.
     """
     if body is None or bbox is None:
@@ -2341,8 +2462,41 @@ def accept_freeform_base(
         # 2. Prismatic bodies → recovered swept-silhouette extrude candidate.
         #    (Also the fallback when a revolved candidate failed its A/B gate —
         #    a part can pass both tests; the prismatic profile may still win.)
+        #    The silhouette base's hausdorff (when it wins) becomes the EXTRA
+        #    baseline the freeform-shell base must ALSO beat, so the tightest
+        #    candidate is the one chosen.
         prof_args = _profile_base_step_args(body, bbox, dimension_scale)
+        silhouette_haus: float | None = None
         if prof_args is not None:
+            kept = _accept_alt_base(
+                box_plan, "extrude_profile_world", prof_args, body, bbox,
+            )
+            if kept is not None:
+                _sil_score = _score_reconstruction(kept, body, bbox)
+                if _sil_score is not None:
+                    silhouette_haus = _sil_score[1]
+
+        # 3. FREEFORM RE-SOLIDIFY base candidate. Engaged for freeform /
+        #    non-prismatic bodies: a constant-section prismatic body's silhouette
+        #    base already matches its bbox so it never reaches here with a
+        #    tighter candidate; a true freeform body (Ventilator) has no
+        #    silhouette/revolved win, so this is its path. Only attempted when
+        #    the boundary actually re-solidifies (cheap gate first), and KEPT
+        #    only when it beats both the box and silhouette hausdorff.
+        if _freeform_shell_solidifies(body, sew_tol_mm=0.1):
+            plan_name = box_plan.get("plan_name") or "reconstructed_plan"
+            ff_step = _freeform_shell_base_step(body, bbox, plan_name)
+            if ff_step is not None:
+                kept = _accept_freeform_shell_base(
+                    box_plan, ff_step, body, bbox,
+                    extra_baseline_haus=silhouette_haus,
+                )
+                if kept is not None:
+                    return kept
+
+        # 4. The silhouette base (if it won its box A/B but lost to no freeform
+        #    shell) is still the best available — return it.
+        if prof_args is not None and silhouette_haus is not None:
             kept = _accept_alt_base(
                 box_plan, "extrude_profile_world", prof_args, body, bbox,
             )
