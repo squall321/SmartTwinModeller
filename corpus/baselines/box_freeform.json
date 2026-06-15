@@ -3,21 +3,21 @@
   "mode": "box",
   "subset": "freeform",
   "base_profile_mode": "auto",
-  "generated_at": "2026-06-14T13:10:18+00:00",
+  "generated_at": "2026-06-14T23:59:24+00:00",
   "records": {
     "rounded_plate": {
       "file": "rounded_plate",
       "mechanism": "silhouette_extrude",
-      "match_ratio": 0.4444,
-      "hausdorff_mm": 2.523008,
+      "match_ratio": 0.2917,
+      "hausdorff_mm": 0.271506,
       "box_hausdorff_mm": 2.523008,
       "profile_hausdorff_mm": 0.271506,
-      "auto_base_is_profile": false,
-      "volume_delta_pct": -13.293,
+      "auto_base_is_profile": true,
+      "volume_delta_pct": -7.172,
       "analytic_volume_mm3": 11752.7787,
       "plan_steps": 3,
       "error": null,
-      "duration_s": 44.4
+      "duration_s": 20.5
     },
     "loft_boss": {
       "file": "loft_boss",
@@ -31,7 +31,7 @@
       "analytic_volume_mm3": 3769.9112,
       "plan_steps": 1,
       "error": null,
-      "duration_s": 32.6
+      "duration_s": 19.7
     },
     "revolve_frustum": {
       "file": "revolve_frustum",
@@ -45,7 +45,7 @@
       "analytic_volume_mm3": 8566.076,
       "plan_steps": 1,
       "error": null,
-      "duration_s": 20.3
+      "duration_s": 8.5
     },
     "swept_channel": {
       "file": "swept_channel",
@@ -59,7 +59,7 @@
       "analytic_volume_mm3": 1261.5929,
       "plan_steps": 1,
       "error": null,
-      "duration_s": 21.3
+      "duration_s": 10.3
     }
   }
 }

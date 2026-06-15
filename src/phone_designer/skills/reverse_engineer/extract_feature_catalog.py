@@ -260,6 +260,180 @@ def _recover_loft_profile(shape, cx, cy, z, diam_estimate):
         return None
 
 
+def _extrusion_direction(extrusion_faces) -> tuple[float, float, float] | None:
+    """PILLAR FREEFORM (phase-4, 2026-06-15, ITEM 2): area-weighted mean of the
+    ``GeomAbs_SurfaceOfExtrusion`` BasisCurve directions.
+
+    Each surface-of-extrusion face is one straight LEG of the swept tube; its
+    ``BRepAdaptor_Surface.Direction()`` is the extrusion (sweep) direction of
+    that leg. For a straight (single-leg) sweep all legs share one direction; we
+    average them (area-weighted) and re-unit so a slightly tilted leg does not
+    dominate. Returns the unit direction, or ``None`` when no face yields a
+    usable direction (caller keeps the fabricated bbox-diagonal path).
+    """
+    try:
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.BRepGProp import BRepGProp
+        from OCP.GProp import GProp_GProps
+    except Exception:
+        return None
+    sx = sy = sz = 0.0
+    wsum = 0.0
+    for _fi, f in extrusion_faces:
+        try:
+            d = BRepAdaptor_Surface(f).Direction()
+            props = GProp_GProps()
+            BRepGProp.SurfaceProperties_s(f, props)
+            w = float(props.Mass())
+        except Exception:
+            continue
+        if w <= 0.0:
+            continue
+        dx, dy, dz = float(d.X()), float(d.Y()), float(d.Z())
+        # Flip to a consistent hemisphere (dominant component positive) so
+        # opposing-wall legs do not cancel.
+        comps = (abs(dx), abs(dy), abs(dz))
+        k = comps.index(max(comps))
+        ref = (dx, dy, dz)[k]
+        if ref < 0.0:
+            dx, dy, dz = -dx, -dy, -dz
+        sx += dx * w
+        sy += dy * w
+        sz += dz * w
+        wsum += w
+    if wsum <= 0.0:
+        return None
+    mx, my, mz = sx / wsum, sy / wsum, sz / wsum
+    mag = (mx * mx + my * my + mz * mz) ** 0.5
+    if mag < 1e-9:
+        return None
+    return (mx / mag, my / mag, mz / mag)
+
+
+def _recover_sweep_path_and_profile(shape, extrusion_faces, all_bb):
+    """PILLAR FREEFORM (phase-4, 2026-06-15, ITEM 2): recover a REAL straight
+    sweep path + one real perpendicular profile section.
+
+    Replaces the fabricated 3-point bbox-diagonal path with honest recovery:
+
+      * extrusion direction = area-weighted mean of the surface-of-extrusion
+        BasisCurve directions (``_extrusion_direction``);
+      * path = the two endpoints of the merged-bbox span PROJECTED onto that
+        direction through the bbox centre (a straight 2-point polyline — the
+        surface-of-extrusion fingerprint is by construction a STRAIGHT sweep);
+      * profile = one real perpendicular ``recover_section_loop`` taken at the
+        mid-span plane (normal = extrusion direction).
+
+    Returns ``(path_points, profile_sketch, profile_diameter_mm)`` on success,
+    where ``profile_sketch`` is an executable sketch dict (or ``None`` when no
+    consistent section was recovered — the emitter then falls back to the
+    circle). Returns ``None`` entirely when even the path can't be recovered, so
+    the caller keeps the historic fabricated path (byte-identical fallback).
+    """
+    try:
+        direction = _extrusion_direction(extrusion_faces)
+        if direction is None:
+            return None
+        xmin, ymin, zmin, xmax, ymax, zmax = all_bb
+        cx = 0.5 * (xmin + xmax)
+        cy = 0.5 * (ymin + ymax)
+        cz = 0.5 * (zmin + zmax)
+        dx, dy, dz = direction
+        # Project each of the 8 bbox corners onto the direction line through the
+        # centre; the min/max projections bracket the sweep extent.
+        tmin = tmax = None
+        for px in (xmin, xmax):
+            for py in (ymin, ymax):
+                for pz in (zmin, zmax):
+                    t = (px - cx) * dx + (py - cy) * dy + (pz - cz) * dz
+                    tmin = t if tmin is None else min(tmin, t)
+                    tmax = t if tmax is None else max(tmax, t)
+        if tmin is None or (tmax - tmin) < 1e-6:
+            return None
+        # Anchor the start at the END of the span nearer the base plane
+        # (anchor_z) so a +Z-ish sweep still starts low, matching the historic
+        # fabricated path's intent.
+        p_lo = (cx + dx * tmin, cy + dy * tmin, cz + dz * tmin)
+        p_hi = (cx + dx * tmax, cy + dy * tmax, cz + dz * tmax)
+        start, end = (p_lo, p_hi) if p_lo[2] <= p_hi[2] else (p_hi, p_lo)
+        path_points = [
+            [round(start[0], 4), round(start[1], 4), round(start[2], 4)],
+            [round(end[0], 4), round(end[1], 4), round(end[2], 4)],
+        ]
+
+        # Profile: one real perpendicular section at the mid-span plane.
+        profile_sketch = None
+        profile_d = None
+        try:
+            from phone_designer.skills.inspect._section_curve import (
+                recover_section_loop,
+            )
+            rec = recover_section_loop(shape, (cx, cy, cz), direction)
+            if not (rec.get("skipped") or rec.get("empty")):
+                sk = rec.get("sketch")
+                area = float(rec.get("area_mm2") or 0.0)
+                if sk and area > 1e-6:
+                    # equivalent-circle diameter from the section area, used as
+                    # the circle fallback's diameter when the sketch is dropped.
+                    profile_d = 2.0 * (area / 3.141592653589793) ** 0.5
+                    # BRepCheck.IsValid gate (ITEM 2): build the swept solid from
+                    # the recovered profile + path and KEEP the profile_sketch
+                    # ONLY when the resulting solid is valid. An invalid sweep
+                    # (self-intersection, non-manifold) drops the profile so the
+                    # emitter falls back to the circle (byte-identical).
+                    if _swept_profile_is_valid(sk, path_points):
+                        profile_sketch = sk
+        except Exception:
+            profile_sketch = None
+        return (path_points, profile_sketch, profile_d)
+    except Exception:
+        return None
+
+
+def _swept_profile_is_valid(sketch, path_points) -> bool:
+    """PILLAR FREEFORM (phase-4, 2026-06-15, ITEM 2): build the swept solid from
+    a recovered ``sketch`` + ``path_points`` and return ``BRepCheck.IsValid``.
+
+    Mirrors ``swept_boss_along_curve``'s build path (planar profile face →
+    orient +Z to the initial tangent → ``BRepOffsetAPI_MakePipe``) so the
+    validity verdict matches what the executor would build. Returns ``False`` on
+    any exception so the caller drops the profile and the emitter uses the
+    circle fallback (byte-identical). Read-only — discards the trial solid.
+    """
+    try:
+        from pydantic import TypeAdapter
+
+        from OCP.BRepCheck import BRepCheck_Analyzer
+        from OCP.BRepOffsetAPI import BRepOffsetAPI_MakePipe
+
+        from phone_designer.skills.modify_pocket._sketch import SketchSpec
+        from phone_designer.skills.modify_pocket._sketch_to_solid import (
+            _build_planar_face,
+        )
+        from phone_designer.skills.modify_boss.swept_boss_along_curve import (
+            _build_path_wire,
+            _initial_tangent,
+            _transform_face_to_frame,
+        )
+
+        pts = [(float(p[0]), float(p[1]), float(p[2])) for p in path_points]
+        if len(pts) < 2:
+            return False
+        spec = TypeAdapter(SketchSpec).validate_python(sketch)
+        profile_face = _build_planar_face(spec)
+        tangent = _initial_tangent(pts, "polyline")
+        oriented = _transform_face_to_frame(profile_face, pts[0], tangent)
+        wire = _build_path_wire(pts, "polyline")
+        pipe = BRepOffsetAPI_MakePipe(wire, oriented)
+        pipe.Build()
+        if not pipe.IsDone():
+            return False
+        solid = pipe.Shape()
+        return bool(BRepCheck_Analyzer(solid).IsValid())
+    except Exception:
+        return False
+
+
 def _detect_swept_loft_revolve(body, bosses, base_z_max, holes=None):
     """Heuristic detection of sweep / loft / revolve features by surface type.
 
@@ -373,21 +547,35 @@ def _detect_swept_loft_revolve(body, bosses, base_z_max, holes=None):
                 all_bb[5] = max(all_bb[5], bb[5])
         if all_bb is not None:
             xmin, ymin, zmin, xmax, ymax, zmax = all_bb
-            # Build a 3-point polyline path along the bbox diagonal in XY,
-            # starting at the base plane and rising to bbox top.
             anchor_z = base_z_max if base_z_max is not None else zmin
-            mid_x = 0.5 * (xmin + xmax)
-            mid_y = 0.5 * (ymin + ymax)
-            path_points = [
-                [round(mid_x, 4), round(ymin, 4), round(anchor_z, 4)],
-                [round(mid_x, 4), round(mid_y, 4), round(zmax, 4)],
-                [round(mid_x, 4), round(ymax, 4), round(zmax, 4)],
-            ]
-            # Estimated profile diameter = min of cross-section extents.
+            # Estimated profile diameter = min of cross-section extents
+            # (the circle fallback when no real section is recovered).
             extent_x = xmax - xmin
             extent_y = ymax - ymin
             profile_d = max(1.0, min(extent_x, extent_y) * 0.5)
-            sweep_features.append({
+            # PILLAR FREEFORM (phase-4, 2026-06-15, ITEM 2): try REAL recovery
+            # of the straight sweep path (extrusion-direction-projected bbox
+            # span) + one real perpendicular profile section. On any failure we
+            # fall back to the historic fabricated 3-point bbox-diagonal path so
+            # files that can't recover stay byte-identical.
+            profile_sketch = None
+            recovered = _recover_sweep_path_and_profile(
+                shape, extrusion_faces, all_bb,
+            )
+            if recovered is not None:
+                path_points, profile_sketch, prof_d_real = recovered
+                if prof_d_real and prof_d_real > 1e-6:
+                    profile_d = max(1.0, float(prof_d_real))
+            else:
+                # Historic fabricated 3-point bbox-diagonal path (fallback).
+                mid_x = 0.5 * (xmin + xmax)
+                mid_y = 0.5 * (ymin + ymax)
+                path_points = [
+                    [round(mid_x, 4), round(ymin, 4), round(anchor_z, 4)],
+                    [round(mid_x, 4), round(mid_y, 4), round(zmax, 4)],
+                    [round(mid_x, 4), round(ymax, 4), round(zmax, 4)],
+                ]
+            feat = {
                 "id": 0,
                 "bbox": [round(c, 4) for c in all_bb],
                 "anchor_z": round(anchor_z, 4),
@@ -395,7 +583,12 @@ def _detect_swept_loft_revolve(body, bosses, base_z_max, holes=None):
                 "profile_diameter_mm": round(profile_d, 4),
                 "path_points": path_points,
                 "kind": "boss",   # surface-of-extrusion ⇒ positive feature
-            })
+            }
+            # Store the recovered real profile ONLY when present; the emitter
+            # prefers it and falls back to the circle (byte-identical) otherwise.
+            if profile_sketch is not None:
+                feat["profile_sketch"] = profile_sketch
+            sweep_features.append(feat)
 
     # ── loft features: cone faces are the lofted frustum walls ─────────────
     # Cone radius + half-angle give us top/bottom radii at the bbox z range.

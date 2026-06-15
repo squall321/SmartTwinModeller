@@ -923,6 +923,22 @@ def _lug_step(idx: int, lug: dict, dimension_scale: float = 1.0) -> dict:
     })
 
 
+def _sweep_profile_sketch(feat: dict, profile_d: float, dimension_scale: float) -> dict:
+    """PILLAR FREEFORM (phase-4, 2026-06-15, ITEM 2): pick the sweep profile.
+
+    PREFER the recovered real perpendicular section (``feat["profile_sketch"]``,
+    a polygon / composite / bspline_closed loop whose 2D coords are already
+    centred on the path) scaled by ``dimension_scale``. Falls back to the
+    historic ``circle`` sketch — BYTE-IDENTICAL to today — when no real profile
+    was recovered (extract_feature_catalog stores ``profile_sketch`` ONLY when
+    the recovered section also passed the BRepCheck.IsValid swept-solid gate).
+    """
+    prof = feat.get("profile_sketch")
+    if prof:
+        return _scale_sketch_dict(prof, float(dimension_scale))
+    return {"kind": "circle", "diameter_mm": profile_d}
+
+
 def _sweep_boss_step(idx: int, feat: dict, dimension_scale: float = 1.0) -> dict:
     """Emit a ``swept_boss_along_curve`` step from a sweep_features entry."""
     sid = f"s_sweep_boss_{idx}"
@@ -931,7 +947,7 @@ def _sweep_boss_step(idx: int, feat: dict, dimension_scale: float = 1.0) -> dict
     path_points = feat.get("path_points") or []
     return _new_step(sid, "swept_boss_along_curve", {
         "face_selector": _DEFAULT_FACE_SELECTOR,
-        "profile_sketch": {"kind": "circle", "diameter_mm": profile_d},
+        "profile_sketch": _sweep_profile_sketch(feat, profile_d, dimension_scale),
         "path_points": [
             [float(p[0]), float(p[1]), float(p[2])]
             for p in path_points
@@ -948,7 +964,7 @@ def _sweep_pocket_step(idx: int, feat: dict, dimension_scale: float = 1.0) -> di
     path_points = feat.get("path_points") or []
     return _new_step(sid, "swept_pocket_along_curve", {
         "face_selector": _DEFAULT_FACE_SELECTOR,
-        "profile_sketch": {"kind": "circle", "diameter_mm": profile_d},
+        "profile_sketch": _sweep_profile_sketch(feat, profile_d, dimension_scale),
         "path_points": [
             [float(p[0]), float(p[1]), float(p[2])]
             for p in path_points
@@ -2111,8 +2127,10 @@ def _classify_base_topology(body: Any, bbox: tuple | None) -> str:
 
     This is ONLY a label. The authoritative accept/reject is the full-recon A/B
     revert-guard (``accept_freeform_base``): a non-box base is kept ONLY when the
-    full regen's match_ratio is not worse AND geometry_deviation hausdorff is
-    STRICTLY better. The classifier just orders which candidate base to A/B.
+    full regen's geometry_deviation hausdorff is STRICTLY better than the box
+    base's (PILLAR FREEFORM phase-4, 2026-06-15 — match_ratio no longer gates;
+    see ``_accept_alt_base``). The classifier just orders which candidate base
+    to A/B.
     """
     if body is None:
         return "box"
@@ -2223,11 +2241,28 @@ def _accept_alt_base(
     bbox: tuple | None,
 ) -> dict | None:
     """Score a sibling plan whose ``s_base`` is swapped to ``alt_skill`` against
-    the box plan. Returns the swapped plan ONLY when its full-recon match_ratio
-    is not worse AND its hausdorff is STRICTLY better — else ``None``.
+    the box plan. Returns the swapped plan ONLY when its full-recon
+    geometry_deviation hausdorff is STRICTLY better than the box base's — else
+    ``None``.
 
     Shared core of the multi-candidate A/B revert-guard (prismatic-profile and
     revolved-primitive candidates both flow through here).
+
+    PILLAR FREEFORM (phase-4, 2026-06-15) — HAUSDORFF-KEYED GUARD (ITEM 1):
+    the previous guard also required ``alt_match >= box_match`` (the
+    FeatureFidelityDiff overall_match_ratio must not drop). That was
+    fake-accuracy in REVERSE — it REVERTED a geometrically-tighter base to the
+    box on a feature-COUNT metric. The proof case is ``rounded_plate``: its
+    silhouette base is hausdorff 0.272 mm vs the box's 2.523 mm (9.3× better)
+    yet match_ratio drops 0.444 → 0.333 (the rounded outline carries fewer
+    detector-countable faces than the bbox slab), so the old guard threw the
+    better geometry away. A reconstruction's freeform "win" is a HAUSDORFF
+    claim, never a match_ratio claim, so the decision now keys ONLY on
+    hausdorff. This stays revert-SAFE: a candidate whose hausdorff is NOT
+    strictly better keeps the box base, so a non-freeform (prismatic-corpus)
+    body — whose box bbox already IS its tight silhouette, giving an equal or
+    worse candidate hausdorff — is unaffected and keeps its box base exactly
+    as today.
     """
     import copy
 
@@ -2247,9 +2282,13 @@ def _accept_alt_base(
     alt_score = _score_reconstruction(alt_plan, body, bbox)
     if box_score is None or alt_score is None:
         return None
-    box_match, box_haus = box_score
-    alt_match, alt_haus = alt_score
-    if alt_match >= box_match and alt_haus < box_haus:
+    _box_match, box_haus = box_score
+    _alt_match, alt_haus = alt_score
+    # Keep the candidate ONLY when its hausdorff is strictly tighter than the
+    # box base's — regardless of match_ratio (see the ITEM 1 rationale above).
+    # Worse-or-equal hausdorff → keep the box (revert-safe for prismatic corpus
+    # files, which are not freeform candidates).
+    if alt_haus < box_haus:
         return alt_plan
     return None
 
@@ -2274,11 +2313,13 @@ def accept_freeform_base(
         solid of revolution from ``_revolved_base_step_args``).
 
     Execute BOTH the box and the candidate, compare each FULL regen against the
-    ORIGINAL body, and KEEP the candidate ONLY when its overall match_ratio is
-    not worse than the box AND its hausdorff is STRICTLY better. Any other
-    outcome (no candidate, equal/worse match, equal/worse hausdorff, any
-    execution error) returns ``None`` → the caller keeps the box plan. This
-    makes the feature incapable of regressing match_ratio or hausdorff.
+    ORIGINAL body, and KEEP the candidate ONLY when its geometry_deviation
+    hausdorff is STRICTLY better than the box (PILLAR FREEFORM phase-4,
+    2026-06-15 — match_ratio no longer gates; see ``_accept_alt_base`` for the
+    ITEM 1 rationale). Any other outcome (no candidate, equal/worse hausdorff,
+    any execution error) returns ``None`` → the caller keeps the box plan. This
+    makes the feature incapable of regressing hausdorff: a worse-hausdorff
+    candidate is always reverted to the box.
 
     Returns the candidate ``Plan``-dict to use, or ``None`` to keep the box plan.
     """

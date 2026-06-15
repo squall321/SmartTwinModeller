@@ -273,6 +273,7 @@ import phone_designer.skills.inspect.body_orientation_check  # noqa: F401
 import phone_designer.skills.inspect.topology_health  # noqa: F401
 import phone_designer.skills.inspect.geometry_deviation  # noqa: F401
 import phone_designer.skills.inspect.validate_rebuilt_body  # noqa: F401
+import phone_designer.skills.inspect.fit_bspline_surface_patch  # noqa: F401
 import phone_designer.skills.inspect.inspect_draft_angles  # noqa: F401
 import phone_designer.skills.inspect.classify_edge_blends  # noqa: F401
 import phone_designer.skills.inspect.measure_thread  # noqa: F401
@@ -293,6 +294,8 @@ import phone_designer.skills.reverse_engineer.compare_parts  # noqa: F401
 import phone_designer.skills.reverse_engineer.recover_design_relations  # noqa: F401
 import phone_designer.skills.reverse_engineer.apply_variant_drivers  # noqa: F401
 import phone_designer.skills.reverse_engineer.generate_variant_family  # noqa: F401
+import phone_designer.skills.reverse_engineer.snap_to_standards  # noqa: F401
+import phone_designer.skills.reverse_engineer.solve_driver_range  # noqa: F401
 import phone_designer.skills.reverse_engineer.assembly_reverse_engineer  # noqa: F401
 from phone_designer.skills.io.iges_import import IgesImport
 from phone_designer.skills.io.iges_export import IgesExport

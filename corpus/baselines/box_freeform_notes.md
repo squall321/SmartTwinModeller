@@ -22,9 +22,13 @@ corpus STEP outputs.
 
 The reconstruction is box-mode with `PlanFromFeatureCatalog(base_profile_mode=
 "auto")` — the **shipping** path, which keeps a non-box base ONLY when the full
-regen's match_ratio is not worse AND its hausdorff is strictly better (the
-`accept_freeform_base` revert-guard). Every record also stores the two forced
-A/B halves so the win/loss is auditable and impossible to fake:
+regen's geometry_deviation **hausdorff is strictly better** than the box's (the
+`accept_freeform_base` revert-guard). PILLAR FREEFORM phase-4 (2026-06-15, ITEM
+1) removed the old `match_ratio not worse AND` co-condition: it was
+fake-accuracy in reverse — reverting a geometrically-tighter base on a
+feature-COUNT metric. A freeform win is a hausdorff claim, never a match_ratio
+claim. Every record also stores the two forced A/B halves so the win/loss is
+auditable and impossible to fake:
 
 | column | meaning |
 | --- | --- |
@@ -42,16 +46,21 @@ These are the recorded baseline numbers — measured, not aspirational. They are
 the **before** picture for Phase-4 B-spline work.
 
 ### silhouette_extrude — `rounded_plate` (50×30, r6, h8)
-- **GOOD geometry, conservatively reverted.** The recovered outline base is
-  **9.3× tighter** than the box base: `profile_hausdorff_mm 0.272` vs
-  `box_hausdorff_mm 2.523`. This is the anti-fake proof — the silhouette path
-  genuinely removes the rounded-corner over-cover.
-- The shipping `auto` path nonetheless **keeps the box** here
-  (`auto_base_is_profile=false`, `hausdorff_mm == box_hausdorff_mm`): swapping to
-  the profile base drops `match_ratio` 0.444 → 0.333 (the recovered composite
-  loop changes the detected feature inventory), and the revert-guard refuses any
-  match regression. Honest tension, recorded rather than hidden. Phase-4 should
-  let the profile base land WITHOUT the match-ratio cost.
+- **WIN, now KEPT (phase-4 ITEM 1).** The recovered outline base is **9.3×
+  tighter** than the box base: `profile_hausdorff_mm 0.272` vs
+  `box_hausdorff_mm 2.523`. The shipping `auto` path now **keeps the profile**
+  (`auto_base_is_profile=true`, `hausdorff_mm 0.272 == profile_hausdorff_mm`,
+  `volume_delta_pct` −13.3 → −7.2). The phase-3 revert-guard had thrown this
+  away because swapping to the profile base drops `match_ratio` 0.444 → ~0.31
+  (the recovered composite loop changes the detected feature inventory) and the
+  old guard refused any match regression — fake-accuracy in reverse. ITEM 1
+  rekeys the guard on hausdorff alone, so the geometrically-better base lands.
+- **Honest caveat — match_ratio here is non-deterministic** (observed 0.2917 ↔
+  0.3333 across runs): the rounded-corner section's recovered face count jitters
+  with OCCT tessellation. The baseline records the conservative **floor
+  (0.2917)** so the lane's `MATCH_DROP_TOL` guard does not false-trip on this
+  noise. This jitter is *exactly why* match_ratio must not gate the base choice;
+  `hausdorff_mm` (0.271506) is rock-stable across every run.
 
 ### sweep — `swept_channel` (L-path, 6×4 section)
 - **STRONG win, kept.** `auto_base_is_profile=true`: the L-channel is prismatic
@@ -80,15 +89,22 @@ the **before** picture for Phase-4 B-spline work.
 | fixture | mechanism | match | auto haus (mm) | box haus (mm) | profile haus (mm) | vol Δ% | auto kept non-box? |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | swept_channel | sweep | 0.667 | 0.077 | 25.0 | 0.081 | +2.1 | yes |
-| rounded_plate | silhouette_extrude | 0.444 | 2.523 | 2.523 | 0.272 | −13.3 | no (match-safe) |
+| rounded_plate | silhouette_extrude | 0.292* | **0.272** | 2.523 | 0.272 | **−7.2** | **yes** |
 | loft_boss | loft_section | 1.000 | 4.134 | 4.134 | n/a | +27.3 | no |
 | revolve_frustum | revolve | 1.000 | 6.363 | 6.363 | n/a | −44.6 | no |
 
+`*` rounded_plate match_ratio is non-deterministic (0.2917 ↔ 0.3333); the
+conservative floor is recorded. The **auto haus** column is what matters and is
+deterministic.
+
 Bands, lowest-deviation to highest: **sweep** (silhouette-prismatic, kept) →
-**silhouette** (profile 9× tighter but reverted for match safety) →
-**loft / revolve** (partial; box base kept, the explicit Phase-4 work items).
+**silhouette** (profile 9× tighter, NOW KEPT after ITEM 1) →
+**loft / revolve** (partial; box base kept, the remaining Phase-4 work items).
 
 No per-file tuning, no fake accuracy: the box-vs-profile A/B halves are both
-recorded, and the revert-guard's conservatism is documented where it costs us
-(rounded_plate). A re-run reproduces the baseline exactly (deterministic
-deviation metrics) — `freeform_corpus_regress.py` with no flags exits 0.
+recorded; the revert-guard now keys on hausdorff alone (ITEM 1), so a
+geometrically-tighter base is kept and a worse one is still reverted to the box
+(prismatic corpus files unaffected — their box bbox already is their tight
+silhouette). The `hausdorff_mm` deviation metric reproduces exactly on every
+run; only the secondary feature-count `match_ratio` carries tessellation noise,
+which is why it no longer gates the base choice.
