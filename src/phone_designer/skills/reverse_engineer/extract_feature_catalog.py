@@ -864,9 +864,10 @@ class ExtractFeatureCatalog(SkillBase):
             DetectMirrorSymmetry,
         )
         from phone_designer.skills.inspect.detect_ribs import DetectRibs
-        from phone_designer.skills.inspect.match_standard_hole import (
-            MatchStandardHole,
-        )
+        # match_standard_hole's PURE matcher (_gather_candidates) is imported
+        # at the per-hole loop below — the full skill apply() is intentionally
+        # NOT used there (it would re-measure the whole body per hole; see the
+        # 2026-06-16 PERF note at the match loop).
 
         # ── face-count guard — bail on raw mesh-to-brep shells ─────────────
         if max_face_count is not None:
@@ -1064,38 +1065,40 @@ class ExtractFeatureCatalog(SkillBase):
         if circ_skipped:
             skipped_detectors.append("detect_circular_array")
 
-        # ── match_standard_hole — one call per hole's primary diameter ─────
+        # ── match_standard_hole — one match per hole's primary diameter ────
+        # 2026-06-16 PERF: call the PURE matching function directly instead of
+        # MatchStandardHole().apply(body, ...) per hole. The full skill apply()
+        # wrapper runs _measure(body) BEFORE and AFTER every call (volume +
+        # face-count via BRepGProp on the WHOLE body) — on a 493-face assembly
+        # leaf that body-measurement, times N holes, was 81.6s of the catalog's
+        # 182s (the single biggest cost), while the diameter→catalog match
+        # itself is microseconds. _gather_candidates + sort reproduces the
+        # skill's matches[0] EXACTLY (byte-identical best_match) with zero body
+        # measurement. Output unchanged; only the wrapper overhead removed.
+        from phone_designer.skills.inspect.match_standard_hole import (
+            _gather_candidates as _msh_gather,
+        )
         standard_matches: list[dict] = []
-        msh_total = 0.0
-        msh_skipped = False
+        t_msh0 = time.perf_counter()
         for h in holes:
             diams = h.get("diameters_mm") or []
             if not diams:
                 continue
             primary_d = min(diams)  # shaft (clearance) diameter
-            t0 = time.perf_counter()
-            try:
-                mres = MatchStandardHole().apply(
-                    body,
-                    {"hole_diameter_mm": float(primary_d), "fit_kind": "auto"},
-                )
-            except Exception as exc:
-                mres = None
-                if _is_too_big(exc):
-                    msh_skipped = True
-            msh_total += time.perf_counter() - t0
             top = None
-            if mres:
-                matches = mres.extras.get("matches", []) or []
-                top = matches[0] if matches else None
+            try:
+                cands = _msh_gather(float(primary_d), "auto")
+                cands.sort(key=lambda m: m["deviation_mm"])
+                top = cands[0] if cands else None
+            except Exception:
+                top = None
             standard_matches.append({
                 "hole_id": h.get("id"),
                 "diameter_mm": float(primary_d),
                 "best_match": top,
             })
-        timings_sec["match_standard_hole"] = round(msh_total, 4)
-        if msh_skipped:
-            skipped_detectors.append("match_standard_hole")
+        timings_sec["match_standard_hole"] = round(
+            time.perf_counter() - t_msh0, 4)
 
         # ── sweep / revolve / loft surface-type detection ──────────────────
         t0 = time.perf_counter()
