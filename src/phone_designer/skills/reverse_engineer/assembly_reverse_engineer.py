@@ -152,21 +152,23 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-# SPOT-CHECK-tuned (phase-4, 2026-06-15). RC_Buggy's worst leaves cost ~220 s
-# each in the full per-face catalog (a 493/360/289-face solid), so anything
-# face-heavy MUST go coarse. The committed default 60 is the value VERIFIED on
-# both OEM fixtures with NO global timeout:
-#   * RC_Buggy: 211 solids → 144 components, 144/144 catalog coverage
-#     (102 full + 42 coarse) in 277 s — was a >700 s hang.
-#   * KR600:    61 solids → 61 components, 61/61 coverage
-#     (41 full + 20 coarse) in 79 s — was a >700 s hang.
-# Note the cost driver is geometric complexity, not face count alone — a few
-# ~46-face solids still take 60-160 s in the full path — so the budget only
-# bounds the WORST offenders; the rest is what makes RC_Buggy 277 s rather than
-# instant. Override with PHONE_DESIGNER_LOD_MAX_FACES; set the Arg to None to
-# disable (full fidelity, the historic hang-prone path); raise it to trade
-# wall-clock for fidelity on hosts with more time budget.
-DEFAULT_LOD_MAX_FACES: int = _env_int("PHONE_DESIGNER_LOD_MAX_FACES", 60)
+# SPOT-CHECK-tuned (phase-4, 2026-06-15; raised 2026-06-16 after the #2 perf
+# fix). RC_Buggy's worst leaves cost ~220 s each in the full per-face catalog
+# (a 493-face solid), so anything face-heavy MUST go coarse — but the
+# 2026-06-16 match_standard_hole fix (killing the per-hole whole-body
+# re-measurement) cut that 493-face catalog 182 s → 105 s (~42%), so the
+# budget can rise: MORE components reconstruct full-fidelity in the same
+# wall-clock. Measured on RC_Buggy with the speedup (per_class_timeout=None):
+#   * lod=60  → 0 full / 10 coarse in 81 s   (the old conservative default)
+#   * lod=150 → 2 full / 8 coarse in 100 s   (the new default — +full, +19 s)
+# So 150 is measured-safe (100 s, well under any per-file timeout, 0 skipped).
+# Phase-4 lod=60 baseline (pre-speedup, no global timeout): RC_Buggy 144/144
+# coverage in 277 s, KR600 61/61 in 79 s. Cost driver is geometric complexity,
+# not face count alone — the budget bounds the WORST offenders. Override with
+# PHONE_DESIGNER_LOD_MAX_FACES; set the Arg to None to disable (full fidelity,
+# the historic hang-prone path); raise further to trade wall-clock for fidelity
+# on hosts with more time budget.
+DEFAULT_LOD_MAX_FACES: int = _env_int("PHONE_DESIGNER_LOD_MAX_FACES", 150)
 
 
 def _bbox_of(shape):
