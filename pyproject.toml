@@ -46,6 +46,11 @@ dev = [
     "mypy>=1.10",
 ]
 mesh-advanced = ["pymeshlab"]
+# report-pdf: true .pdf export (text + embedded PNG views) via reportlab.
+# Optional — the print-optimized self-contained HTML remains the
+# dependency-free, high-fidelity deliverable; reportlab adds a low-fidelity
+# real .pdf when installed (lights up _report_pdf's gated path automatically).
+report-pdf = ["reportlab>=4"]
 # fbx 의존성은 의도적으로 빼둠 (Rev 4 결정, glb only)
 
 [project.scripts]
