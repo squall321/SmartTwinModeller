@@ -61,9 +61,21 @@
 >   imported 경계 re-solidify 지 parametric 재구성 아님**(면 재사용, win 은
 >   hausdorff). box-mode base_profile_mode='auto' 의 3번째 베이스 후보,
 >   hausdorff-revert 게이트, box corpus 0 회귀.
-> - 잔여 정직한 한계: parametric-from-catalog freeform(편집가능 트리 복원)은
->   여전히 미해결(재솔리드는 그 대체가 아님); --workers 는 speedup(기본
->   serial 권위); 11752 preserve_brep 696s 경계 파일(충분한 시간엔 0.8684).
+> - **3대 미해결건 전부 해결 (2026-06-16, corpus 양 모드 0 회귀):**
+>   **#1 parametric-from-catalog freeform** — `classify_generating_op` +
+>   `place_generating_op_solid`: 자유곡면의 생성연산을 **편집가능** revolve/
+>   loft/sweep 으로 복원. REVOLVE 작동(revolve_frustum 6.37→0.18mm), **증명:
+>   profile_scale 1.2 → 부피 1.2³ 정확·bbox 1.2× = 진짜 parametric 변형**
+>   (재솔리드는 못 함). loft/sweep 은 축 복원 미흡 시 정직하게 freeform_shell
+>   로 revert. base_profile_mode='auto' candidate 0, hausdorff 1.15× tol.
+>   **#2 어셈블리 full-fidelity** — 프로파일로 진범 적발: hole 마다
+>   `MatchStandardHole().apply(body)` 가 SkillBase 의 _measure(493면 바디)를
+>   2×N 호출 = 81.6s. 순수 매처 직접 호출로 **81.6s→1.275s(64×), catalog
+>   182→105s(byte-id)**; LOD 기본 60→150 으로 RC_Buggy full 컴포넌트 0→2.
+>   **#3 PDF** — reportlab(옵션 의존성) 설치로 진짜 %PDF- 출력 경로 점등.
+> - 잔여(정직): loft/sweep 축 복원 robust화, 148-distinct 어셈블리의 *전*
+>   컴포넌트 full-fidelity(여전히 시간 vs 충실도 트레이드오프), 11752 696s
+>   경계 파일(충분한 시간엔 0.8684).
 
 설계 원칙 (전 기둥 공통, 23-pass + Wave1~4 의 교훈 계승):
 1. corpus-regress 하니스로 게이트 — 인라인 sweep 금지.
