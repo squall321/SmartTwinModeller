@@ -2406,6 +2406,128 @@ def _accept_freeform_shell_base(
     return alt_plan
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# PARAMETRIC GENERATING-OP base (PILLAR FREEFORM, 2026-06-16).
+#
+# Distinct from the re-solidified shell: classify_generating_op recovers a body's
+# DOMINANT generating operation (revolve meridian / loft sections / sweep section
+# + path) and we emit it as an EDITABLE base step (place_generating_op_solid).
+# The win over re-solidify is EDITABILITY — the recovered profile/sections carry
+# tunable parameters (profile_scale, the sketches themselves), so a downstream
+# operator can change a dimension and the body rebuilds parametrically; a
+# re-solidified shell is frozen. We pay for that with a slightly looser hausdorff
+# acceptance: the parametric base is kept when its hausdorff is within
+# PARAMETRIC_HAUS_TOL of the box base (i.e. NOT necessarily strictly tighter — we
+# trade a small geometric slack for the editability win). If it is MUCH worse
+# (> tol × box) we keep the box / re-solidify and SAY SO (honest fallback).
+
+# A recovered parametric op may be marginally LOOSER on hausdorff than the box
+# yet still be the right base because it is editable. Accept up to this multiple
+# of the box base's hausdorff. 1.15 = tolerate 15% worse-than-box hausdorff for
+# the editability win; a candidate worse than this reverts to box/re-solidify.
+_PARAMETRIC_HAUS_TOL = 1.15
+
+
+def _generating_op_base_step(
+    body: Any,
+    bbox: tuple | None,
+    n_sections: int = 3,
+) -> tuple[dict, dict] | None:
+    """Classify the body's generating op and build a ``place_generating_op_solid``
+    base step landed in the box frame — or ``None`` when no op is recoverable.
+
+    Returns ``(step_dict, op_dict)`` so the caller can label the plan with the
+    recovered mechanism. ``op_dict`` is the raw classify_generating_op extras.
+    """
+    if body is None or bbox is None:
+        return None
+    try:
+        # Register the create skill before the A/B executes the candidate plan.
+        import phone_designer.skills.create.place_generating_op_solid  # noqa: F401
+        from phone_designer.skills.inspect.classify_generating_op import (
+            ClassifyGeneratingOp,
+        )
+
+        op = ClassifyGeneratingOp().apply(
+            body, {"n_sections": int(n_sections)}
+        ).extras["generating_op"]
+        if op.get("kind") in (None, "none") or op.get("confidence", 0.0) <= 0.0:
+            return None
+
+        axis = op.get("axis") or {}
+        box_shift = _world_to_box_shift(bbox)
+        args: dict[str, Any] = {
+            "kind": op["kind"],
+            "profile_sketch": op.get("profile_sketch"),
+            "section_sketches": op.get("section_sketches"),
+            "axis_origin": list(axis.get("origin") or (0.0, 0.0, 0.0)),
+            "axis_dir": list(axis.get("dir") or (0.0, 0.0, 1.0)),
+            "path_points": (op.get("path") or {}).get("points"),
+            "path_type": (op.get("path") or {}).get("type", "polyline"),
+            "profile_scale": 1.0,
+            "box_shift": [float(box_shift[0]), float(box_shift[1]), float(box_shift[2])],
+        }
+        step = _new_step("s_base", "place_generating_op_solid", args)
+        return (step, op)
+    except Exception:
+        return None
+
+
+def _accept_parametric_op_base(
+    box_plan: dict,
+    op_step: dict,
+    op: dict,
+    body: Any,
+    bbox: tuple | None,
+) -> dict | None:
+    """A/B the recovered parametric generating-op base against the box base.
+
+    Builds a FULL-reconstruction candidate plan = ONLY the parametric base step
+    (the recovered op reproduces the whole outer body; re-cutting catalog
+    features on top would double-count, mirroring the freeform-shell honesty
+    gate). Executes both, compares each FULL regen's geometry_deviation hausdorff
+    vs the ORIGINAL, and KEEPS the parametric plan when its hausdorff is within
+    ``_PARAMETRIC_HAUS_TOL`` × the box base's (the editability tolerance — see the
+    block comment above). MUCH worse → ``None`` (keep box / re-solidify).
+
+    The candidate is labelled ``base_mechanism='parametric_revolve'|
+    'parametric_loft'|'parametric_sweep'`` so downstream consumers see this is an
+    EDITABLE rebuild, not a frozen shell.
+    """
+    import copy
+
+    kind = op.get("kind")
+    if kind not in ("revolve", "loft", "sweep"):
+        return None
+    alt_plan = copy.deepcopy(box_plan)
+    alt_plan["steps"] = [copy.deepcopy(op_step)]
+    alt_plan["base_mechanism"] = f"parametric_{kind}"
+    alt_plan["base_label"] = (
+        f"parametric_{kind} (editable generating op, "
+        f"confidence={op.get('confidence')})"
+    )
+    alt_plan["generating_op"] = {
+        "kind": kind,
+        "confidence": op.get("confidence"),
+        "axis": op.get("axis"),
+        "reason": op.get("reason"),
+    }
+
+    box_score = _score_reconstruction(box_plan, body, bbox)
+    alt_score = _score_reconstruction(alt_plan, body, bbox)
+    if box_score is None or alt_score is None:
+        return None
+    _box_match, box_haus = box_score
+    _alt_match, alt_haus = alt_score
+    # Editability tolerance: keep the parametric base when it is competitive
+    # (within tol×box), not only when strictly tighter. Much worse → revert.
+    if alt_haus <= box_haus * _PARAMETRIC_HAUS_TOL:
+        alt_plan["base_haus_mm"] = round(float(alt_haus), 6)
+        alt_plan["box_haus_mm"] = round(float(box_haus), 6)
+        return alt_plan
+    return None
+
+
 def accept_freeform_base(
     box_plan: dict,
     body: Any,
@@ -2448,6 +2570,23 @@ def accept_freeform_base(
         return None
     try:
         topo = _classify_base_topology(body, bbox)
+
+        # 0. PARAMETRIC GENERATING-OP base (PILLAR FREEFORM, 2026-06-16) — tried
+        #    FIRST because it is the EDITABLE win: classify_generating_op recovers
+        #    a revolve meridian / loft sections / sweep section+path, emitted as
+        #    place_generating_op_solid. Kept when its hausdorff is within
+        #    _PARAMETRIC_HAUS_TOL of the box base (editability tolerance — a
+        #    parametric rebuild is worth a small geometric slack a frozen
+        #    re-solidify shell is not). MUCH worse → fall through to the existing
+        #    silhouette / revolved-primitive / freeform-shell candidates, all of
+        #    which stay strictly-better-than-box (revert-safe; the box corpus is
+        #    unaffected because base_profile_mode defaults to 'off').
+        op_built = _generating_op_base_step(body, bbox)
+        if op_built is not None:
+            op_step, op = op_built
+            kept = _accept_parametric_op_base(box_plan, op_step, op, body, bbox)
+            if kept is not None:
+                return kept
 
         # 1. Revolved bodies (lathe-style) → revolved-primitive base candidate.
         if topo == "revolved" and None not in (base_l, base_w, base_h):
