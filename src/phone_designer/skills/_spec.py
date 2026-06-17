@@ -166,8 +166,41 @@ class SkillBase(ABC):
         else:
             args = args_dict
 
+        # 2026-06-17 PERF: _measure(body) runs BRepGProp volume + face count on
+        # the WHOLE body before AND after every apply(). For a read-only skill
+        # whose ONLY post_condition is 'body_present', _check_one looks solely
+        # at whether the body is None (never at volume/face_count) and the
+        # _step_metrics it would feed are meaningless (no geometry change), so
+        # the measurement is pure waste — on a 493-face assembly leaf the
+        # metrology/detector skills' _measure tax was ~14s (44 VolumeProperties_s
+        # calls per extract_feature_catalog). When no declared post_condition
+        # needs metrics we substitute a CHEAP presence sentinel (None ⇔ body is
+        # None, else {} = "present, no metrics") which preserves body_present
+        # semantics EXACTLY and leaves _step_metrics None (correct for a
+        # read-only/zero-delta step). Volume/face-changing skills (every
+        # modify_* + create) keep full measurement, so executor provenance +
+        # the volume_* post-conditions are unaffected.
+        spec = getattr(self, "spec", None)
+        _conds = getattr(spec, "post_conditions", None) if spec is not None else None
+        _category = getattr(spec, "category", None) if spec is not None else None
+        # Skip the measurement ONLY for read-only 'inspect' skills whose sole
+        # post_condition is body_present. Restricting to category=='inspect'
+        # (never create/modify/compose/io) guarantees we never drop the V5
+        # per-step provenance for a geometry-CHANGING step — e.g. the 'hole'
+        # cut declares only body_present yet must report its volume delta, so
+        # it stays measured. inspect skills return the body unchanged, so their
+        # _step_metrics are trivially zero-delta and the measurement is waste.
+        _needs_metrics = not (
+            _category == "inspect"
+            and bool(_conds)
+            and all(getattr(c, "kind", None) == "body_present" for c in _conds)
+        )
+
+        def _present(b):
+            return None if b is None else {}
+
         # Pre-execution shape metrics (None when create skills receive body=None).
-        pre_metrics = _measure(body)
+        pre_metrics = _measure(body) if _needs_metrics else _present(body)
 
         _t0 = time.perf_counter()
         result = self._apply(body, args)
@@ -175,12 +208,11 @@ class SkillBase(ABC):
 
         # Post-execution metrics — measured ONCE here and shared between the
         # post-condition gate below and the per-step provenance record (V5).
-        post_metrics = _measure(result.body)
+        post_metrics = _measure(result.body) if _needs_metrics else _present(result.body)
 
         # Post-condition verification — catches silent no-ops like an
         # extrude_pocket that removed 0 mm³ due to a face-orientation bug.
         # Skills opt-in via `post_conditions=[...]` in their @skill(...) block.
-        spec = getattr(self, "spec", None)
         if spec is not None and getattr(spec, "post_conditions", None):
             check_post_conditions(
                 spec.post_conditions, pre_metrics, post_metrics, spec.name,
