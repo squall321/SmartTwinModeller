@@ -526,6 +526,103 @@ def inspect_re(
     raise typer.Exit(code or 0)
 
 
+@app.command()
+def analyze(
+    part: Path = typer.Argument(..., help="분석할 CAD 파일 (STEP/IGES/BREP)"),
+    out: Path = typer.Option(
+        None, "--out", "-o",
+        help="리포트 출력 경로. .html → 자가포함 HTML, .pdf → reportlab PDF "
+             "(미설치면 HTML 로 폴백), .json → 전체 분석 JSON.",
+    ),
+    reconstruct: bool = typer.Option(
+        False, "--reconstruct",
+        help="박스모드 역설계 재구성 + geometry_deviation Hausdorff 채점 (느림).",
+    ),
+    processes: str = typer.Option(
+        "cnc_milling,injection_molding", "--processes",
+        help="DFM 평가 공정 (쉼표 구분).",
+    ),
+):
+    """단일 부품 front-door: CAD 파일 1개 → 품질 리포트(위상/벽두께/draft/blend/
+    질량/DFM) + feature 카탈로그 + 편집가능 주요치수 + (선택)재구성 fidelity.
+
+    예:
+      phone-designer analyze part.step
+      phone-designer analyze part.step -o report.html
+      phone-designer analyze part.step -o report.pdf --reconstruct
+      phone-designer analyze part.step -o analysis.json --reconstruct
+    """
+    if not part.exists():
+        typer.echo(f"[error] file not found: {part}", err=True)
+        raise typer.Exit(code=2)
+
+    import json as _json
+
+    from phone_designer.skills import export_manifest  # noqa: F401 — register
+    from phone_designer.skills.reverse_engineer.analyze_part import AnalyzePart
+
+    want_html = out is not None and out.suffix.lower() == ".html"
+    want_pdf = out is not None and out.suffix.lower() == ".pdf"
+    want_json = out is not None and out.suffix.lower() == ".json"
+
+    typer.echo(f">>> analyzing {part.name} ...")
+    res = AnalyzePart().apply(None, {
+        "part_path": str(part),
+        "processes": [p.strip() for p in processes.split(",") if p.strip()],
+        "include_html": want_html or want_pdf or out is None,
+        "pdf": want_pdf,
+        "reconstruct": reconstruct,
+    })
+    pa = res.extras["part_analysis"]
+
+    # console summary
+    typer.echo(f"    part: {pa.get('part_id')}  bbox_mm: {pa.get('bbox_mm')}")
+    counts = (pa.get("feature_catalog") or {}).get("counts") or {}
+    if counts:
+        typer.echo("    features: " + ", ".join(
+            f"{k}={v}" for k, v in counts.items() if v))
+    for d in (pa.get("key_dimensions") or [])[:6]:
+        typer.echo(f"    dim  {d.get('name')}: {d.get('value_mm')} mm")
+    rec = pa.get("reconstruction")
+    if rec:
+        typer.echo(
+            f"    reconstruction: base={rec.get('base_mechanism')} "
+            f"match={rec.get('match_ratio')} hausdorff_mm={rec.get('hausdorff_mm')}")
+    for stage, info in (pa.get("_stages") or {}).items():
+        if not info.get("ok"):
+            typer.echo(f"    [stage {stage} failed] {info.get('error')}")
+
+    if out is None:
+        raise typer.Exit(0)
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+    if want_pdf:
+        pdf = pa.get("report_pdf") or {}
+        pb = pdf.get("pdf_bytes")
+        if pb:
+            out.write_bytes(pb)
+            typer.echo(f">>> wrote PDF ({pdf.get('pdf_engine')}) -> {out}")
+        else:
+            html = pa.get("report_html") or ""
+            fallback = out.with_suffix(".html")
+            fallback.write_text(html, encoding="utf-8")
+            typer.echo(f"[note] no PDF engine ({pdf.get('note')}); "
+                       f"wrote print-ready HTML -> {fallback}")
+    elif want_html:
+        out.write_text(pa.get("report_html") or "", encoding="utf-8")
+        typer.echo(f">>> wrote HTML -> {out}")
+    elif want_json:
+        # drop the raw pdf bytes from the JSON (not serializable / huge)
+        dump = dict(pa)
+        if isinstance(dump.get("report_pdf"), dict):
+            rp = dict(dump["report_pdf"])
+            rp.pop("pdf_bytes", None)
+            dump["report_pdf"] = rp
+        out.write_text(_json.dumps(dump, indent=1, default=str), encoding="utf-8")
+        typer.echo(f">>> wrote analysis JSON -> {out}")
+    raise typer.Exit(0)
+
+
 @app.command("corpus-test")
 def corpus_test(
     dir: Path = typer.Option(

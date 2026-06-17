@@ -295,6 +295,7 @@ import phone_designer.skills.reverse_engineer.normalize_varied_catalog  # noqa: 
 import phone_designer.skills.reverse_engineer.feature_change_classify  # noqa: F401
 import phone_designer.skills.reverse_engineer.identify_key_dimensions  # noqa: F401
 import phone_designer.skills.reverse_engineer.compare_parts  # noqa: F401
+import phone_designer.skills.reverse_engineer.analyze_part  # noqa: F401
 import phone_designer.skills.reverse_engineer.recover_design_relations  # noqa: F401
 import phone_designer.skills.reverse_engineer.apply_variant_drivers  # noqa: F401
 import phone_designer.skills.reverse_engineer.generate_variant_family  # noqa: F401
