@@ -3,20 +3,7 @@
   "mode": "box",
   "subset": "freeform",
   "base_profile_mode": "auto",
-  "generated_at": "2026-06-15T05:30:20+00:00",
-  "freeform_shell_note": "FREEFORM RE-SOLIDIFY (2026-06-15): base_profile_mode='auto' now also tries a RE-SOLIDIFIED-BOUNDARY base (place_freeform_solid) — it sews the body's COMPLETE boundary face set into a watertight freeform SOLID via the proven OCCT 7.8 recipe and keeps it ONLY when its hausdorff strictly beats BOTH the box and silhouette bases. Because it REUSES the body's own faces it recovers the TRUE outer geometry near-losslessly (hausdorff ~0, volume == original) and is emitted as the FULL reconstruction (base step ONLY — the boundary already carries every feature, so re-cutting would double-count). This is a base-stock recovery, NOT a parametric rebuild-from-catalog. All 4 fixtures now re-solidify, so 'hausdorff_mm' (the shipping auto value) dropped to 0.0 (was the silhouette/box value). The 'mechanism' label still names the builder's true mechanism; the auto base that wins is now freeform_shell on every fixture here. base_profile_mode='off' (the default + the committed box_complex/preserve_brep corpus) is UNCHANGED and never emits place_freeform_solid.",
-  "freeform_shell_proof": {
-    "metric": "geometry_deviation hausdorff_mm vs original body (box frame)",
-    "comment": "box/silhouette baselines vs the re-solidified freeform-shell base. Forced in-process measurement (silhouette None where the body is not prismatic).",
-    "records": {
-      "Ventilator": {"box": 19.6306, "silhouette": null, "freeform_shell": 0.3602, "solidifies": true, "chosen": "freeform_shell"},
-      "rounded_plate": {"box": 2.5081, "silhouette": 0.5705, "freeform_shell": 0.0, "solidifies": true, "chosen": "freeform_shell"},
-      "loft_boss": {"box": 4.134, "silhouette": null, "freeform_shell": 0.0675, "solidifies": true, "chosen": "freeform_shell"},
-      "revolve_frustum": {"box": 6.3674, "silhouette": null, "freeform_shell": 0.1795, "solidifies": true, "chosen": "freeform_shell"},
-      "swept_channel": {"box": 25.0, "silhouette": 0.0807, "freeform_shell": 0.0683, "solidifies": true, "chosen": "freeform_shell"},
-      "11752": {"box": 66.675, "silhouette": null, "freeform_shell": 11.0722, "solidifies": true, "n_shells": 3, "volume_ratio": 1.001123, "note": "multi-shell industrial part: largest-shell pick recovers the outer solid; a small inner void shell is not captured, hence ratio 1.0011 and residual hausdorff."}
-    }
-  },
+  "generated_at": "2026-06-16T23:26:35+00:00",
   "records": {
     "rounded_plate": {
       "file": "rounded_plate",
@@ -30,21 +17,21 @@
       "analytic_volume_mm3": 11752.7787,
       "plan_steps": 1,
       "error": null,
-      "duration_s": 21.4
+      "duration_s": 19.1
     },
     "loft_boss": {
       "file": "loft_boss",
       "mechanism": "loft_section",
       "match_ratio": 1.0,
-      "hausdorff_mm": 0.0,
+      "hausdorff_mm": 0.787636,
       "box_hausdorff_mm": 4.134011,
       "profile_hausdorff_mm": null,
       "auto_base_is_profile": true,
-      "volume_delta_pct": 0.0,
+      "volume_delta_pct": 4.718,
       "analytic_volume_mm3": 3769.9112,
       "plan_steps": 1,
       "error": null,
-      "duration_s": 21.9
+      "duration_s": 17.3
     },
     "revolve_frustum": {
       "file": "revolve_frustum",
@@ -54,25 +41,25 @@
       "box_hausdorff_mm": 6.363301,
       "profile_hausdorff_mm": null,
       "auto_base_is_profile": true,
-      "volume_delta_pct": -0.0,
+      "volume_delta_pct": 0.0,
       "analytic_volume_mm3": 8566.076,
       "plan_steps": 1,
       "error": null,
-      "duration_s": 8.0
+      "duration_s": 6.4
     },
     "swept_channel": {
       "file": "swept_channel",
       "mechanism": "sweep",
-      "match_ratio": 1.0,
-      "hausdorff_mm": 0.0,
+      "match_ratio": 0.6667,
+      "hausdorff_mm": 0.078592,
       "box_hausdorff_mm": 25.0,
       "profile_hausdorff_mm": 0.080661,
       "auto_base_is_profile": true,
-      "volume_delta_pct": 0.0,
+      "volume_delta_pct": 2.093,
       "analytic_volume_mm3": 1261.5929,
       "plan_steps": 1,
       "error": null,
-      "duration_s": 10.7
+      "duration_s": 14.0
     }
   }
 }

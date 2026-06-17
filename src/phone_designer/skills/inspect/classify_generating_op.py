@@ -464,64 +464,102 @@ class ClassifyGeneratingOp(SkillBase):
                     return self._result(body, op)
             diagnostics["revolve_meridian"] = "recovery_failed"
 
-        # ── 2/3. LOFT vs SWEEP: cross-section stations along the dominant axis.
-        # Dominant axis = the longest bbox extent (the stacking direction).
-        spans = [
-            ("X", xmax - xmin, (1.0, 0.0, 0.0)),
-            ("Y", ymax - ymin, (0.0, 1.0, 0.0)),
-            ("Z", zmax - zmin, (0.0, 0.0, 1.0)),
+        # ── 2/3. LOFT vs SWEEP: cross-section stations along the stacking axis.
+        # 2026-06-17 ROBUSTNESS: try ALL THREE bbox axes, not just the longest.
+        # The longest-axis-only heuristic mis-detected loft_boss (LOFTED along Z
+        # but WIDEST in X → sectioning along X read 'constant' and mislabeled it
+        # a sweep-along-X). A genuine loft/sweep along axis K gives sections
+        # perpendicular to K that are CLEAN single closed loops; a wrong axis
+        # tends to fragment them (n_loops > 1) or fail to recover. So we score
+        # each axis by section cleanliness (all single-loop) + section count,
+        # recover stations along each viable axis, and pick the axis with the
+        # most decisive, cleanest signal. The planner's hausdorff A/B
+        # revert-guard still geometrically verifies the chosen op downstream.
+        all_spans = [
+            ("X", xmax - xmin, (1.0, 0.0, 0.0), 0, xmin),
+            ("Y", ymax - ymin, (0.0, 1.0, 0.0), 1, ymin),
+            ("Z", zmax - zmin, (0.0, 0.0, 1.0), 2, zmin),
         ]
-        spans.sort(key=lambda t: -t[1])
-        axis_label, span, axis_dir = spans[0]
-        diagnostics["stack_axis"] = axis_label
-        diagnostics["stack_span_mm"] = round(span, 4)
-
-        if span <= 1e-6:
-            op["reason"] = "degenerate bbox — no stacking axis."
-            return self._result(body, op)
-
-        # station fractions strictly inside the body so the plane hits material.
         n = int(args.n_sections)
         fracs = [(i + 1) / (n + 1) for i in range(n)]
-        axis_lo = {"X": xmin, "Y": ymin, "Z": zmin}[axis_label]
-        idx = {"X": 0, "Y": 1, "Z": 2}[axis_label]
 
-        stations: list[dict[str, Any]] = []
-        for fr in fracs:
-            along = axis_lo + fr * span
-            origin = list(centroid)
-            origin[idx] = along
-            rec = _section_at(
-                shape, axis_dir, tuple(origin), args.simplify_tol_mm,
-            )
-            if rec is None:
+        def _stations_along(axis_dir, idx, axis_lo, span):
+            """Recover the N perpendicular sections along one axis; returns
+            (stations, all_single_loop)."""
+            sts: list[dict[str, Any]] = []
+            single = True
+            for fr in fracs:
+                along = axis_lo + fr * span
+                origin = list(centroid)
+                origin[idx] = along
+                rec = _section_at(
+                    shape, axis_dir, tuple(origin), args.simplify_tol_mm,
+                )
+                if rec is None:
+                    continue
+                if int(rec.get("n_loops") or 1) != 1:
+                    single = False
+                cxy = _section_center_xy(rec["sketch"])
+                sts.append({
+                    "sketch": rec["sketch"],
+                    "z_along_axis_mm": round(along, 6),
+                    "area_mm2": float(rec.get("area_mm2") or 0.0),
+                    "center_xy": [round(cxy[0], 6), round(cxy[1], 6)],
+                })
+            return sts, single
+
+        # Evaluate every axis with a meaningful span; keep the candidates.
+        axis_candidates: list[dict[str, Any]] = []
+        for axis_label, span, axis_dir, idx, axis_lo in all_spans:
+            if span <= 1e-6:
                 continue
-            cxy = _section_center_xy(rec["sketch"])
-            stations.append({
-                "sketch": rec["sketch"],
-                "z_along_axis_mm": round(along, 6),
-                "area_mm2": float(rec.get("area_mm2") or 0.0),
-                "center_xy": [round(cxy[0], 6), round(cxy[1], 6)],
+            sts, single = _stations_along(axis_dir, idx, axis_lo, span)
+            if len(sts) < 2:
+                continue
+            areas = [s["area_mm2"] for s in sts]
+            a_mean = sum(areas) / len(areas)
+            if a_mean <= 1e-9:
+                continue
+            sp = (max(areas) - min(areas)) / a_mean
+            axis_candidates.append({
+                "axis_label": axis_label, "axis_dir": axis_dir,
+                "idx": idx, "axis_lo": axis_lo, "span": span,
+                "stations": sts, "all_single_loop": single, "spread": sp,
             })
 
-        diagnostics["n_stations_recovered"] = len(stations)
-        diagnostics["station_areas"] = [
-            round(s["area_mm2"], 4) for s in stations
+        diagnostics["axes_evaluated"] = [
+            {"axis": c["axis_label"], "spread": round(c["spread"], 4),
+             "single_loop": c["all_single_loop"], "n": len(c["stations"])}
+            for c in axis_candidates
         ]
 
-        if len(stations) < 2:
-            op["reason"] = (
-                f"only {len(stations)} cross-section station(s) recovered "
-                f"along {axis_label} — no loft/sweep."
-            )
+        if not axis_candidates:
+            op["reason"] = "no axis yielded >=2 clean cross-sections — no loft/sweep."
             return self._result(body, op)
 
-        areas = [s["area_mm2"] for s in stations]
-        a_mean = sum(areas) / len(areas)
-        if a_mean <= 1e-9:
-            op["reason"] = "zero-area sections — no loft/sweep."
-            return self._result(body, op)
-        spread = (max(areas) - min(areas)) / a_mean
+        # Pick the best axis: prefer CLEAN single-loop axes; among those, the
+        # most DECISIVE signal — a near-constant sweep (low spread) or a clearly
+        # varying loft (high spread). The "ambiguous middle" (spread near the
+        # sweep_area_tol boundary) is the least trustworthy, so rank by distance
+        # from that boundary. Single-loop axes always beat fragmented ones.
+        tol = args.sweep_area_tol
+
+        def _axis_key(c):
+            decisiveness = abs(c["spread"] - tol)
+            return (1 if c["all_single_loop"] else 0, decisiveness)
+
+        best = max(axis_candidates, key=_axis_key)
+        axis_label = best["axis_label"]
+        axis_dir = best["axis_dir"]
+        idx = best["idx"]
+        axis_lo = best["axis_lo"]
+        span = best["span"]
+        stations = best["stations"]
+        spread = best["spread"]
+        diagnostics["stack_axis"] = axis_label
+        diagnostics["stack_span_mm"] = round(span, 4)
+        diagnostics["n_stations_recovered"] = len(stations)
+        diagnostics["station_areas"] = [round(s["area_mm2"], 4) for s in stations]
         diagnostics["area_spread"] = round(spread, 4)
 
         # SWEEP: constant section + straight centroid path.
