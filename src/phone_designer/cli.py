@@ -623,6 +623,103 @@ def analyze(
     raise typer.Exit(0)
 
 
+@app.command("analyze-batch")
+def analyze_batch(
+    paths: list[str] = typer.Argument(
+        None,
+        help="입력 CAD 파일/디렉토리/glob (예: corpus/oem/kicad__*.step). "
+             "디렉토리는 안의 *.step/*.stp/*.iges/*.brep 를 모두 포함.",
+    ),
+    glob: str = typer.Option(
+        None, "--glob",
+        help="추가 입력 glob 패턴 (예: \"corpus/oem/*.step\").",
+    ),
+    out_dir: Path = typer.Option(
+        ..., "--out-dir",
+        help="부품별 리포트 + 통합 index.json/index.html 출력 디렉토리 (필수).",
+    ),
+    fmt: str = typer.Option(
+        "html", "--format",
+        help="부품별 리포트 형식: html | json | both.",
+    ),
+    reconstruct: bool = typer.Option(
+        False, "--reconstruct",
+        help="각 부품에 박스모드 재구성 + Hausdorff 채점 (느림).",
+    ),
+    processes: str = typer.Option(
+        "cnc_milling,injection_molding", "--processes",
+        help="DFM 평가 공정 (쉼표 구분).",
+    ),
+    timeout_s: int = typer.Option(
+        None, "--timeout-s",
+        help="파일당 subprocess watchdog (기본 300s). 한 개의 멈춘 OCCT "
+             "호출이 배치 전체를 막지 않도록 격리.",
+    ),
+    workers: int = typer.Option(
+        1, "--workers",
+        help="병렬 worker 수 (기본 1=직렬). N>1 이면 파일별 subprocess 를 "
+             "ProcessPoolExecutor 로 분산 (상한 min(cpu-2, n_files)). "
+             "솔직한 주의: per-file timeout 은 벽시계 watchdog 이므로 경계에 "
+             "걸친 파일은 경합 하에 거짓 timeout 가능 — 권위있는 실행은 "
+             "--workers 1.",
+    ),
+):
+    """배치 front-door: 여러 CAD 파일에 analyze_part 를 한번에 돌려 통합
+    deliverable 을 생성. 각 파일은 watchdog 가 붙은 격리 subprocess 에서 분석되어
+    하나의 나쁜/느린 파일이 배치 전체를 막지 않음.
+
+    출력 (--out-dir 아래):
+      <part_id>.html / .json   부품별 analyze_part 리포트
+      index.json               {n_files, n_ok, n_failed, parts:[...]} 요약
+      index.html               부품별 리포트를 링크하는 정렬가능 표
+
+    예:
+      phone-designer analyze-batch corpus/oem/kicad__C_0603_1608Metric.step \\
+                                    corpus/oem/occt__linkrods.step \\
+                                    --out-dir run_logs/batch
+      phone-designer analyze-batch --glob "corpus/oem/kicad__*.step" \\
+                                    --out-dir run_logs/batch --format both
+      phone-designer analyze-batch corpus/oem/ --out-dir out --workers 4
+    """
+    from phone_designer.corpus import batch_analyze
+
+    if fmt not in ("html", "json", "both"):
+        typer.echo(f"[error] unknown --format: {fmt} (html|json|both)", err=True)
+        raise typer.Exit(code=2)
+
+    files = batch_analyze.resolve_inputs(list(paths or []), glob)
+    if not files:
+        typer.echo(
+            "[error] no CAD files resolved from the given paths/--glob "
+            "(accepts *.step/*.stp/*.iges/*.igs/*.brep, files, dirs, globs).",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+
+    typer.echo(f">>> resolved {len(files)} input file(s)")
+    eff_timeout = timeout_s or batch_analyze.PER_FILE_TIMEOUT_S
+    index = batch_analyze.run_batch(
+        files,
+        out_dir=out_dir,
+        fmt=fmt,
+        reconstruct=reconstruct,
+        processes=[p.strip() for p in processes.split(",") if p.strip()],
+        timeout_s=eff_timeout,
+        workers=workers,
+        log=typer.echo,
+    )
+
+    typer.echo(
+        f">>> done: {index['n_ok']}/{index['n_files']} ok, "
+        f"{index['n_failed']} failed"
+    )
+    typer.echo(f">>> index.json: {Path(out_dir) / 'index.json'}")
+    typer.echo(f">>> index.html: {Path(out_dir) / 'index.html'}")
+    # non-zero exit only if EVERY file failed (a batch with some failures is a
+    # valid, useful deliverable — the per-part records carry the errors).
+    raise typer.Exit(code=1 if index["n_ok"] == 0 and index["n_files"] else 0)
+
+
 @app.command("corpus-test")
 def corpus_test(
     dir: Path = typer.Option(
