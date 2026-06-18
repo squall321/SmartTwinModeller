@@ -267,6 +267,50 @@ class AnalyzePart(SkillBase):
 
     @staticmethod
     def _reconstruct(in_body, shape, catalog, base_profile_mode):
+        """Pick the reconstruction strategy, then score it by geometry_deviation
+        Hausdorff vs the original.
+
+        A true multi-body assembly (>=3 closed shells, per base_step_kind_chooser)
+        is hopeless in box mode — a single placeholder slab cannot represent N
+        sparse solids (as1_pe_203 box hausdorff 1009mm vs preserve 153mm). Route
+        THOSE to preserve_brep (keep the original B-rep, re-apply the detected
+        cuts). Any preserve failure (e.g. a huge assembly that times out / errors)
+        FALLS BACK to box, so the worst case equals the prior box-only behaviour.
+        Single bodies keep box + base_profile_mode='auto': the chooser's
+        single-body 'preserve_brep' verdict is deliberately NOT acted on, because
+        box + freeform 'auto' is better-or-equal there (e.g. Ventilator box
+        0.048mm vs preserve 0.91mm). 2026-06-18.
+        """
+        chosen = "box"
+        try:
+            from phone_designer.skills.inspect.base_step_kind_chooser import (
+                BaseStepKindChooser,
+            )
+            hint = (
+                BaseStepKindChooser().apply(in_body, {}).extras
+                .get("base_step_kind_hint") or {}
+            )
+            chosen = hint.get("chosen", "box")
+        except Exception:
+            chosen = "box"
+
+        if chosen == "assembly":
+            try:
+                out = AnalyzePart._reconstruct_preserve(in_body, shape, catalog)
+                if out is not None and out.get("hausdorff_mm") is not None:
+                    out["strategy"] = "preserve_brep_assembly"
+                    return out
+            except Exception:
+                pass  # any preserve failure → fall back to box below
+        out = AnalyzePart._reconstruct_box(
+            in_body, shape, catalog, base_profile_mode
+        )
+        if isinstance(out, dict):
+            out.setdefault("strategy", "box")
+        return out
+
+    @staticmethod
+    def _reconstruct_box(in_body, shape, catalog, base_profile_mode):
         """Box-mode RE reconstruction scored by geometry_deviation Hausdorff
         vs the original. Returns {match_ratio, hausdorff_mm, base_mechanism,
         plan_steps} or raises (caught by _safe)."""
@@ -347,6 +391,87 @@ class AnalyzePart(SkillBase):
                 "align": "rigid" if transform else "none",
                 **({"transform_4x4": transform} if transform else {}),
             })
+            out["hausdorff_mm"] = gd.extras["geometry_deviation"].get("hausdorff_mm")
+        except Exception:
+            out["hausdorff_mm"] = None
+
+        return out
+
+    @staticmethod
+    def _reconstruct_preserve(in_body, shape, catalog):
+        """preserve_brep reconstruction for true multi-body assemblies: keep the
+        original B-rep and re-apply the detected cuts, scored by geometry_deviation
+        Hausdorff. Unlike the box path this stays in the ORIGINAL WORLD FRAME — the
+        plan executes from initial_body=in_body and there is no world->box shift,
+        so match_ratio uses no frame_translation and geometry_deviation aligns with
+        identity. Returns {match_ratio, hausdorff_mm, base_mechanism, plan_steps}
+        or raises (the caller catches and falls back to box). 2026-06-18."""
+        import os
+        import tempfile
+
+        from build123d import Part
+        from OCP.STEPControl import STEPControl_AsIs, STEPControl_Writer
+
+        from phone_designer.plan.executor import PlanExecutor
+        from phone_designer.plan.yaml_io import load_plan
+        from phone_designer.skills.inspect.geometry_deviation import (
+            GeometryDeviation,
+        )
+        from phone_designer.skills.reverse_engineer.extract_feature_catalog import (
+            ExtractFeatureCatalog,
+        )
+        from phone_designer.skills.reverse_engineer.feature_fidelity_diff import (
+            FeatureFidelityDiff,
+        )
+        from phone_designer.skills.reverse_engineer.plan_from_feature_catalog import (
+            PlanFromFeatureCatalog,
+        )
+
+        tmpdir = tempfile.mkdtemp(prefix="analyze_part_pre_")
+        plan_path = os.path.join(tmpdir, "plan.yaml")
+        PlanFromFeatureCatalog().apply(in_body, {
+            "catalog": catalog,
+            "base_step_kind": "preserve_brep",
+            "plan_out_path": plan_path,
+        })
+        plan = load_plan(plan_path)
+        # preserve_brep STARTS from the original body (the cuts no-op against the
+        # real topology) — mirrors the corpus regress preserve lane.
+        result = PlanExecutor(plan).run(initial_body=in_body)
+        regen = result.final_body
+        if regen is None:
+            raise RuntimeError("preserve reconstruction produced no body")
+
+        out: dict[str, Any] = {
+            "plan_steps": len(plan.steps),
+            "base_mechanism": plan.steps[0].skill if plan.steps else None,
+        }
+
+        # match ratio — SAME world frame, so no frame_translation remap.
+        try:
+            regen_cat = ExtractFeatureCatalog().apply(regen, {}).extras[
+                "feature_catalog"
+            ]
+            fid = FeatureFidelityDiff().apply(
+                regen, {"catalog_a": catalog, "catalog_b": regen_cat},
+            ).extras["feature_fidelity"]
+            out["match_ratio"] = fid.get("overall_match_ratio")
+        except Exception:
+            out["match_ratio"] = None
+
+        # geometric Hausdorff vs the original — identity alignment (shared frame).
+        try:
+            ref = os.path.join(tmpdir, "orig.step")
+            w = STEPControl_Writer()
+            w.Transfer(shape, STEPControl_AsIs)
+            w.Write(ref)
+            gd = GeometryDeviation().apply(
+                Part(regen) if not hasattr(regen, "wrapped") else regen, {
+                    "reference_step_path": ref,
+                    "linear_deflection_mm": 0.3,
+                    "align": "none",
+                },
+            )
             out["hausdorff_mm"] = gd.extras["geometry_deviation"].get("hausdorff_mm")
         except Exception:
             out["hausdorff_mm"] = None
