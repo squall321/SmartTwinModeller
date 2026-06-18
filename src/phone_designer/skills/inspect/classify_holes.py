@@ -22,6 +22,8 @@ Body unchanged — post ``body_present``.
 from __future__ import annotations
 
 import math
+import os
+import threading
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -30,6 +32,66 @@ from phone_designer.skills._history import EntityHistoryMap
 from phone_designer.skills._post_conditions import PostCondition
 from phone_designer.skills._registry import skill
 from phone_designer.skills._spec import SkillBase, SkillResult
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# PERF (2026-06-18): per-_apply optimal-bbox memo for _face_bbox.
+#
+# WHY: cProfile of ClassifyHoles on RC_Buggy's heaviest 493-face leaf showed
+# 608 BRepBndLib.AddOptimal_s(face, ...) calls (105.5 s, 96% of the detector's
+# wall-clock) that resolved to only 40 UNIQUE faces — a 15.2x redundancy (one
+# cone face was bbox'd 127 times, once per cylinder group it was tested
+# against). The optimal bbox of a TopoDS_Face is a PURE function of that face;
+# _classify_one (cylinder bands + cone-on-axis projection) and
+# _face_axis_distance_to_line all re-derive the SAME face's bbox across the
+# axis-grouping passes.
+#
+# SAFETY — byte-identity proof (gated by
+# tests/skills/test_classify_holes_bbox_cache.py, which runs ClassifyHoles
+# with the memo ON vs OFF and asserts the 'holes' list is JSON-deep-equal):
+#   * AddOptimal_s(face) is byte-STABLE on repeat: 493 faces x 30 interleaved
+#     calls returned max_abs_dev = 0.0 — there is NO per-face re-tessellation
+#     drift, so memoizing the first result equals every later result exactly.
+#   * The PACK-B "inflated post-detector AddOptimal_s cache" drift documented
+#     in extract_feature_catalog / plan_from_feature_catalog is a WHOLE-SHAPE
+#     pre/post-detector effect on the body bbox; it does NOT touch per-face
+#     boxes and this memo never caches a whole-shape box. The memo is also
+#     scoped to ONE _apply (entered/cleared via _bbox_cache_scope) so it can
+#     never persist across bodies or change WHEN any box is computed relative
+#     to the existing pass order.
+#
+# KEY: hash(face). OCP 7.7+ hashes a TopoDS_Shape by topological identity
+# (same handle the resolvers' _shape_id already trusts); measured 493/493
+# unique on the RC_Buggy leaf and stable across re-exploration. The cache is
+# only consulted while a scope is active, so the un-scoped path (and the
+# PD_DISABLE_BBOX_CACHE escape hatch) is bit-for-bit the historic code.
+_BBOX_CACHE_DISABLED = bool(os.environ.get("PD_DISABLE_BBOX_CACHE"))
+_bbox_cache_tls = threading.local()
+
+
+def _bbox_cache_get():
+    """Active per-_apply cache dict, or None when no scope is open / disabled."""
+    if _BBOX_CACHE_DISABLED:
+        return None
+    return getattr(_bbox_cache_tls, "cache", None)
+
+
+class _bbox_cache_scope:
+    """Context manager: open a fresh per-_apply face-bbox memo (thread-local).
+
+    Nesting is supported (inner scope keeps the outer cache) so a future caller
+    that wraps _apply twice never loses or cross-contaminates entries.
+    """
+
+    def __enter__(self):
+        self._prev = getattr(_bbox_cache_tls, "cache", None)
+        if self._prev is None and not _BBOX_CACHE_DISABLED:
+            _bbox_cache_tls.cache = {}
+        return self
+
+    def __exit__(self, *exc):
+        _bbox_cache_tls.cache = self._prev
+        return False
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -372,7 +434,7 @@ def _cone_info(face):
     )
 
 
-def _face_bbox(face):
+def _face_bbox_uncached(face):
     from OCP.Bnd import Bnd_Box
     from OCP.BRepBndLib import BRepBndLib
 
@@ -387,6 +449,33 @@ def _face_bbox(face):
     if bb.IsVoid():
         return ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
     return tuple(bb.Get()[:3]), tuple(bb.Get()[3:])
+
+
+def _face_bbox(face):
+    """Optimal bounding box of ``face`` as ``((xmin,ymin,zmin),(xmax,ymax,zmax))``.
+
+    PERF (2026-06-18): when a per-_apply scope is open (ClassifyHoles._apply),
+    memoize on ``hash(face)`` so the SAME face — re-derived O(passes) times by
+    the axis-grouping / band-projection / cone-on-axis passes — calls
+    BRepBndLib.AddOptimal_s exactly once. Byte-identical to the historic path:
+    AddOptimal_s(face) is deterministic and per-face stable on repeat (no
+    re-tessellation drift), so the cached first result equals every later one.
+    No active scope (or PD_DISABLE_BBOX_CACHE) → the original uncached code.
+    """
+    cache = _bbox_cache_get()
+    if cache is None:
+        return _face_bbox_uncached(face)
+    try:
+        key = hash(face)
+    except TypeError:
+        # Unhashable face (older OCP) → never cache; bit-identical fallback.
+        return _face_bbox_uncached(face)
+    hit = cache.get(key)
+    if hit is not None:
+        return hit
+    val = _face_bbox_uncached(face)
+    cache[key] = val
+    return val
 
 
 def _axes_collinear(
@@ -855,8 +944,19 @@ class ClassifyHoles(SkillBase):
 
         groups, group_axes = _group_cylinders_by_axis(cyl_records)
 
+        # PERF (2026-06-18): open the per-_apply face-bbox memo. Every
+        # _face_bbox call below (cylinder bands + cone-on-axis projection in
+        # _classify_one, threaded-face axis distance in
+        # _face_axis_distance_to_line) is keyed by hash(face); the same face
+        # — re-derived across all groups/passes — now triggers exactly one
+        # AddOptimal_s. Output is byte-identical (per-face AddOptimal_s is
+        # deterministic + repeat-stable); scope auto-clears on exit so nothing
+        # leaks across bodies. PD_DISABLE_BBOX_CACHE forces the legacy path.
         holes: list[dict[str, Any]] = []
-        for gi, group in enumerate(groups):
+        _bbox_scope = _bbox_cache_scope()
+        _bbox_scope.__enter__()
+        try:
+          for gi, group in enumerate(groups):
             o, d = group_axes[gi]
             desc = _classify_one(
                 group, cyl_records, cone_records, other_records, faces,
@@ -947,6 +1047,8 @@ class ClassifyHoles(SkillBase):
                 "face_indices": desc["face_indices"],
                 "standard_match": desc["standard_match"],
             })
+        finally:
+            _bbox_scope.__exit__(None, None, None)
 
         return SkillResult(
             body=body,
