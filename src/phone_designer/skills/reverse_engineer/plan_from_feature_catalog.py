@@ -2427,6 +2427,22 @@ def _accept_freeform_shell_base(
 # the editability win; a candidate worse than this reverts to box/re-solidify.
 _PARAMETRIC_HAUS_TOL = 1.15
 
+# ROBUSTNESS (2026-06-18): the 'auto' A/B revert-guard executes up to FOUR full
+# reconstruction regens (parametric-op / revolved-primitive / swept-silhouette /
+# freeform-shell), each RE-RUNNING every feature cut just to score a candidate
+# base's hausdorff. On a very complex part each full regen is minutes, so the
+# A/B can blow the time budget: pythonocc__11752 (a 143-hole / 21-pocket /
+# 80-blend sparse multi-body assembly) goes from a 178 s box reconstruction to
+# >1600 s and TIMES OUT — losing the result entirely. Such parts are ALSO
+# exactly the ones a single parametric/freeform base can never represent
+# (multi-body, ~30% bbox fill), so the A/B would revert to box regardless. Skip
+# the A/B above this plan-step count and keep the box base: deterministic,
+# result-NEUTRAL on every part that already reverts to box (it just gets there
+# without the wasted regens), and it preserves the box reconstruction instead of
+# losing it to a timeout. Wide margin — the freeform WINNERS are 2..37 steps
+# (screw 2, linkrods ~22, Ventilator ~37); 11752 is ~245.
+_AB_MAX_PLAN_STEPS = 100
+
 
 def _generating_op_base_step(
     body: Any,
@@ -2567,6 +2583,15 @@ def accept_freeform_base(
     Returns the candidate ``Plan``-dict to use, or ``None`` to keep the box plan.
     """
     if body is None or bbox is None:
+        return None
+    # ROBUSTNESS (2026-06-18): skip the expensive multi-candidate A/B on very
+    # complex plans — each candidate is a FULL regen of every feature cut, so on
+    # a 245-step assembly the A/B blows the time budget (11752 178 s → TIMEOUT).
+    # Such parts can't be captured by a single parametric/freeform base anyway
+    # (they revert to box), so keeping the box base here is result-neutral and
+    # avoids losing the reconstruction to a timeout. See _AB_MAX_PLAN_STEPS.
+    _steps = box_plan.get("steps") if isinstance(box_plan, dict) else None
+    if isinstance(_steps, list) and len(_steps) > _AB_MAX_PLAN_STEPS:
         return None
     try:
         topo = _classify_base_topology(body, bbox)

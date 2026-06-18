@@ -1,237 +1,237 @@
 {
- "schema": 1,
- "mode": "box",
- "subset": "complex",
- "generated_at": "2026-06-18T00:00:00+00:00",
- "records": {
-  "complex/occt__screw.step": {
-   "file": "complex/occt__screw.step",
-   "mode": "box",
-   "match_ratio": 0.875,
-   "per_kind": {
-    "holes": {
-     "a": 1,
-     "b": 0,
-     "matched": 0
+  "schema": 1,
+  "mode": "box",
+  "subset": "complex",
+  "generated_at": "2026-06-18T07:48:21+00:00",
+  "records": {
+    "complex/occt__screw.step": {
+      "file": "complex/occt__screw.step",
+      "mode": "box",
+      "match_ratio": 0.75,
+      "per_kind": {
+        "holes": {
+          "a": 1,
+          "b": 1,
+          "matched": 0
+        },
+        "pockets": {
+          "a": 1,
+          "b": 1,
+          "matched": 0
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        }
+      },
+      "volume_delta_pct": -19.56,
+      "hausdorff_mm": 4.79517,
+      "rms_mm": 2.35102,
+      "p95_mm": 4.576678,
+      "error": null,
+      "duration_s": 10.8,
+      "plan_steps": 1,
+      "executor_outcome": "PASS"
     },
-    "pockets": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
+    "complex/pythonocc__as1_pe_203.stp": {
+      "file": "complex/pythonocc__as1_pe_203.stp",
+      "mode": "box",
+      "match_ratio": 0.6562,
+      "per_kind": {
+        "holes": {
+          "a": 7,
+          "b": 7,
+          "matched": 3
+        },
+        "pockets": {
+          "a": 18,
+          "b": 19,
+          "matched": 12
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        }
+      },
+      "volume_delta_pct": 238.483,
+      "hausdorff_mm": 1009.310478,
+      "rms_mm": 150.600337,
+      "p95_mm": 409.061923,
+      "error": null,
+      "duration_s": 110.0,
+      "plan_steps": 23,
+      "executor_outcome": "PASS"
     },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
+    "complex/pythonocc__as1-oc-214.stp": {
+      "file": "complex/pythonocc__as1-oc-214.stp",
+      "mode": "box",
+      "match_ratio": 0.8235,
+      "per_kind": {
+        "pockets": {
+          "a": 11,
+          "b": 8,
+          "matched": 8
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        }
+      },
+      "volume_delta_pct": 228.677,
+      "hausdorff_mm": 33.0,
+      "rms_mm": 18.817697,
+      "p95_mm": 32.172924,
+      "error": null,
+      "duration_s": 98.8,
+      "plan_steps": 9,
+      "executor_outcome": "PASS"
+    },
+    "complex/pythonocc__11752.stp": {
+      "file": "complex/pythonocc__11752.stp",
+      "mode": "box",
+      "match_ratio": 0.0584,
+      "per_kind": {
+        "holes": {
+          "a": 143,
+          "b": 29,
+          "matched": 5
+        },
+        "pockets": {
+          "a": 4,
+          "b": 21,
+          "matched": 0
+        },
+        "loft_features": {
+          "a": 4,
+          "b": 2,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 67,
+          "b": 3,
+          "matched": 3
+        },
+        "edge_blends": {
+          "a": 80,
+          "b": 0,
+          "matched": 0
+        }
+      },
+      "volume_delta_pct": 98.639,
+      "hausdorff_mm": 568.95507,
+      "rms_mm": 41.512852,
+      "p95_mm": 55.656167,
+      "error": null,
+      "duration_s": 183.5,
+      "plan_steps": 148,
+      "executor_outcome": "PASS"
+    },
+    "complex/occt__linkrods.step": {
+      "file": "complex/occt__linkrods.step",
+      "mode": "box",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 2,
+          "b": 2,
+          "matched": 2
+        },
+        "pockets": {
+          "a": 3,
+          "b": 3,
+          "matched": 3
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "edge_blends": {
+          "a": 8,
+          "b": 8,
+          "matched": 8
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 90.9,
+      "plan_steps": 1,
+      "executor_outcome": "PASS"
+    },
+    "complex/pythonocc__Ventilator.stp": {
+      "file": "complex/pythonocc__Ventilator.stp",
+      "mode": "box",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 14,
+          "b": 14,
+          "matched": 14
+        },
+        "pockets": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "edge_blends": {
+          "a": 15,
+          "b": 15,
+          "matched": 15
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.048088,
+      "rms_mm": 0.000811,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 505.2,
+      "plan_steps": 1,
+      "executor_outcome": "PASS"
+    },
+    "complex/pythonocc__KR600_R2830-4.stp": {
+      "file": "complex/pythonocc__KR600_R2830-4.stp",
+      "mode": "box",
+      "match_ratio": null,
+      "per_kind": null,
+      "volume_delta_pct": null,
+      "hausdorff_mm": null,
+      "rms_mm": null,
+      "p95_mm": null,
+      "error": "TIMEOUT after 800s",
+      "duration_s": 800.0
+    },
+    "complex/pythonocc__RC_Buggy_2_front_suspension.stp": {
+      "file": "complex/pythonocc__RC_Buggy_2_front_suspension.stp",
+      "mode": "box",
+      "match_ratio": null,
+      "per_kind": null,
+      "volume_delta_pct": null,
+      "hausdorff_mm": null,
+      "rms_mm": null,
+      "p95_mm": null,
+      "error": "TIMEOUT after 800s",
+      "duration_s": 800.1
     }
-   },
-   "volume_delta_pct": 292.635,
-   "hausdorff_mm": 9.149198,
-   "rms_mm": 1.975161,
-   "p95_mm": 3.595216,
-   "error": null,
-   "duration_s": 10.1,
-   "plan_steps": 2,
-   "executor_outcome": "PASS"
-  },
-  "complex/pythonocc__as1_pe_203.stp": {
-   "file": "complex/pythonocc__as1_pe_203.stp",
-   "mode": "box",
-   "match_ratio": 0.6562,
-   "per_kind": {
-    "holes": {
-     "a": 7,
-     "b": 7,
-     "matched": 3
-    },
-    "pockets": {
-     "a": 18,
-     "b": 19,
-     "matched": 12
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    }
-   },
-   "volume_delta_pct": 238.483,
-   "hausdorff_mm": 1009.310478,
-   "rms_mm": 150.600337,
-   "p95_mm": 409.061923,
-   "error": null,
-   "duration_s": 20.0,
-   "plan_steps": 23,
-   "executor_outcome": "PASS"
-  },
-  "complex/pythonocc__as1-oc-214.stp": {
-   "file": "complex/pythonocc__as1-oc-214.stp",
-   "mode": "box",
-   "match_ratio": 0.8235,
-   "per_kind": {
-    "pockets": {
-     "a": 11,
-     "b": 8,
-     "matched": 8
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    }
-   },
-   "volume_delta_pct": 228.677,
-   "hausdorff_mm": 33.0,
-   "rms_mm": 18.817697,
-   "p95_mm": 32.172924,
-   "error": null,
-   "duration_s": 13.3,
-   "plan_steps": 9,
-   "executor_outcome": "PASS"
-  },
-  "complex/pythonocc__11752.stp": {
-   "file": "complex/pythonocc__11752.stp",
-   "mode": "box",
-   "match_ratio": 0.0584,
-   "per_kind": {
-    "holes": {
-     "a": 143,
-     "b": 29,
-     "matched": 5
-    },
-    "pockets": {
-     "a": 4,
-     "b": 21,
-     "matched": 0
-    },
-    "loft_features": {
-     "a": 4,
-     "b": 2,
-     "matched": 1
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 67,
-     "b": 3,
-     "matched": 3
-    },
-    "edge_blends": {
-     "a": 80,
-     "b": 0,
-     "matched": 0
-    }
-   },
-   "volume_delta_pct": 98.639,
-   "hausdorff_mm": 568.95507,
-   "rms_mm": 41.512852,
-   "p95_mm": 55.656167,
-   "error": null,
-   "duration_s": 214.1,
-   "plan_steps": 148,
-   "executor_outcome": "PASS"
-  },
-  "complex/occt__linkrods.step": {
-   "file": "complex/occt__linkrods.step",
-   "mode": "box",
-   "match_ratio": 0.5263,
-   "per_kind": {
-    "holes": {
-     "a": 2,
-     "b": 2,
-     "matched": 2
-    },
-    "pockets": {
-     "a": 3,
-     "b": 2,
-     "matched": 2
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 1,
-     "b": 0,
-     "matched": 0
-    },
-    "edge_blends": {
-     "a": 8,
-     "b": 0,
-     "matched": 0
-    }
-   },
-   "volume_delta_pct": 239.9,
-   "hausdorff_mm": 0.626352,
-   "rms_mm": 0.186526,
-   "p95_mm": 0.412099,
-   "error": null,
-   "duration_s": 28.3,
-   "plan_steps": 3,
-   "executor_outcome": "PASS"
-  },
-  "complex/pythonocc__Ventilator.stp": {
-   "file": "complex/pythonocc__Ventilator.stp",
-   "mode": "box",
-   "match_ratio": 0.3023,
-   "per_kind": {
-    "holes": {
-     "a": 14,
-     "b": 7,
-     "matched": 6
-    },
-    "pockets": {
-     "a": 1,
-     "b": 8,
-     "matched": 1
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "edge_blends": {
-     "a": 15,
-     "b": 0,
-     "matched": 0
-    }
-   },
-   "volume_delta_pct": 271.512,
-   "hausdorff_mm": 19.630608,
-   "rms_mm": 4.611542,
-   "p95_mm": 8.798393,
-   "error": null,
-   "duration_s": 94.7,
-   "plan_steps": 9,
-   "executor_outcome": "PASS"
-  },
-  "complex/pythonocc__KR600_R2830-4.stp": {
-   "file": "complex/pythonocc__KR600_R2830-4.stp",
-   "mode": "box",
-   "match_ratio": null,
-   "per_kind": null,
-   "volume_delta_pct": null,
-   "hausdorff_mm": null,
-   "rms_mm": null,
-   "p95_mm": null,
-   "error": "TIMEOUT after 800s",
-   "duration_s": 800.0
-  },
-  "complex/pythonocc__RC_Buggy_2_front_suspension.stp": {
-   "file": "complex/pythonocc__RC_Buggy_2_front_suspension.stp",
-   "mode": "box",
-   "match_ratio": null,
-   "per_kind": null,
-   "volume_delta_pct": null,
-   "hausdorff_mm": null,
-   "rms_mm": null,
-   "p95_mm": null,
-   "error": "TIMEOUT after 800s",
-   "duration_s": 800.1
   }
- }
 }

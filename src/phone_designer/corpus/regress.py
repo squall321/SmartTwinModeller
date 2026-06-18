@@ -260,6 +260,18 @@ def _worker_pipeline(
             return record
 
         plan_args: dict[str, Any] = {"catalog": cat, "base_step_kind": mode}
+        # 2026-06-18: the box lane previously omitted base_profile_mode, so it
+        # ran the bare PlanFromFeatureCatalog default ('off') — a solid bbox
+        # slab. But the PRODUCT front door (analyze_part) already defaults
+        # base_profile_mode='auto', so the gate was UNDER-measuring what users
+        # actually get. Wire 'auto' into the box lane to measure the shipped
+        # capability: freeform/parametric/re-solidify base recovery, each kept
+        # ONLY when its geometry_deviation HAUSDORFF beats the box base (revert-
+        # guarded in plan_from_feature_catalog). preserve_brep ignores it (the
+        # 'auto' lane is gated on base_step_kind=='box'), so the 35-PERFECT /
+        # 55-floor self-match baselines are provably untouched.
+        if mode == "box":
+            plan_args["base_profile_mode"] = "auto"
         if plan_out_path is not None:
             # Concurrent worker: write to a distinct plan file so parallel
             # workers don't race plans/reconstructed_plan.yaml. Load back from
