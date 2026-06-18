@@ -2,7 +2,7 @@
  "schema": 1,
  "mode": "box",
  "subset": "complex",
- "generated_at": "2026-06-13T00:00:00+00:00",
+ "generated_at": "2026-06-18T00:00:00+00:00",
  "records": {
   "complex/occt__screw.step": {
    "file": "complex/occt__screw.step",
@@ -30,7 +30,7 @@
    "rms_mm": 1.975161,
    "p95_mm": 3.595216,
    "error": null,
-   "duration_s": 6.1,
+   "duration_s": 10.1,
    "plan_steps": 2,
    "executor_outcome": "PASS"
   },
@@ -60,7 +60,7 @@
    "rms_mm": 150.600337,
    "p95_mm": 409.061923,
    "error": null,
-   "duration_s": 13.8,
+   "duration_s": 20.0,
    "plan_steps": 23,
    "executor_outcome": "PASS"
   },
@@ -85,14 +85,14 @@
    "rms_mm": 18.817697,
    "p95_mm": 32.172924,
    "error": null,
-   "duration_s": 13.5,
+   "duration_s": 13.3,
    "plan_steps": 9,
    "executor_outcome": "PASS"
   },
   "complex/pythonocc__11752.stp": {
    "file": "complex/pythonocc__11752.stp",
    "mode": "box",
-   "match_ratio": 0.0467,
+   "match_ratio": 0.0584,
    "per_kind": {
     "holes": {
      "a": 143,
@@ -130,14 +130,14 @@
    "rms_mm": 41.512852,
    "p95_mm": 55.656167,
    "error": null,
-   "duration_s": 205.2,
+   "duration_s": 214.1,
    "plan_steps": 148,
    "executor_outcome": "PASS"
   },
   "complex/occt__linkrods.step": {
    "file": "complex/occt__linkrods.step",
    "mode": "box",
-   "match_ratio": 0.5,
+   "match_ratio": 0.5263,
    "per_kind": {
     "holes": {
      "a": 2,
@@ -170,7 +170,7 @@
    "rms_mm": 0.186526,
    "p95_mm": 0.412099,
    "error": null,
-   "duration_s": 29.3,
+   "duration_s": 28.3,
    "plan_steps": 3,
    "executor_outcome": "PASS"
   },
@@ -205,7 +205,7 @@
    "rms_mm": 4.611542,
    "p95_mm": 8.798393,
    "error": null,
-   "duration_s": 58.5,
+   "duration_s": 94.7,
    "plan_steps": 9,
    "executor_outcome": "PASS"
   },
@@ -218,8 +218,8 @@
    "hausdorff_mm": null,
    "rms_mm": null,
    "p95_mm": null,
-   "error": "TIMEOUT after 300s",
-   "duration_s": 300.0
+   "error": "TIMEOUT after 800s",
+   "duration_s": 800.0
   },
   "complex/pythonocc__RC_Buggy_2_front_suspension.stp": {
    "file": "complex/pythonocc__RC_Buggy_2_front_suspension.stp",
@@ -230,8 +230,8 @@
    "hausdorff_mm": null,
    "rms_mm": null,
    "p95_mm": null,
-   "error": "TIMEOUT after 300s",
-   "duration_s": 300.2
+   "error": "TIMEOUT after 800s",
+   "duration_s": 800.1
   }
  }
 }

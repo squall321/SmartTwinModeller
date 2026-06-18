@@ -56,6 +56,35 @@ _TOL_DIM_FRAC_BY_KIND: dict[str, float] = {
 }
 _TOL_DIM_FRAC_DEFAULT = 0.15
 
+# DERIVED-FEATURE fix (2026-06-18): kinds whose entries are NOT independent
+# features but DERIVED groupings of features that are ALREADY counted under
+# another kind. ``patterns`` is the only one today: every linear/circular
+# array reported by detect_*_array is a re-description of holes/pockets/bosses
+# that classify_holes/classify_pockets/detect_bosses already enumerated under
+# the ``holes``/``pockets``/``bosses`` kinds.
+#
+# Because a pattern is redundant, an UNMATCHED pattern (present on exactly one
+# side) re-penalizes the SAME geometric divergence the underlying hole/pocket
+# kind already scored — double counting. Concretely, when preserve_brep
+# re-applies the extracted cuts OCCT carves a slightly different solid: a few
+# extra small side-wall pockets appear, and three of them happen to fall
+# collinear, so detect_linear_array reports a *pattern* the original catalog
+# never had (HSOP-8: patterns a=0 b=6; Trimmer: a=1 b=2). Those extra pockets
+# are ALREADY counted (and unmatched) under ``pockets``; the spurious pattern
+# adds a second, redundant denominator hit purely because the grouping is a
+# count-only first-fit pairing (linear arrays expose no centre/dim, so the
+# spatial+dim gates in _greedy_pair are no-ops for them).
+#
+# Rule: a derived kind contributes ONLY its MATCHED count to the union
+# denominator (``matched`` instead of ``max(a, b)``). A *matched* pattern is
+# genuine corroboration and stays fully scored on BOTH sides — when patterns
+# are fully matched (a == b == matched) the rule is a byte-for-byte no-op, so
+# every PERFECT baseline with patterns (R/C/L 0402-1206, QFN, PinHeader,
+# linkrods, DFN, LED) is unaffected. Only the unmatched-pattern penalty is
+# dropped, which is symmetric (helps over- AND under-detection equally) and
+# never lowers a ratio.
+_DERIVED_DENOM_KINDS = frozenset({"patterns"})
+
 # COMPLEX-CAD fix (2026-06-08): scale-aware xyz tolerance. The fixed 5 mm
 # floor is 7% of bbox on a 75 mm phone but only 0.07% on a 6.7 m
 # industrial assembly; legitimate planner-side bbox-clamp + face-projection
@@ -420,7 +449,15 @@ class FeatureFidelityDiff(SkillBase):
             all_pairs[k] = pairs
             by_kind[k] = {"a": a, "b": b, "diff": b - a, "matched": len(pairs)}
             matched_total += len(pairs)
-            union_total += max(a, b)
+            # DERIVED-FEATURE fix (2026-06-18): a derived kind (patterns) adds
+            # only its MATCHED count to the union — unmatched patterns are a
+            # redundant re-penalty of holes/pockets already scored under their
+            # own kind. No-op when patterns are fully matched (max(a,b)==matched),
+            # so every PERFECT baseline is byte-identical. See _DERIVED_DENOM_KINDS.
+            if k in _DERIVED_DENOM_KINDS:
+                union_total += len(pairs)
+            else:
+                union_total += max(a, b)
             for ai in unmatched_a:
                 missing_in_b.append((k, ai))
             for bi in unmatched_b:

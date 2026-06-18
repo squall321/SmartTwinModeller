@@ -28,6 +28,7 @@ import pytest
 from build123d import Box as B3dBox
 
 from phone_designer.skills.reverse_engineer.feature_fidelity_diff import (
+    _DERIVED_DENOM_KINDS,
     _TOL_DIM_FRAC_BY_KIND,
     _TOL_XYZ_BBOX_FRAC,
     _TOL_XYZ_MM_FLOOR,
@@ -322,3 +323,109 @@ def test_greedy_pair_non_dict_entries_are_unmatched():
     assert pairs == []
     assert ua == [0]
     assert ub == [0]
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# DERIVED-FEATURE denominator (2026-06-18): patterns are re-descriptions of
+# holes/pockets already counted, so an UNMATCHED pattern must NOT add a second
+# (redundant) hit to the union denominator. A MATCHED pattern stays fully
+# scored on both sides. Fixes HSOP-8 (patterns a=0/b=6) and Trimmer (a=1/b=2)
+# over-detecting patterns on the genuinely-different regen solid, without
+# touching any PERFECT baseline (where patterns are fully matched → no-op).
+
+
+def _linear_pattern(*positions, spacing=2.54, feature_kind="hole"):
+    """A linear-array catalog entry as emitted by detect_linear_array — it
+    exposes no ``center`` and no ``*_mm`` primary dim, so _xyz_of / _primary_dim
+    both return None and pattern pairing is count-only first-fit."""
+    return {
+        "pattern_kind": "linear",
+        "feature_kind": feature_kind,
+        "positions": [list(p) for p in positions],
+        "direction": [1.0, 0.0, 0.0],
+        "spacing_mm": spacing,
+        "count": len(positions),
+    }
+
+
+def test_patterns_is_the_only_derived_denominator_kind():
+    # Pin the registry the union rule reads — patterns is derived, the
+    # primary feature kinds are NOT.
+    assert "patterns" in _DERIVED_DENOM_KINDS
+    for k in ("holes", "pockets", "bosses", "ribs", "edge_blends", "symmetries"):
+        assert k not in _DERIVED_DENOM_KINDS
+
+
+def test_invented_pattern_does_not_penalize_the_denominator():
+    # The HSOP-8 / Trimmer shape: regen invents a pattern the original never
+    # had (a=0, b=1). Because the pattern is DERIVED from pockets/holes already
+    # scored, it must add 0 to the union — ratio stays 1.0, unlike an invented
+    # HOLE which would drop it to 0.0 (see test_invented_hole_*).
+    p = _linear_pattern((0, 0, 0), (2.54, 0, 0), (5.08, 0, 0))
+    ca = _catalog(holes=[_hole(0, 0, 0)])
+    cb = _catalog(holes=[_hole(0, 0, 0)], patterns=[p])
+
+    rep = _diff(ca, cb)
+    assert rep["by_kind"]["patterns"] == {"a": 0, "b": 1, "diff": 1, "matched": 0}
+    # holes 1/1 matched, the lone invented pattern contributes 0 to union.
+    assert rep["overall_match_ratio"] == 1.0
+
+
+def test_dropped_pattern_does_not_penalize_the_denominator():
+    # Symmetric to the invented case: a pattern present only on side A
+    # (e.g. Panasonic button a=1/b=0) also adds nothing to the union.
+    p = _linear_pattern((0, 0, 0), (2.54, 0, 0), (5.08, 0, 0))
+    ca = _catalog(holes=[_hole(0, 0, 0)], patterns=[p])
+    cb = _catalog(holes=[_hole(0, 0, 0)])
+
+    rep = _diff(ca, cb)
+    assert rep["by_kind"]["patterns"] == {"a": 1, "b": 0, "diff": -1, "matched": 0}
+    assert rep["overall_match_ratio"] == 1.0
+
+
+def test_matched_pattern_is_fully_scored_on_both_sides():
+    # A pattern present on BOTH sides is genuine corroboration: it counts in
+    # numerator AND denominator exactly like any other kind. This is the
+    # PERFECT-baseline no-op path (a == b == matched), e.g. C_0603 / linkrods
+    # patterns 1/1/1.
+    p = _linear_pattern((0, 0, 0), (2.54, 0, 0), (5.08, 0, 0))
+    ca = _catalog(holes=[_hole(0, 0, 0)], patterns=[copy.deepcopy(p)])
+    cb = _catalog(holes=[_hole(0, 0, 0)], patterns=[copy.deepcopy(p)])
+
+    rep = _diff(ca, cb)
+    assert rep["by_kind"]["patterns"] == {"a": 1, "b": 1, "diff": 0, "matched": 1}
+    assert rep["overall_match_ratio"] == 1.0
+
+
+def test_partially_matched_patterns_keep_only_the_matched_share_in_denom():
+    # Under-detection on top of a matched pattern (the SOT-353 a=6/b=5/m=5
+    # shape): the matched share stays scored, the surplus drops out of the
+    # denominator. Pattern pairing is count-only first-fit, so 2 a-patterns vs
+    # 1 b-pattern → matched=1, one unmatched a. Without the derived rule the
+    # union would be max(2,1)=2 (ratio 1/2); with it the union is matched=1.
+    p1 = _linear_pattern((0, 0, 0), (2.54, 0, 0), (5.08, 0, 0))
+    p2 = _linear_pattern((0, 9, 0), (2.54, 9, 0), (5.08, 9, 0))
+    ca = _catalog(patterns=[copy.deepcopy(p1), copy.deepcopy(p2)])
+    cb = _catalog(patterns=[copy.deepcopy(p1)])
+
+    rep = _diff(ca, cb)
+    assert rep["by_kind"]["patterns"] == {"a": 2, "b": 1, "diff": -1, "matched": 1}
+    # union for patterns == matched == 1 → ratio 1/1, NOT 1/2.
+    assert rep["overall_match_ratio"] == 1.0
+
+
+def test_orig_and_regen_agree_on_a_regular_hole_grid_pattern():
+    # Consistency pin: when orig and regen detect the SAME regular grid as
+    # one matched pattern, the derived-kind rule is invisible — the ratio is
+    # identical to what it would be with patterns excluded entirely, and to
+    # the pre-fix value (1.0). Guards against the rule ever perturbing the
+    # agree-case.
+    grid = _linear_pattern((0, 0, 0), (2.54, 0, 0), (5.08, 0, 0), (7.62, 0, 0))
+    holes = [_hole(x, 0, 0) for x in (0.0, 2.54, 5.08, 7.62)]
+    ca = _catalog(holes=copy.deepcopy(holes), patterns=[copy.deepcopy(grid)])
+    cb = _catalog(holes=copy.deepcopy(holes), patterns=[copy.deepcopy(grid)])
+
+    rep = _diff(ca, cb)
+    assert rep["by_kind"]["holes"]["matched"] == 4
+    assert rep["by_kind"]["patterns"]["matched"] == 1
+    assert rep["overall_match_ratio"] == 1.0

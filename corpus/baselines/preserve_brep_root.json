@@ -2,7 +2,7 @@
  "schema": 1,
  "mode": "preserve_brep",
  "subset": "root",
- "generated_at": "2026-06-13T00:00:00+00:00",
+ "generated_at": "2026-06-18T00:00:00+00:00",
  "records": {
   "kicad__Buzzer_15x7.5RM7.6.step": {
    "file": "kicad__Buzzer_15x7.5RM7.6.step",
@@ -30,12 +30,12 @@
      "matched": 2
     }
    },
-   "volume_delta_pct": -1.398,
-   "hausdorff_mm": 2.8534,
-   "rms_mm": 1.361833,
-   "p95_mm": 2.848887,
+   "volume_delta_pct": -1.397,
+   "hausdorff_mm": 2.85,
+   "rms_mm": 1.360172,
+   "p95_mm": 2.845487,
    "error": null,
-   "duration_s": 7.0,
+   "duration_s": 21.4,
    "plan_steps": 4,
    "executor_outcome": "PASS"
   },
@@ -55,7 +55,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 5.5,
+   "duration_s": 14.2,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -90,7 +90,7 @@
    "rms_mm": 0.011399,
    "p95_mm": 0.026275,
    "error": null,
-   "duration_s": 9.1,
+   "duration_s": 26.4,
    "plan_steps": 6,
    "executor_outcome": "FAIL"
   },
@@ -125,7 +125,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 6.6,
+   "duration_s": 17.1,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -155,7 +155,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 6.5,
+   "duration_s": 18.9,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -185,7 +185,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 6.2,
+   "duration_s": 24.7,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -215,7 +215,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 6.3,
+   "duration_s": 21.7,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -250,7 +250,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 6.2,
+   "duration_s": 17.1,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -285,7 +285,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 6.3,
+   "duration_s": 18.9,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -320,7 +320,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 6.6,
+   "duration_s": 18.9,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -355,7 +355,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 6.1,
+   "duration_s": 20.8,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -390,7 +390,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 6.2,
+   "duration_s": 22.1,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -425,7 +425,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 6.3,
+   "duration_s": 23.9,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -455,14 +455,14 @@
    "rms_mm": 0.042862,
    "p95_mm": 0.14,
    "error": null,
-   "duration_s": 7.4,
+   "duration_s": 25.0,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
   "kicad__Trimmer_Bourns_3296.step": {
    "file": "kicad__Trimmer_Bourns_3296.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.6111,
+   "match_ratio": 0.6471,
    "per_kind": {
     "holes": {
      "a": 4,
@@ -490,7 +490,7 @@
    "rms_mm": 0.708862,
    "p95_mm": 2.03,
    "error": null,
-   "duration_s": 6.9,
+   "duration_s": 25.3,
    "plan_steps": 6,
    "executor_outcome": "PASS"
   },
@@ -515,14 +515,14 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 14.0,
+   "duration_s": 19.5,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
   "kicad__SOT-89.step": {
    "file": "kicad__SOT-89.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.8571,
+   "match_ratio": 0.9231,
    "per_kind": {
     "holes": {
      "a": 1,
@@ -555,7 +555,7 @@
    "rms_mm": 0.028294,
    "p95_mm": 0.08,
    "error": null,
-   "duration_s": 6.7,
+   "duration_s": 9.3,
    "plan_steps": 2,
    "executor_outcome": "PASS"
   },
@@ -590,7 +590,7 @@
    "rms_mm": 0.009882,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 8.8,
+   "duration_s": 11.6,
    "plan_steps": 3,
    "executor_outcome": "PASS"
   },
@@ -625,7 +625,7 @@
    "rms_mm": 0.063266,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 9.0,
+   "duration_s": 11.8,
    "plan_steps": 5,
    "executor_outcome": "PASS"
   },
@@ -655,7 +655,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 9.1,
+   "duration_s": 11.4,
    "plan_steps": 2,
    "executor_outcome": "PASS"
   },
@@ -690,7 +690,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 7.6,
+   "duration_s": 11.0,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -730,7 +730,7 @@
    "rms_mm": 0.250218,
    "p95_mm": 0.657998,
    "error": null,
-   "duration_s": 13.3,
+   "duration_s": 20.5,
    "plan_steps": 7,
    "executor_outcome": "PASS"
   },
@@ -775,7 +775,7 @@
    "rms_mm": 0.118861,
    "p95_mm": 0.008088,
    "error": null,
-   "duration_s": 12.0,
+   "duration_s": 17.5,
    "plan_steps": 7,
    "executor_outcome": "PASS"
   },
@@ -815,7 +815,7 @@
    "rms_mm": 0.095244,
    "p95_mm": 0.213911,
    "error": null,
-   "duration_s": 6.8,
+   "duration_s": 39.9,
    "plan_steps": 2,
    "executor_outcome": "FAIL"
   },
@@ -845,14 +845,14 @@
    "rms_mm": 0.682233,
    "p95_mm": 1.831593,
    "error": null,
-   "duration_s": 8.1,
+   "duration_s": 145.6,
    "plan_steps": 2,
    "executor_outcome": "PASS"
   },
   "kicad__SOT-353.step": {
    "file": "kicad__SOT-353.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.8837,
+   "match_ratio": 0.9048,
    "per_kind": {
     "holes": {
      "a": 4,
@@ -880,12 +880,12 @@
      "matched": 6
     }
    },
-   "volume_delta_pct": -3.354,
+   "volume_delta_pct": -3.352,
    "hausdorff_mm": 0.174409,
    "rms_mm": 0.019273,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 11.6,
+   "duration_s": 16.6,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
@@ -910,14 +910,14 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 20.8,
+   "duration_s": 22.9,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
   "kicad__Panasonic_EVQPUA_button.step": {
    "file": "kicad__Panasonic_EVQPUA_button.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.7241,
+   "match_ratio": 0.75,
    "per_kind": {
     "holes": {
      "a": 6,
@@ -955,7 +955,7 @@
    "rms_mm": 0.032197,
    "p95_mm": 0.099084,
    "error": null,
-   "duration_s": 11.8,
+   "duration_s": 15.0,
    "plan_steps": 5,
    "executor_outcome": "PASS"
   },
@@ -990,7 +990,7 @@
    "rms_mm": 0.055137,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 12.3,
+   "duration_s": 14.0,
    "plan_steps": 5,
    "executor_outcome": "PASS"
   },
@@ -1025,7 +1025,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 9.0,
+   "duration_s": 11.0,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1055,14 +1055,14 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 7.6,
+   "duration_s": 9.1,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
   "kicad__HSOP-8-1EP_3.9x4.9mm.step": {
    "file": "kicad__HSOP-8-1EP_3.9x4.9mm.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.641,
+   "match_ratio": 0.7576,
    "per_kind": {
     "holes": {
      "a": 4,
@@ -1095,7 +1095,7 @@
    "rms_mm": 0.002991,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 13.1,
+   "duration_s": 14.9,
    "plan_steps": 6,
    "executor_outcome": "PASS"
   },
@@ -1125,7 +1125,7 @@
    "rms_mm": 16.390751,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 45.2,
+   "duration_s": 58.6,
    "plan_steps": 22,
    "executor_outcome": "PASS"
   },
@@ -1165,7 +1165,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 8.3,
+   "duration_s": 10.2,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1195,7 +1195,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 8.5,
+   "duration_s": 10.7,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1230,7 +1230,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 14.5,
+   "duration_s": 16.7,
    "plan_steps": 4,
    "executor_outcome": "PASS"
   },
@@ -1265,7 +1265,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 15.9,
+   "duration_s": 18.5,
    "plan_steps": 4,
    "executor_outcome": "PASS"
   },
@@ -1295,7 +1295,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 10.0,
+   "duration_s": 11.0,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1335,7 +1335,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 10.9,
+   "duration_s": 12.9,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1370,7 +1370,7 @@
    "rms_mm": 0.016871,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 14.4,
+   "duration_s": 17.3,
    "plan_steps": 6,
    "executor_outcome": "PASS"
   },
@@ -1410,7 +1410,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 12.2,
+   "duration_s": 13.4,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1445,7 +1445,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 22.4,
+   "duration_s": 23.7,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1480,7 +1480,7 @@
    "rms_mm": 0.015198,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 16.4,
+   "duration_s": 17.9,
    "plan_steps": 6,
    "executor_outcome": "PASS"
   },
@@ -1505,7 +1505,7 @@
    "rms_mm": 0.476152,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 25.9,
+   "duration_s": 21.4,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
@@ -1540,7 +1540,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 37.2,
+   "duration_s": 36.3,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1580,7 +1580,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 16.0,
+   "duration_s": 25.3,
    "plan_steps": 0,
    "executor_outcome": "PASS"
   },
@@ -1615,7 +1615,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 41.7,
+   "duration_s": 56.3,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
@@ -1655,7 +1655,7 @@
    "rms_mm": 0.036817,
    "p95_mm": 0.022328,
    "error": null,
-   "duration_s": 47.0,
+   "duration_s": 74.9,
    "plan_steps": 34,
    "executor_outcome": "PASS"
   },
@@ -1690,14 +1690,14 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 57.0,
+   "duration_s": 87.9,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
   "kicad__USB_A_Molex_67643_Horizontal.step": {
    "file": "kicad__USB_A_Molex_67643_Horizontal.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.8943,
+   "match_ratio": 0.9016,
    "per_kind": {
     "holes": {
      "a": 40,
@@ -1735,7 +1735,7 @@
    "rms_mm": 0.061694,
    "p95_mm": 0.000384,
    "error": null,
-   "duration_s": 132.5,
+   "duration_s": 195.6,
    "plan_steps": 57,
    "executor_outcome": "PASS"
   },
@@ -1770,14 +1770,14 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 85.3,
+   "duration_s": 134.5,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
   "pythonocc__11752.step": {
    "file": "pythonocc__11752.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.8684,
+   "match_ratio": 0.88,
    "per_kind": {
     "holes": {
      "a": 143,
@@ -1815,7 +1815,7 @@
    "rms_mm": 1.045904,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 609.1,
+   "duration_s": 647.1,
    "plan_steps": 143,
    "executor_outcome": "FAIL"
   },
@@ -1850,7 +1850,7 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 103.3,
+   "duration_s": 291.7,
    "plan_steps": 8,
    "executor_outcome": "PASS"
   },
@@ -1890,14 +1890,14 @@
    "rms_mm": 0.0,
    "p95_mm": 0.0,
    "error": null,
-   "duration_s": 45.6,
+   "duration_s": 38.8,
    "plan_steps": 2,
    "executor_outcome": "PASS"
   },
   "pythonocc__Ventilator.step": {
    "file": "pythonocc__Ventilator.step",
    "mode": "preserve_brep",
-   "match_ratio": 0.9459,
+   "match_ratio": 0.9722,
    "per_kind": {
     "holes": {
      "a": 14,
@@ -1930,7 +1930,7 @@
    "rms_mm": 0.135358,
    "p95_mm": 0.187045,
    "error": null,
-   "duration_s": 123.5,
+   "duration_s": 150.8,
    "plan_steps": 15,
    "executor_outcome": "PASS"
   }
