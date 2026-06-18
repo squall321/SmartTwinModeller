@@ -192,6 +192,57 @@ def test_greedy_pair_dim_gate_rejection_is_strictly_greater():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# End-agnostic hole pairing (2026-06-18) — a through-hole's stored entry END can
+# differ between orig/regen; the axis-midpoint term rescues the twin without
+# false-pairing two different coaxial holes that merely share one endpoint.
+
+
+def _through_hole(entry, axis_dir, depth, d=6.0):
+    return {
+        "entry_origin": list(entry),
+        "axis_dir": list(axis_dir),
+        "entry_depth_mm": depth,
+        "diameters_mm": [d],
+        "diameter_mm": d,
+        "depth_mm": depth,
+    }
+
+
+def test_through_hole_pairs_when_stored_entry_end_differs():
+    # ONE physical Ø6 through-hole along Z, depth 10. ORIG stored entry at z=0
+    # (axis +Z); REGEN stored entry at the OTHER end z=10 (axis -Z). The entry
+    # points are a full depth (10 mm) apart — single-point distance > tol 5 would
+    # reject — but the axis midpoints coincide at z=5, so the twin pairs.
+    a = [_through_hole([0, 0, 0], [0, 0, 1], 10.0)]
+    b = [_through_hole([0, 0, 10], [0, 0, -1], 10.0)]
+    pairs, ua, ub = _greedy_pair(a, b, "holes", tol_xyz_mm=5.0)
+    assert len(pairs) == 1, "flipped-entry twin must pair via the midpoint term"
+    assert ua == [] and ub == []
+
+
+def test_stacked_coaxial_holes_do_not_false_pair():
+    # TWO DIFFERENT Ø6 holes stacked along Z sharing the z=10 plane: A spans
+    # z0..z10, B spans z10..z20. They share a coincident endpoint (z=10) but are
+    # NOT the same feature. entry↔entry = 10 and mid↔mid = |5-15| = 10, both >
+    # tol 5 → the ALIGNED-only min refuses the false pair (a naive all-pairs min
+    # would wrongly match on the shared endpoint).
+    a = [_through_hole([0, 0, 0], [0, 0, 1], 10.0)]
+    b = [_through_hole([0, 0, 10], [0, 0, 1], 10.0)]
+    pairs, ua, ub = _greedy_pair(a, b, "holes", tol_xyz_mm=5.0)
+    assert pairs == [], "stacked different holes sharing an endpoint must NOT pair"
+    assert ua == [0] and ub == [0]
+
+
+def test_endpoint_logic_is_holes_only_pockets_unchanged():
+    # Pockets carry no axis_dir; the endpoint path is holes-only, so a pocket
+    # pair 10 mm apart still rejects on the single-point gate (bit-identical).
+    a = [_pocket(0, 0, 0)]
+    b = [_pocket(0, 0, 10)]
+    pairs, ua, ub = _greedy_pair(a, b, "pockets", tol_xyz_mm=5.0)
+    assert pairs == [] and ua == [0] and ub == [0]
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Adaptive xyz tolerance
 
 

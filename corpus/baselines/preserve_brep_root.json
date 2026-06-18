@@ -1,1938 +1,1938 @@
 {
- "schema": 1,
- "mode": "preserve_brep",
- "subset": "root",
- "generated_at": "2026-06-18T00:00:00+00:00",
- "records": {
-  "kicad__Buzzer_15x7.5RM7.6.step": {
-   "file": "kicad__Buzzer_15x7.5RM7.6.step",
-   "mode": "preserve_brep",
-   "match_ratio": 0.6111,
-   "per_kind": {
-    "holes": {
-     "a": 3,
-     "b": 3,
-     "matched": 2
+  "schema": 1,
+  "mode": "preserve_brep",
+  "subset": "root",
+  "generated_at": "2026-06-18T08:30:52+00:00",
+  "records": {
+    "kicad__Buzzer_15x7.5RM7.6.step": {
+      "file": "kicad__Buzzer_15x7.5RM7.6.step",
+      "mode": "preserve_brep",
+      "match_ratio": 0.6111,
+      "per_kind": {
+        "holes": {
+          "a": 3,
+          "b": 3,
+          "matched": 2
+        },
+        "pockets": {
+          "a": 2,
+          "b": 5,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "edge_blends": {
+          "a": 4,
+          "b": 2,
+          "matched": 2
+        }
+      },
+      "volume_delta_pct": -1.398,
+      "hausdorff_mm": 2.8534,
+      "rms_mm": 1.361003,
+      "p95_mm": 2.848887,
+      "error": null,
+      "duration_s": 33.3,
+      "plan_steps": 4,
+      "executor_outcome": "PASS"
     },
-    "pockets": {
-     "a": 2,
-     "b": 5,
-     "matched": 1
+    "pythonocc__splinecage.step": {
+      "file": "pythonocc__splinecage.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        }
+      },
+      "volume_delta_pct": null,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 7.5,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
     },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
+    "pythonocc__face_recognition_sample_part.step": {
+      "file": "pythonocc__face_recognition_sample_part.step",
+      "mode": "preserve_brep",
+      "match_ratio": 0.8889,
+      "per_kind": {
+        "holes": {
+          "a": 6,
+          "b": 6,
+          "matched": 5
+        },
+        "pockets": {
+          "a": 1,
+          "b": 1,
+          "matched": 0
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "edge_blends": {
+          "a": 5,
+          "b": 5,
+          "matched": 5
+        }
+      },
+      "volume_delta_pct": -4.388,
+      "hausdorff_mm": 0.098018,
+      "rms_mm": 0.011399,
+      "p95_mm": 0.026275,
+      "error": null,
+      "duration_s": 11.6,
+      "plan_steps": 6,
+      "executor_outcome": "FAIL"
     },
-    "edge_blends": {
-     "a": 4,
-     "b": 2,
-     "matched": 2
+    "kicad__R_1206_3216Metric.step": {
+      "file": "kicad__R_1206_3216Metric.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 8,
+          "b": 8,
+          "matched": 8
+        },
+        "pockets": {
+          "a": 8,
+          "b": 8,
+          "matched": 8
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "edge_blends": {
+          "a": 4,
+          "b": 4,
+          "matched": 4
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 8.5,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
+    },
+    "kicad__R_0805_2012Metric.step": {
+      "file": "kicad__R_0805_2012Metric.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 8,
+          "b": 8,
+          "matched": 8
+        },
+        "pockets": {
+          "a": 8,
+          "b": 8,
+          "matched": 8
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 8.2,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
+    },
+    "kicad__R_0603_1608Metric.step": {
+      "file": "kicad__R_0603_1608Metric.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 8,
+          "b": 8,
+          "matched": 8
+        },
+        "pockets": {
+          "a": 8,
+          "b": 8,
+          "matched": 8
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 8.5,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
+    },
+    "kicad__R_0402_1005Metric.step": {
+      "file": "kicad__R_0402_1005Metric.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 4,
+          "b": 4,
+          "matched": 4
+        },
+        "pockets": {
+          "a": 8,
+          "b": 8,
+          "matched": 8
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 8.7,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
+    },
+    "kicad__C_0603_1608Metric.step": {
+      "file": "kicad__C_0603_1608Metric.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 4,
+          "b": 4,
+          "matched": 4
+        },
+        "pockets": {
+          "a": 12,
+          "b": 12,
+          "matched": 12
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 8.1,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
+    },
+    "kicad__C_1206_3216Metric.step": {
+      "file": "kicad__C_1206_3216Metric.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 4,
+          "b": 4,
+          "matched": 4
+        },
+        "pockets": {
+          "a": 12,
+          "b": 12,
+          "matched": 12
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 8.5,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
+    },
+    "kicad__L_0603_1608Metric.step": {
+      "file": "kicad__L_0603_1608Metric.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 4,
+          "b": 4,
+          "matched": 4
+        },
+        "pockets": {
+          "a": 12,
+          "b": 12,
+          "matched": 12
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 8.4,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
+    },
+    "kicad__C_0402_1005Metric.step": {
+      "file": "kicad__C_0402_1005Metric.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 4,
+          "b": 4,
+          "matched": 4
+        },
+        "pockets": {
+          "a": 12,
+          "b": 12,
+          "matched": 12
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 8.4,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
+    },
+    "kicad__L_0402_1005Metric.step": {
+      "file": "kicad__L_0402_1005Metric.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 4,
+          "b": 4,
+          "matched": 4
+        },
+        "pockets": {
+          "a": 12,
+          "b": 12,
+          "matched": 12
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 8.5,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
+    },
+    "kicad__C_0805_2012Metric.step": {
+      "file": "kicad__C_0805_2012Metric.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 4,
+          "b": 4,
+          "matched": 4
+        },
+        "pockets": {
+          "a": 12,
+          "b": 12,
+          "matched": 12
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 8.5,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
+    },
+    "kicad__Crystal_SMD_3225-4Pin.step": {
+      "file": "kicad__Crystal_SMD_3225-4Pin.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 8,
+          "b": 8,
+          "matched": 8
+        },
+        "pockets": {
+          "a": 12,
+          "b": 12,
+          "matched": 12
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        }
+      },
+      "volume_delta_pct": -7.507,
+      "hausdorff_mm": 0.143155,
+      "rms_mm": 0.042862,
+      "p95_mm": 0.14,
+      "error": null,
+      "duration_s": 10.6,
+      "plan_steps": 8,
+      "executor_outcome": "PASS"
+    },
+    "kicad__Trimmer_Bourns_3296.step": {
+      "file": "kicad__Trimmer_Bourns_3296.step",
+      "mode": "preserve_brep",
+      "match_ratio": 0.6471,
+      "per_kind": {
+        "holes": {
+          "a": 4,
+          "b": 3,
+          "matched": 3
+        },
+        "pockets": {
+          "a": 2,
+          "b": 6,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 1,
+          "b": 2,
+          "matched": 1
+        }
+      },
+      "volume_delta_pct": -1.502,
+      "hausdorff_mm": 2.210139,
+      "rms_mm": 0.719266,
+      "p95_mm": 2.03,
+      "error": null,
+      "duration_s": 9.2,
+      "plan_steps": 6,
+      "executor_outcome": "PASS"
+    },
+    "kicad__BGA-49_6.25x6.25mm_P0.8mm.step": {
+      "file": "kicad__BGA-49_6.25x6.25mm_P0.8mm.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 14.6,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
+    },
+    "kicad__SOT-89.step": {
+      "file": "kicad__SOT-89.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "pockets": {
+          "a": 5,
+          "b": 5,
+          "matched": 5
+        },
+        "ribs": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 0,
+          "b": 1,
+          "matched": 0
+        }
+      },
+      "volume_delta_pct": -0.235,
+      "hausdorff_mm": 0.1027,
+      "rms_mm": 0.029925,
+      "p95_mm": 0.08,
+      "error": null,
+      "duration_s": 8.5,
+      "plan_steps": 2,
+      "executor_outcome": "PASS"
+    },
+    "kicad__SOT-23.step": {
+      "file": "kicad__SOT-23.step",
+      "mode": "preserve_brep",
+      "match_ratio": 0.8696,
+      "per_kind": {
+        "holes": {
+          "a": 4,
+          "b": 5,
+          "matched": 4
+        },
+        "pockets": {
+          "a": 2,
+          "b": 3,
+          "matched": 2
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "edge_blends": {
+          "a": 9,
+          "b": 8,
+          "matched": 8
+        }
+      },
+      "volume_delta_pct": -0.935,
+      "hausdorff_mm": 0.085724,
+      "rms_mm": 0.009882,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 12.1,
+      "plan_steps": 3,
+      "executor_outcome": "PASS"
+    },
+    "kicad__SOT-223.step": {
+      "file": "kicad__SOT-223.step",
+      "mode": "preserve_brep",
+      "match_ratio": 0.9375,
+      "per_kind": {
+        "holes": {
+          "a": 4,
+          "b": 4,
+          "matched": 4
+        },
+        "pockets": {
+          "a": 1,
+          "b": 2,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "edge_blends": {
+          "a": 4,
+          "b": 4,
+          "matched": 4
+        }
+      },
+      "volume_delta_pct": -9.363,
+      "hausdorff_mm": 0.732911,
+      "rms_mm": 0.063266,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 11.9,
+      "plan_steps": 5,
+      "executor_outcome": "PASS"
+    },
+    "kicad__D_0603_1608Metric.step": {
+      "file": "kicad__D_0603_1608Metric.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 10,
+          "b": 10,
+          "matched": 10
+        },
+        "pockets": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 11.3,
+      "plan_steps": 2,
+      "executor_outcome": "PASS"
+    },
+    "kicad__LED_0402_1005Metric.step": {
+      "file": "kicad__LED_0402_1005Metric.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 4,
+          "b": 4,
+          "matched": 4
+        },
+        "pockets": {
+          "a": 8,
+          "b": 8,
+          "matched": 8
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 2,
+          "b": 2,
+          "matched": 2
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 8.6,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
+    },
+    "kicad__CP_Elec_3x5.4.step": {
+      "file": "kicad__CP_Elec_3x5.4.step",
+      "mode": "preserve_brep",
+      "match_ratio": 0.7,
+      "per_kind": {
+        "holes": {
+          "a": 5,
+          "b": 5,
+          "matched": 4
+        },
+        "pockets": {
+          "a": 4,
+          "b": 4,
+          "matched": 1
+        },
+        "ribs": {
+          "a": 1,
+          "b": 0,
+          "matched": 0
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "edge_blends": {
+          "a": 3,
+          "b": 4,
+          "matched": 3
+        }
+      },
+      "volume_delta_pct": -33.24,
+      "hausdorff_mm": 1.419563,
+      "rms_mm": 0.250218,
+      "p95_mm": 0.657998,
+      "error": null,
+      "duration_s": 15.8,
+      "plan_steps": 7,
+      "executor_outcome": "PASS"
+    },
+    "kicad__CP_Elec_10x10.step": {
+      "file": "kicad__CP_Elec_10x10.step",
+      "mode": "preserve_brep",
+      "match_ratio": 0.8571,
+      "per_kind": {
+        "holes": {
+          "a": 5,
+          "b": 6,
+          "matched": 5
+        },
+        "pockets": {
+          "a": 4,
+          "b": 4,
+          "matched": 3
+        },
+        "ribs": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "revolve_features": {
+          "a": 0,
+          "b": 1,
+          "matched": 0
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "edge_blends": {
+          "a": 3,
+          "b": 3,
+          "matched": 3
+        }
+      },
+      "volume_delta_pct": -40.579,
+      "hausdorff_mm": 1.168742,
+      "rms_mm": 0.118881,
+      "p95_mm": 0.008088,
+      "error": null,
+      "duration_s": 14.1,
+      "plan_steps": 7,
+      "executor_outcome": "PASS"
+    },
+    "kicad__TO-220-3_Vertical.step": {
+      "file": "kicad__TO-220-3_Vertical.step",
+      "mode": "preserve_brep",
+      "match_ratio": 0.8333,
+      "per_kind": {
+        "holes": {
+          "a": 1,
+          "b": 0,
+          "matched": 0
+        },
+        "pockets": {
+          "a": 2,
+          "b": 2,
+          "matched": 1
+        },
+        "ribs": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "edge_blends": {
+          "a": 2,
+          "b": 2,
+          "matched": 2
+        }
+      },
+      "volume_delta_pct": -0.781,
+      "hausdorff_mm": 0.469656,
+      "rms_mm": 0.095244,
+      "p95_mm": 0.213911,
+      "error": null,
+      "duration_s": 9.9,
+      "plan_steps": 2,
+      "executor_outcome": "FAIL"
+    },
+    "occt__screw.step": {
+      "file": "occt__screw.step",
+      "mode": "preserve_brep",
+      "match_ratio": 0.875,
+      "per_kind": {
+        "holes": {
+          "a": 1,
+          "b": 1,
+          "matched": 0
+        },
+        "pockets": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        }
+      },
+      "volume_delta_pct": -66.832,
+      "hausdorff_mm": 3.815048,
+      "rms_mm": 0.682233,
+      "p95_mm": 1.831593,
+      "error": null,
+      "duration_s": 10.9,
+      "plan_steps": 2,
+      "executor_outcome": "PASS"
+    },
+    "kicad__SOT-353.step": {
+      "file": "kicad__SOT-353.step",
+      "mode": "preserve_brep",
+      "match_ratio": 0.9048,
+      "per_kind": {
+        "holes": {
+          "a": 4,
+          "b": 4,
+          "matched": 4
+        },
+        "pockets": {
+          "a": 17,
+          "b": 19,
+          "matched": 17
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 6,
+          "b": 5,
+          "matched": 5
+        },
+        "edge_blends": {
+          "a": 8,
+          "b": 6,
+          "matched": 6
+        }
+      },
+      "volume_delta_pct": -3.354,
+      "hausdorff_mm": 0.174409,
+      "rms_mm": 0.019273,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 14.6,
+      "plan_steps": 8,
+      "executor_outcome": "PASS"
+    },
+    "kicad__BGA-100_9.0x9.0mm_P0.8mm.step": {
+      "file": "kicad__BGA-100_9.0x9.0mm_P0.8mm.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 22.5,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
+    },
+    "kicad__Panasonic_EVQPUA_button.step": {
+      "file": "kicad__Panasonic_EVQPUA_button.step",
+      "mode": "preserve_brep",
+      "match_ratio": 0.75,
+      "per_kind": {
+        "holes": {
+          "a": 6,
+          "b": 5,
+          "matched": 5
+        },
+        "pockets": {
+          "a": 2,
+          "b": 2,
+          "matched": 2
+        },
+        "ribs": {
+          "a": 2,
+          "b": 2,
+          "matched": 2
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 1,
+          "b": 0,
+          "matched": 0
+        },
+        "edge_blends": {
+          "a": 12,
+          "b": 7,
+          "matched": 6
+        }
+      },
+      "volume_delta_pct": -1.096,
+      "hausdorff_mm": 0.155938,
+      "rms_mm": 0.032155,
+      "p95_mm": 0.099084,
+      "error": null,
+      "duration_s": 14.9,
+      "plan_steps": 5,
+      "executor_outcome": "PASS"
+    },
+    "kicad__SOIC-8_3.9x4.9mm_P1.27mm.step": {
+      "file": "kicad__SOIC-8_3.9x4.9mm_P1.27mm.step",
+      "mode": "preserve_brep",
+      "match_ratio": 0.95,
+      "per_kind": {
+        "holes": {
+          "a": 4,
+          "b": 4,
+          "matched": 4
+        },
+        "pockets": {
+          "a": 1,
+          "b": 2,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "edge_blends": {
+          "a": 8,
+          "b": 8,
+          "matched": 8
+        }
+      },
+      "volume_delta_pct": -0.435,
+      "hausdorff_mm": 0.511771,
+      "rms_mm": 0.055137,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 14.4,
+      "plan_steps": 5,
+      "executor_outcome": "PASS"
+    },
+    "kicad__DFN-10-1EP_2x3mm_P0.5mm.step": {
+      "file": "kicad__DFN-10-1EP_2x3mm_P0.5mm.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 11,
+          "b": 11,
+          "matched": 11
+        },
+        "pockets": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 2,
+          "b": 2,
+          "matched": 2
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 11.2,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
+    },
+    "kicad__JST_EH_B2B_1x02_P2.50mm_Vertical.step": {
+      "file": "kicad__JST_EH_B2B_1x02_P2.50mm_Vertical.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "pockets": {
+          "a": 2,
+          "b": 2,
+          "matched": 2
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "edge_blends": {
+          "a": 5,
+          "b": 5,
+          "matched": 5
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 10.2,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
+    },
+    "kicad__HSOP-8-1EP_3.9x4.9mm.step": {
+      "file": "kicad__HSOP-8-1EP_3.9x4.9mm.step",
+      "mode": "preserve_brep",
+      "match_ratio": 0.7576,
+      "per_kind": {
+        "holes": {
+          "a": 4,
+          "b": 6,
+          "matched": 4
+        },
+        "pockets": {
+          "a": 7,
+          "b": 13,
+          "matched": 7
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 0,
+          "b": 6,
+          "matched": 0
+        },
+        "edge_blends": {
+          "a": 8,
+          "b": 8,
+          "matched": 8
+        }
+      },
+      "volume_delta_pct": -0.269,
+      "hausdorff_mm": 0.039549,
+      "rms_mm": 0.002991,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 16.1,
+      "plan_steps": 6,
+      "executor_outcome": "PASS"
+    },
+    "pythonocc__as1_pe_203.step": {
+      "file": "pythonocc__as1_pe_203.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 7,
+          "b": 7,
+          "matched": 7
+        },
+        "pockets": {
+          "a": 18,
+          "b": 18,
+          "matched": 18
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        }
+      },
+      "volume_delta_pct": -0.081,
+      "hausdorff_mm": 200.0,
+      "rms_mm": 16.390751,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 58.7,
+      "plan_steps": 22,
+      "executor_outcome": "PASS"
+    },
+    "kicad__PinHeader_1x04_P2.54mm_Vertical.step": {
+      "file": "kicad__PinHeader_1x04_P2.54mm_Vertical.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "pockets": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "ribs": {
+          "a": 4,
+          "b": 4,
+          "matched": 4
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "edge_blends": {
+          "a": 36,
+          "b": 36,
+          "matched": 36
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 10.3,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
+    },
+    "kicad__QFN-16-1EP_3x3mm_P0.5mm_EP1.7x1.7mm.step": {
+      "file": "kicad__QFN-16-1EP_3x3mm_P0.5mm_EP1.7x1.7mm.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "pockets": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 10.4,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
+    },
+    "kicad__SOIC-14_3.9x8.7mm_P1.27mm.step": {
+      "file": "kicad__SOIC-14_3.9x8.7mm_P1.27mm.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 4,
+          "b": 4,
+          "matched": 4
+        },
+        "pockets": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "edge_blends": {
+          "a": 10,
+          "b": 10,
+          "matched": 10
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 18.7,
+      "plan_steps": 4,
+      "executor_outcome": "PASS"
+    },
+    "kicad__SOIC-16_3.9x9.9mm_P1.27mm.step": {
+      "file": "kicad__SOIC-16_3.9x9.9mm_P1.27mm.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 4,
+          "b": 4,
+          "matched": 4
+        },
+        "pockets": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "edge_blends": {
+          "a": 10,
+          "b": 10,
+          "matched": 10
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 19.5,
+      "plan_steps": 4,
+      "executor_outcome": "PASS"
+    },
+    "kicad__JST_EH_B5B_1x05_P2.50mm_Vertical.step": {
+      "file": "kicad__JST_EH_B5B_1x05_P2.50mm_Vertical.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "pockets": {
+          "a": 2,
+          "b": 2,
+          "matched": 2
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "edge_blends": {
+          "a": 5,
+          "b": 5,
+          "matched": 5
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 11.7,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
+    },
+    "kicad__PinHeader_2x05_P2.54mm_Vertical.step": {
+      "file": "kicad__PinHeader_2x05_P2.54mm_Vertical.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "pockets": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "ribs": {
+          "a": 10,
+          "b": 10,
+          "matched": 10
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 2,
+          "b": 2,
+          "matched": 2
+        },
+        "edge_blends": {
+          "a": 84,
+          "b": 84,
+          "matched": 84
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 13.7,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
+    },
+    "kicad__DIP-8_W7.62mm.step": {
+      "file": "kicad__DIP-8_W7.62mm.step",
+      "mode": "preserve_brep",
+      "match_ratio": 0.9474,
+      "per_kind": {
+        "holes": {
+          "a": 3,
+          "b": 3,
+          "matched": 3
+        },
+        "pockets": {
+          "a": 3,
+          "b": 3,
+          "matched": 3
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "edge_blends": {
+          "a": 6,
+          "b": 7,
+          "matched": 6
+        }
+      },
+      "volume_delta_pct": -0.051,
+      "hausdorff_mm": 0.315447,
+      "rms_mm": 0.016871,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 17.5,
+      "plan_steps": 6,
+      "executor_outcome": "PASS"
+    },
+    "kicad__PinHeader_1x10_P2.54mm_Vertical.step": {
+      "file": "kicad__PinHeader_1x10_P2.54mm_Vertical.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "pockets": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "ribs": {
+          "a": 10,
+          "b": 10,
+          "matched": 10
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "edge_blends": {
+          "a": 84,
+          "b": 84,
+          "matched": 84
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 14.4,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
+    },
+    "kicad__QFN-32-1EP_5x5mm_P0.5mm_EP3.45x3.45mm.step": {
+      "file": "kicad__QFN-32-1EP_5x5mm_P0.5mm_EP3.45x3.45mm.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 33,
+          "b": 33,
+          "matched": 33
+        },
+        "pockets": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 5,
+          "b": 5,
+          "matched": 5
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 23.9,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
+    },
+    "kicad__DIP-14_W7.62mm.step": {
+      "file": "kicad__DIP-14_W7.62mm.step",
+      "mode": "preserve_brep",
+      "match_ratio": 0.9474,
+      "per_kind": {
+        "holes": {
+          "a": 3,
+          "b": 3,
+          "matched": 3
+        },
+        "pockets": {
+          "a": 3,
+          "b": 3,
+          "matched": 3
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "edge_blends": {
+          "a": 6,
+          "b": 7,
+          "matched": 6
+        }
+      },
+      "volume_delta_pct": -0.042,
+      "hausdorff_mm": 0.311708,
+      "rms_mm": 0.015198,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 18.7,
+      "plan_steps": 6,
+      "executor_outcome": "PASS"
+    },
+    "pythonocc__as1-oc-214.step": {
+      "file": "pythonocc__as1-oc-214.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "pockets": {
+          "a": 11,
+          "b": 11,
+          "matched": 11
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        }
+      },
+      "volume_delta_pct": -0.062,
+      "hausdorff_mm": 6.00006,
+      "rms_mm": 0.476152,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 22.1,
+      "plan_steps": 8,
+      "executor_outcome": "PASS"
+    },
+    "kicad__QFN-48_7x7mm_P0.5mm.step": {
+      "file": "kicad__QFN-48_7x7mm_P0.5mm.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 49,
+          "b": 49,
+          "matched": 49
+        },
+        "pockets": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 5,
+          "b": 5,
+          "matched": 5
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 36.9,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
+    },
+    "kicad__PinHeader_2x10_P2.54mm_Vertical.step": {
+      "file": "kicad__PinHeader_2x10_P2.54mm_Vertical.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "pockets": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "ribs": {
+          "a": 20,
+          "b": 20,
+          "matched": 20
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 2,
+          "b": 2,
+          "matched": 2
+        },
+        "edge_blends": {
+          "a": 164,
+          "b": 164,
+          "matched": 164
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 20.0,
+      "plan_steps": 0,
+      "executor_outcome": "PASS"
+    },
+    "kicad__LQFP-48_7x7mm_P0.5mm.step": {
+      "file": "kicad__LQFP-48_7x7mm_P0.5mm.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 8,
+          "b": 8,
+          "matched": 8
+        },
+        "pockets": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "edge_blends": {
+          "a": 16,
+          "b": 16,
+          "matched": 16
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 46.5,
+      "plan_steps": 8,
+      "executor_outcome": "PASS"
+    },
+    "kicad__USB_C_Receptacle_GCT_USB4085.step": {
+      "file": "kicad__USB_C_Receptacle_GCT_USB4085.step",
+      "mode": "preserve_brep",
+      "match_ratio": 0.7383,
+      "per_kind": {
+        "holes": {
+          "a": 18,
+          "b": 18,
+          "matched": 13
+        },
+        "pockets": {
+          "a": 24,
+          "b": 30,
+          "matched": 24
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 2,
+          "b": 2,
+          "matched": 2
+        },
+        "edge_blends": {
+          "a": 51,
+          "b": 35,
+          "matched": 34
+        }
+      },
+      "volume_delta_pct": -13.269,
+      "hausdorff_mm": 0.565573,
+      "rms_mm": 0.036817,
+      "p95_mm": 0.022328,
+      "error": null,
+      "duration_s": 56.6,
+      "plan_steps": 34,
+      "executor_outcome": "PASS"
+    },
+    "kicad__LQFP-64_10x10mm_P0.5mm.step": {
+      "file": "kicad__LQFP-64_10x10mm_P0.5mm.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 8,
+          "b": 8,
+          "matched": 8
+        },
+        "pockets": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "edge_blends": {
+          "a": 16,
+          "b": 16,
+          "matched": 16
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 64.6,
+      "plan_steps": 8,
+      "executor_outcome": "PASS"
+    },
+    "kicad__USB_A_Molex_67643_Horizontal.step": {
+      "file": "kicad__USB_A_Molex_67643_Horizontal.step",
+      "mode": "preserve_brep",
+      "match_ratio": 0.9016,
+      "per_kind": {
+        "holes": {
+          "a": 40,
+          "b": 37,
+          "matched": 36
+        },
+        "pockets": {
+          "a": 33,
+          "b": 33,
+          "matched": 31
+        },
+        "ribs": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 2,
+          "b": 1,
+          "matched": 1
+        },
+        "edge_blends": {
+          "a": 41,
+          "b": 35,
+          "matched": 35
+        }
+      },
+      "volume_delta_pct": -1.752,
+      "hausdorff_mm": 0.652993,
+      "rms_mm": 0.061694,
+      "p95_mm": 0.000384,
+      "error": null,
+      "duration_s": 148.3,
+      "plan_steps": 57,
+      "executor_outcome": "PASS"
+    },
+    "kicad__LQFP-100_14x14mm_P0.5mm.step": {
+      "file": "kicad__LQFP-100_14x14mm_P0.5mm.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 8,
+          "b": 8,
+          "matched": 8
+        },
+        "pockets": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "edge_blends": {
+          "a": 16,
+          "b": 16,
+          "matched": 16
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 95.0,
+      "plan_steps": 8,
+      "executor_outcome": "PASS"
+    },
+    "pythonocc__11752.step": {
+      "file": "pythonocc__11752.step",
+      "mode": "preserve_brep",
+      "match_ratio": 0.8833,
+      "per_kind": {
+        "holes": {
+          "a": 143,
+          "b": 133,
+          "matched": 120
+        },
+        "pockets": {
+          "a": 4,
+          "b": 2,
+          "matched": 2
+        },
+        "loft_features": {
+          "a": 4,
+          "b": 4,
+          "matched": 4
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 67,
+          "b": 63,
+          "matched": 63
+        },
+        "edge_blends": {
+          "a": 80,
+          "b": 70,
+          "matched": 70
+        }
+      },
+      "volume_delta_pct": -100.687,
+      "hausdorff_mm": 19.252758,
+      "rms_mm": 1.045904,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 587.0,
+      "plan_steps": 143,
+      "executor_outcome": "FAIL"
+    },
+    "kicad__LQFP-128_14x14mm_P0.4mm.step": {
+      "file": "kicad__LQFP-128_14x14mm_P0.4mm.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 8,
+          "b": 8,
+          "matched": 8
+        },
+        "pockets": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "edge_blends": {
+          "a": 16,
+          "b": 16,
+          "matched": 16
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 170.6,
+      "plan_steps": 8,
+      "executor_outcome": "PASS"
+    },
+    "occt__linkrods.step": {
+      "file": "occt__linkrods.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 2,
+          "b": 2,
+          "matched": 2
+        },
+        "pockets": {
+          "a": 3,
+          "b": 3,
+          "matched": 3
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "edge_blends": {
+          "a": 8,
+          "b": 8,
+          "matched": 8
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 28.7,
+      "plan_steps": 2,
+      "executor_outcome": "PASS"
+    },
+    "pythonocc__Ventilator.step": {
+      "file": "pythonocc__Ventilator.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 14,
+          "b": 14,
+          "matched": 14
+        },
+        "pockets": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 0,
+          "b": 1,
+          "matched": 0
+        },
+        "edge_blends": {
+          "a": 15,
+          "b": 15,
+          "matched": 15
+        }
+      },
+      "volume_delta_pct": -0.532,
+      "hausdorff_mm": 0.912253,
+      "rms_mm": 0.135354,
+      "p95_mm": 0.188414,
+      "error": null,
+      "duration_s": 96.4,
+      "plan_steps": 15,
+      "executor_outcome": "PASS"
     }
-   },
-   "volume_delta_pct": -1.397,
-   "hausdorff_mm": 2.85,
-   "rms_mm": 1.360172,
-   "p95_mm": 2.845487,
-   "error": null,
-   "duration_s": 21.4,
-   "plan_steps": 4,
-   "executor_outcome": "PASS"
-  },
-  "pythonocc__splinecage.step": {
-   "file": "pythonocc__splinecage.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    }
-   },
-   "volume_delta_pct": null,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 14.2,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "pythonocc__face_recognition_sample_part.step": {
-   "file": "pythonocc__face_recognition_sample_part.step",
-   "mode": "preserve_brep",
-   "match_ratio": 0.8889,
-   "per_kind": {
-    "holes": {
-     "a": 6,
-     "b": 6,
-     "matched": 5
-    },
-    "pockets": {
-     "a": 1,
-     "b": 1,
-     "matched": 0
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "edge_blends": {
-     "a": 5,
-     "b": 5,
-     "matched": 5
-    }
-   },
-   "volume_delta_pct": -4.388,
-   "hausdorff_mm": 0.098018,
-   "rms_mm": 0.011399,
-   "p95_mm": 0.026275,
-   "error": null,
-   "duration_s": 26.4,
-   "plan_steps": 6,
-   "executor_outcome": "FAIL"
-  },
-  "kicad__R_1206_3216Metric.step": {
-   "file": "kicad__R_1206_3216Metric.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 8,
-     "b": 8,
-     "matched": 8
-    },
-    "pockets": {
-     "a": 8,
-     "b": 8,
-     "matched": 8
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "edge_blends": {
-     "a": 4,
-     "b": 4,
-     "matched": 4
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 17.1,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "kicad__R_0805_2012Metric.step": {
-   "file": "kicad__R_0805_2012Metric.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 8,
-     "b": 8,
-     "matched": 8
-    },
-    "pockets": {
-     "a": 8,
-     "b": 8,
-     "matched": 8
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 18.9,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "kicad__R_0603_1608Metric.step": {
-   "file": "kicad__R_0603_1608Metric.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 8,
-     "b": 8,
-     "matched": 8
-    },
-    "pockets": {
-     "a": 8,
-     "b": 8,
-     "matched": 8
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 24.7,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "kicad__R_0402_1005Metric.step": {
-   "file": "kicad__R_0402_1005Metric.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 4,
-     "b": 4,
-     "matched": 4
-    },
-    "pockets": {
-     "a": 8,
-     "b": 8,
-     "matched": 8
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 21.7,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "kicad__C_0603_1608Metric.step": {
-   "file": "kicad__C_0603_1608Metric.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 4,
-     "b": 4,
-     "matched": 4
-    },
-    "pockets": {
-     "a": 12,
-     "b": 12,
-     "matched": 12
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 17.1,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "kicad__C_1206_3216Metric.step": {
-   "file": "kicad__C_1206_3216Metric.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 4,
-     "b": 4,
-     "matched": 4
-    },
-    "pockets": {
-     "a": 12,
-     "b": 12,
-     "matched": 12
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 18.9,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "kicad__L_0603_1608Metric.step": {
-   "file": "kicad__L_0603_1608Metric.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 4,
-     "b": 4,
-     "matched": 4
-    },
-    "pockets": {
-     "a": 12,
-     "b": 12,
-     "matched": 12
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 18.9,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "kicad__C_0402_1005Metric.step": {
-   "file": "kicad__C_0402_1005Metric.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 4,
-     "b": 4,
-     "matched": 4
-    },
-    "pockets": {
-     "a": 12,
-     "b": 12,
-     "matched": 12
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 20.8,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "kicad__L_0402_1005Metric.step": {
-   "file": "kicad__L_0402_1005Metric.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 4,
-     "b": 4,
-     "matched": 4
-    },
-    "pockets": {
-     "a": 12,
-     "b": 12,
-     "matched": 12
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 22.1,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "kicad__C_0805_2012Metric.step": {
-   "file": "kicad__C_0805_2012Metric.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 4,
-     "b": 4,
-     "matched": 4
-    },
-    "pockets": {
-     "a": 12,
-     "b": 12,
-     "matched": 12
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 23.9,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "kicad__Crystal_SMD_3225-4Pin.step": {
-   "file": "kicad__Crystal_SMD_3225-4Pin.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 8,
-     "b": 8,
-     "matched": 8
-    },
-    "pockets": {
-     "a": 12,
-     "b": 12,
-     "matched": 12
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    }
-   },
-   "volume_delta_pct": -7.507,
-   "hausdorff_mm": 0.143155,
-   "rms_mm": 0.042862,
-   "p95_mm": 0.14,
-   "error": null,
-   "duration_s": 25.0,
-   "plan_steps": 8,
-   "executor_outcome": "PASS"
-  },
-  "kicad__Trimmer_Bourns_3296.step": {
-   "file": "kicad__Trimmer_Bourns_3296.step",
-   "mode": "preserve_brep",
-   "match_ratio": 0.6471,
-   "per_kind": {
-    "holes": {
-     "a": 4,
-     "b": 3,
-     "matched": 3
-    },
-    "pockets": {
-     "a": 2,
-     "b": 6,
-     "matched": 1
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 1,
-     "b": 2,
-     "matched": 1
-    }
-   },
-   "volume_delta_pct": -1.482,
-   "hausdorff_mm": 2.210139,
-   "rms_mm": 0.708862,
-   "p95_mm": 2.03,
-   "error": null,
-   "duration_s": 25.3,
-   "plan_steps": 6,
-   "executor_outcome": "PASS"
-  },
-  "kicad__BGA-49_6.25x6.25mm_P0.8mm.step": {
-   "file": "kicad__BGA-49_6.25x6.25mm_P0.8mm.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 19.5,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "kicad__SOT-89.step": {
-   "file": "kicad__SOT-89.step",
-   "mode": "preserve_brep",
-   "match_ratio": 0.9231,
-   "per_kind": {
-    "holes": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "pockets": {
-     "a": 5,
-     "b": 5,
-     "matched": 4
-    },
-    "ribs": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 0,
-     "b": 1,
-     "matched": 0
-    }
-   },
-   "volume_delta_pct": -0.228,
-   "hausdorff_mm": 0.1,
-   "rms_mm": 0.028294,
-   "p95_mm": 0.08,
-   "error": null,
-   "duration_s": 9.3,
-   "plan_steps": 2,
-   "executor_outcome": "PASS"
-  },
-  "kicad__SOT-23.step": {
-   "file": "kicad__SOT-23.step",
-   "mode": "preserve_brep",
-   "match_ratio": 0.8696,
-   "per_kind": {
-    "holes": {
-     "a": 4,
-     "b": 5,
-     "matched": 4
-    },
-    "pockets": {
-     "a": 2,
-     "b": 3,
-     "matched": 2
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "edge_blends": {
-     "a": 9,
-     "b": 8,
-     "matched": 8
-    }
-   },
-   "volume_delta_pct": -0.935,
-   "hausdorff_mm": 0.085724,
-   "rms_mm": 0.009882,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 11.6,
-   "plan_steps": 3,
-   "executor_outcome": "PASS"
-  },
-  "kicad__SOT-223.step": {
-   "file": "kicad__SOT-223.step",
-   "mode": "preserve_brep",
-   "match_ratio": 0.9375,
-   "per_kind": {
-    "holes": {
-     "a": 4,
-     "b": 4,
-     "matched": 4
-    },
-    "pockets": {
-     "a": 1,
-     "b": 2,
-     "matched": 1
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "edge_blends": {
-     "a": 4,
-     "b": 4,
-     "matched": 4
-    }
-   },
-   "volume_delta_pct": -9.363,
-   "hausdorff_mm": 0.732911,
-   "rms_mm": 0.063266,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 11.8,
-   "plan_steps": 5,
-   "executor_outcome": "PASS"
-  },
-  "kicad__D_0603_1608Metric.step": {
-   "file": "kicad__D_0603_1608Metric.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 10,
-     "b": 10,
-     "matched": 10
-    },
-    "pockets": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 11.4,
-   "plan_steps": 2,
-   "executor_outcome": "PASS"
-  },
-  "kicad__LED_0402_1005Metric.step": {
-   "file": "kicad__LED_0402_1005Metric.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 4,
-     "b": 4,
-     "matched": 4
-    },
-    "pockets": {
-     "a": 8,
-     "b": 8,
-     "matched": 8
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 2,
-     "b": 2,
-     "matched": 2
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 11.0,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "kicad__CP_Elec_3x5.4.step": {
-   "file": "kicad__CP_Elec_3x5.4.step",
-   "mode": "preserve_brep",
-   "match_ratio": 0.7,
-   "per_kind": {
-    "holes": {
-     "a": 5,
-     "b": 5,
-     "matched": 4
-    },
-    "pockets": {
-     "a": 4,
-     "b": 4,
-     "matched": 1
-    },
-    "ribs": {
-     "a": 1,
-     "b": 0,
-     "matched": 0
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "edge_blends": {
-     "a": 3,
-     "b": 4,
-     "matched": 3
-    }
-   },
-   "volume_delta_pct": -33.24,
-   "hausdorff_mm": 1.419563,
-   "rms_mm": 0.250218,
-   "p95_mm": 0.657998,
-   "error": null,
-   "duration_s": 20.5,
-   "plan_steps": 7,
-   "executor_outcome": "PASS"
-  },
-  "kicad__CP_Elec_10x10.step": {
-   "file": "kicad__CP_Elec_10x10.step",
-   "mode": "preserve_brep",
-   "match_ratio": 0.8571,
-   "per_kind": {
-    "holes": {
-     "a": 5,
-     "b": 6,
-     "matched": 5
-    },
-    "pockets": {
-     "a": 4,
-     "b": 4,
-     "matched": 3
-    },
-    "ribs": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "revolve_features": {
-     "a": 0,
-     "b": 1,
-     "matched": 0
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "edge_blends": {
-     "a": 3,
-     "b": 3,
-     "matched": 3
-    }
-   },
-   "volume_delta_pct": -40.579,
-   "hausdorff_mm": 1.168742,
-   "rms_mm": 0.118861,
-   "p95_mm": 0.008088,
-   "error": null,
-   "duration_s": 17.5,
-   "plan_steps": 7,
-   "executor_outcome": "PASS"
-  },
-  "kicad__TO-220-3_Vertical.step": {
-   "file": "kicad__TO-220-3_Vertical.step",
-   "mode": "preserve_brep",
-   "match_ratio": 0.8333,
-   "per_kind": {
-    "holes": {
-     "a": 1,
-     "b": 0,
-     "matched": 0
-    },
-    "pockets": {
-     "a": 2,
-     "b": 2,
-     "matched": 1
-    },
-    "ribs": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "edge_blends": {
-     "a": 2,
-     "b": 2,
-     "matched": 2
-    }
-   },
-   "volume_delta_pct": -0.781,
-   "hausdorff_mm": 0.469656,
-   "rms_mm": 0.095244,
-   "p95_mm": 0.213911,
-   "error": null,
-   "duration_s": 39.9,
-   "plan_steps": 2,
-   "executor_outcome": "FAIL"
-  },
-  "occt__screw.step": {
-   "file": "occt__screw.step",
-   "mode": "preserve_brep",
-   "match_ratio": 0.875,
-   "per_kind": {
-    "holes": {
-     "a": 1,
-     "b": 1,
-     "matched": 0
-    },
-    "pockets": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    }
-   },
-   "volume_delta_pct": -66.832,
-   "hausdorff_mm": 3.815048,
-   "rms_mm": 0.682233,
-   "p95_mm": 1.831593,
-   "error": null,
-   "duration_s": 145.6,
-   "plan_steps": 2,
-   "executor_outcome": "PASS"
-  },
-  "kicad__SOT-353.step": {
-   "file": "kicad__SOT-353.step",
-   "mode": "preserve_brep",
-   "match_ratio": 0.9048,
-   "per_kind": {
-    "holes": {
-     "a": 4,
-     "b": 4,
-     "matched": 4
-    },
-    "pockets": {
-     "a": 17,
-     "b": 19,
-     "matched": 17
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 6,
-     "b": 5,
-     "matched": 5
-    },
-    "edge_blends": {
-     "a": 8,
-     "b": 6,
-     "matched": 6
-    }
-   },
-   "volume_delta_pct": -3.352,
-   "hausdorff_mm": 0.174409,
-   "rms_mm": 0.019273,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 16.6,
-   "plan_steps": 8,
-   "executor_outcome": "PASS"
-  },
-  "kicad__BGA-100_9.0x9.0mm_P0.8mm.step": {
-   "file": "kicad__BGA-100_9.0x9.0mm_P0.8mm.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 22.9,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "kicad__Panasonic_EVQPUA_button.step": {
-   "file": "kicad__Panasonic_EVQPUA_button.step",
-   "mode": "preserve_brep",
-   "match_ratio": 0.75,
-   "per_kind": {
-    "holes": {
-     "a": 6,
-     "b": 5,
-     "matched": 5
-    },
-    "pockets": {
-     "a": 2,
-     "b": 2,
-     "matched": 2
-    },
-    "ribs": {
-     "a": 2,
-     "b": 2,
-     "matched": 2
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 1,
-     "b": 0,
-     "matched": 0
-    },
-    "edge_blends": {
-     "a": 12,
-     "b": 7,
-     "matched": 6
-    }
-   },
-   "volume_delta_pct": -1.095,
-   "hausdorff_mm": 0.157077,
-   "rms_mm": 0.032197,
-   "p95_mm": 0.099084,
-   "error": null,
-   "duration_s": 15.0,
-   "plan_steps": 5,
-   "executor_outcome": "PASS"
-  },
-  "kicad__SOIC-8_3.9x4.9mm_P1.27mm.step": {
-   "file": "kicad__SOIC-8_3.9x4.9mm_P1.27mm.step",
-   "mode": "preserve_brep",
-   "match_ratio": 0.95,
-   "per_kind": {
-    "holes": {
-     "a": 4,
-     "b": 4,
-     "matched": 4
-    },
-    "pockets": {
-     "a": 1,
-     "b": 2,
-     "matched": 1
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "edge_blends": {
-     "a": 8,
-     "b": 8,
-     "matched": 8
-    }
-   },
-   "volume_delta_pct": -0.435,
-   "hausdorff_mm": 0.511771,
-   "rms_mm": 0.055137,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 14.0,
-   "plan_steps": 5,
-   "executor_outcome": "PASS"
-  },
-  "kicad__DFN-10-1EP_2x3mm_P0.5mm.step": {
-   "file": "kicad__DFN-10-1EP_2x3mm_P0.5mm.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 11,
-     "b": 11,
-     "matched": 11
-    },
-    "pockets": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 2,
-     "b": 2,
-     "matched": 2
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 11.0,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "kicad__JST_EH_B2B_1x02_P2.50mm_Vertical.step": {
-   "file": "kicad__JST_EH_B2B_1x02_P2.50mm_Vertical.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "pockets": {
-     "a": 2,
-     "b": 2,
-     "matched": 2
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "edge_blends": {
-     "a": 5,
-     "b": 5,
-     "matched": 5
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 9.1,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "kicad__HSOP-8-1EP_3.9x4.9mm.step": {
-   "file": "kicad__HSOP-8-1EP_3.9x4.9mm.step",
-   "mode": "preserve_brep",
-   "match_ratio": 0.7576,
-   "per_kind": {
-    "holes": {
-     "a": 4,
-     "b": 6,
-     "matched": 4
-    },
-    "pockets": {
-     "a": 7,
-     "b": 13,
-     "matched": 7
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 0,
-     "b": 6,
-     "matched": 0
-    },
-    "edge_blends": {
-     "a": 8,
-     "b": 8,
-     "matched": 8
-    }
-   },
-   "volume_delta_pct": -0.269,
-   "hausdorff_mm": 0.039549,
-   "rms_mm": 0.002991,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 14.9,
-   "plan_steps": 6,
-   "executor_outcome": "PASS"
-  },
-  "pythonocc__as1_pe_203.step": {
-   "file": "pythonocc__as1_pe_203.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 7,
-     "b": 7,
-     "matched": 7
-    },
-    "pockets": {
-     "a": 18,
-     "b": 18,
-     "matched": 18
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    }
-   },
-   "volume_delta_pct": -0.081,
-   "hausdorff_mm": 200.0,
-   "rms_mm": 16.390751,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 58.6,
-   "plan_steps": 22,
-   "executor_outcome": "PASS"
-  },
-  "kicad__PinHeader_1x04_P2.54mm_Vertical.step": {
-   "file": "kicad__PinHeader_1x04_P2.54mm_Vertical.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "pockets": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "ribs": {
-     "a": 4,
-     "b": 4,
-     "matched": 4
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "edge_blends": {
-     "a": 36,
-     "b": 36,
-     "matched": 36
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 10.2,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "kicad__QFN-16-1EP_3x3mm_P0.5mm_EP1.7x1.7mm.step": {
-   "file": "kicad__QFN-16-1EP_3x3mm_P0.5mm_EP1.7x1.7mm.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "pockets": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 10.7,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "kicad__SOIC-14_3.9x8.7mm_P1.27mm.step": {
-   "file": "kicad__SOIC-14_3.9x8.7mm_P1.27mm.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 4,
-     "b": 4,
-     "matched": 4
-    },
-    "pockets": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "edge_blends": {
-     "a": 10,
-     "b": 10,
-     "matched": 10
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 16.7,
-   "plan_steps": 4,
-   "executor_outcome": "PASS"
-  },
-  "kicad__SOIC-16_3.9x9.9mm_P1.27mm.step": {
-   "file": "kicad__SOIC-16_3.9x9.9mm_P1.27mm.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 4,
-     "b": 4,
-     "matched": 4
-    },
-    "pockets": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "edge_blends": {
-     "a": 10,
-     "b": 10,
-     "matched": 10
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 18.5,
-   "plan_steps": 4,
-   "executor_outcome": "PASS"
-  },
-  "kicad__JST_EH_B5B_1x05_P2.50mm_Vertical.step": {
-   "file": "kicad__JST_EH_B5B_1x05_P2.50mm_Vertical.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "pockets": {
-     "a": 2,
-     "b": 2,
-     "matched": 2
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "edge_blends": {
-     "a": 5,
-     "b": 5,
-     "matched": 5
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 11.0,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "kicad__PinHeader_2x05_P2.54mm_Vertical.step": {
-   "file": "kicad__PinHeader_2x05_P2.54mm_Vertical.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "pockets": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "ribs": {
-     "a": 10,
-     "b": 10,
-     "matched": 10
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 2,
-     "b": 2,
-     "matched": 2
-    },
-    "edge_blends": {
-     "a": 84,
-     "b": 84,
-     "matched": 84
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 12.9,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "kicad__DIP-8_W7.62mm.step": {
-   "file": "kicad__DIP-8_W7.62mm.step",
-   "mode": "preserve_brep",
-   "match_ratio": 0.8421,
-   "per_kind": {
-    "holes": {
-     "a": 3,
-     "b": 3,
-     "matched": 1
-    },
-    "pockets": {
-     "a": 3,
-     "b": 3,
-     "matched": 3
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "edge_blends": {
-     "a": 6,
-     "b": 7,
-     "matched": 6
-    }
-   },
-   "volume_delta_pct": -0.051,
-   "hausdorff_mm": 0.315447,
-   "rms_mm": 0.016871,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 17.3,
-   "plan_steps": 6,
-   "executor_outcome": "PASS"
-  },
-  "kicad__PinHeader_1x10_P2.54mm_Vertical.step": {
-   "file": "kicad__PinHeader_1x10_P2.54mm_Vertical.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "pockets": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "ribs": {
-     "a": 10,
-     "b": 10,
-     "matched": 10
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "edge_blends": {
-     "a": 84,
-     "b": 84,
-     "matched": 84
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 13.4,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "kicad__QFN-32-1EP_5x5mm_P0.5mm_EP3.45x3.45mm.step": {
-   "file": "kicad__QFN-32-1EP_5x5mm_P0.5mm_EP3.45x3.45mm.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 33,
-     "b": 33,
-     "matched": 33
-    },
-    "pockets": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 5,
-     "b": 5,
-     "matched": 5
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 23.7,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "kicad__DIP-14_W7.62mm.step": {
-   "file": "kicad__DIP-14_W7.62mm.step",
-   "mode": "preserve_brep",
-   "match_ratio": 0.8421,
-   "per_kind": {
-    "holes": {
-     "a": 3,
-     "b": 3,
-     "matched": 1
-    },
-    "pockets": {
-     "a": 3,
-     "b": 3,
-     "matched": 3
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "edge_blends": {
-     "a": 6,
-     "b": 7,
-     "matched": 6
-    }
-   },
-   "volume_delta_pct": -0.042,
-   "hausdorff_mm": 0.311708,
-   "rms_mm": 0.015198,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 17.9,
-   "plan_steps": 6,
-   "executor_outcome": "PASS"
-  },
-  "pythonocc__as1-oc-214.step": {
-   "file": "pythonocc__as1-oc-214.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "pockets": {
-     "a": 11,
-     "b": 11,
-     "matched": 11
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    }
-   },
-   "volume_delta_pct": -0.062,
-   "hausdorff_mm": 6.00006,
-   "rms_mm": 0.476152,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 21.4,
-   "plan_steps": 8,
-   "executor_outcome": "PASS"
-  },
-  "kicad__QFN-48_7x7mm_P0.5mm.step": {
-   "file": "kicad__QFN-48_7x7mm_P0.5mm.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 49,
-     "b": 49,
-     "matched": 49
-    },
-    "pockets": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 5,
-     "b": 5,
-     "matched": 5
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 36.3,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "kicad__PinHeader_2x10_P2.54mm_Vertical.step": {
-   "file": "kicad__PinHeader_2x10_P2.54mm_Vertical.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "pockets": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "ribs": {
-     "a": 20,
-     "b": 20,
-     "matched": 20
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 2,
-     "b": 2,
-     "matched": 2
-    },
-    "edge_blends": {
-     "a": 164,
-     "b": 164,
-     "matched": 164
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 25.3,
-   "plan_steps": 0,
-   "executor_outcome": "PASS"
-  },
-  "kicad__LQFP-48_7x7mm_P0.5mm.step": {
-   "file": "kicad__LQFP-48_7x7mm_P0.5mm.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 8,
-     "b": 8,
-     "matched": 8
-    },
-    "pockets": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "edge_blends": {
-     "a": 16,
-     "b": 16,
-     "matched": 16
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 56.3,
-   "plan_steps": 8,
-   "executor_outcome": "PASS"
-  },
-  "kicad__USB_C_Receptacle_GCT_USB4085.step": {
-   "file": "kicad__USB_C_Receptacle_GCT_USB4085.step",
-   "mode": "preserve_brep",
-   "match_ratio": 0.7383,
-   "per_kind": {
-    "holes": {
-     "a": 18,
-     "b": 18,
-     "matched": 13
-    },
-    "pockets": {
-     "a": 24,
-     "b": 30,
-     "matched": 24
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 2,
-     "b": 2,
-     "matched": 2
-    },
-    "edge_blends": {
-     "a": 51,
-     "b": 35,
-     "matched": 34
-    }
-   },
-   "volume_delta_pct": -13.269,
-   "hausdorff_mm": 0.565573,
-   "rms_mm": 0.036817,
-   "p95_mm": 0.022328,
-   "error": null,
-   "duration_s": 74.9,
-   "plan_steps": 34,
-   "executor_outcome": "PASS"
-  },
-  "kicad__LQFP-64_10x10mm_P0.5mm.step": {
-   "file": "kicad__LQFP-64_10x10mm_P0.5mm.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 8,
-     "b": 8,
-     "matched": 8
-    },
-    "pockets": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "edge_blends": {
-     "a": 16,
-     "b": 16,
-     "matched": 16
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 87.9,
-   "plan_steps": 8,
-   "executor_outcome": "PASS"
-  },
-  "kicad__USB_A_Molex_67643_Horizontal.step": {
-   "file": "kicad__USB_A_Molex_67643_Horizontal.step",
-   "mode": "preserve_brep",
-   "match_ratio": 0.9016,
-   "per_kind": {
-    "holes": {
-     "a": 40,
-     "b": 37,
-     "matched": 36
-    },
-    "pockets": {
-     "a": 33,
-     "b": 33,
-     "matched": 31
-    },
-    "ribs": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 2,
-     "b": 1,
-     "matched": 1
-    },
-    "edge_blends": {
-     "a": 41,
-     "b": 35,
-     "matched": 35
-    }
-   },
-   "volume_delta_pct": -1.752,
-   "hausdorff_mm": 0.652993,
-   "rms_mm": 0.061694,
-   "p95_mm": 0.000384,
-   "error": null,
-   "duration_s": 195.6,
-   "plan_steps": 57,
-   "executor_outcome": "PASS"
-  },
-  "kicad__LQFP-100_14x14mm_P0.5mm.step": {
-   "file": "kicad__LQFP-100_14x14mm_P0.5mm.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 8,
-     "b": 8,
-     "matched": 8
-    },
-    "pockets": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "edge_blends": {
-     "a": 16,
-     "b": 16,
-     "matched": 16
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 134.5,
-   "plan_steps": 8,
-   "executor_outcome": "PASS"
-  },
-  "pythonocc__11752.step": {
-   "file": "pythonocc__11752.step",
-   "mode": "preserve_brep",
-   "match_ratio": 0.88,
-   "per_kind": {
-    "holes": {
-     "a": 143,
-     "b": 133,
-     "matched": 119
-    },
-    "pockets": {
-     "a": 4,
-     "b": 2,
-     "matched": 2
-    },
-    "loft_features": {
-     "a": 4,
-     "b": 4,
-     "matched": 4
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 67,
-     "b": 63,
-     "matched": 63
-    },
-    "edge_blends": {
-     "a": 80,
-     "b": 70,
-     "matched": 70
-    }
-   },
-   "volume_delta_pct": -100.687,
-   "hausdorff_mm": 19.252758,
-   "rms_mm": 1.045904,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 647.1,
-   "plan_steps": 143,
-   "executor_outcome": "FAIL"
-  },
-  "kicad__LQFP-128_14x14mm_P0.4mm.step": {
-   "file": "kicad__LQFP-128_14x14mm_P0.4mm.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 8,
-     "b": 8,
-     "matched": 8
-    },
-    "pockets": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "edge_blends": {
-     "a": 16,
-     "b": 16,
-     "matched": 16
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 291.7,
-   "plan_steps": 8,
-   "executor_outcome": "PASS"
-  },
-  "occt__linkrods.step": {
-   "file": "occt__linkrods.step",
-   "mode": "preserve_brep",
-   "match_ratio": 1.0,
-   "per_kind": {
-    "holes": {
-     "a": 2,
-     "b": 2,
-     "matched": 2
-    },
-    "pockets": {
-     "a": 3,
-     "b": 3,
-     "matched": 3
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "edge_blends": {
-     "a": 8,
-     "b": 8,
-     "matched": 8
-    }
-   },
-   "volume_delta_pct": 0.0,
-   "hausdorff_mm": 0.0,
-   "rms_mm": 0.0,
-   "p95_mm": 0.0,
-   "error": null,
-   "duration_s": 38.8,
-   "plan_steps": 2,
-   "executor_outcome": "PASS"
-  },
-  "pythonocc__Ventilator.step": {
-   "file": "pythonocc__Ventilator.step",
-   "mode": "preserve_brep",
-   "match_ratio": 0.9722,
-   "per_kind": {
-    "holes": {
-     "a": 14,
-     "b": 14,
-     "matched": 13
-    },
-    "pockets": {
-     "a": 1,
-     "b": 1,
-     "matched": 1
-    },
-    "symmetries": {
-     "a": 6,
-     "b": 6,
-     "matched": 6
-    },
-    "patterns": {
-     "a": 0,
-     "b": 1,
-     "matched": 0
-    },
-    "edge_blends": {
-     "a": 15,
-     "b": 15,
-     "matched": 15
-    }
-   },
-   "volume_delta_pct": -0.532,
-   "hausdorff_mm": 0.910733,
-   "rms_mm": 0.135358,
-   "p95_mm": 0.187045,
-   "error": null,
-   "duration_s": 150.8,
-   "plan_steps": 15,
-   "executor_outcome": "PASS"
   }
- }
 }

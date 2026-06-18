@@ -177,6 +177,54 @@ def _xyz_of(entry: dict, frame_offset: tuple[float, float, float] = (0.0, 0.0, 0
     return None
 
 
+def _hole_axis_points(
+    entry: dict, frame_offset: tuple[float, float, float] = (0.0, 0.0, 0.0)
+) -> tuple[tuple[float, float, float], tuple[float, float, float]] | None:
+    """``(entry_point, midpoint)`` of a hole's axis — for an END-AGNOSTIC pairing
+    distance.
+
+    COMPLEX-CAD (2026-06-18): ``classify_holes._standardize_entry`` stage-2 picks
+    WHICH end of a through-cylinder is the stored ``entry_origin`` by bbox-face
+    proximity, and that choice can differ between the ORIG and REGEN catalogs.
+    The two genuine twins then sit ~one depth apart and ``_greedy_pair``'s
+    single-point distance rejects them (DIP-14 matched 1/3 despite hausdorff
+    0.31 mm; USB_C 13/18). The axis MIDPOINT is end-INDEPENDENT (same point no
+    matter which end is called 'entry'), so the caller takes ``min(entry↔entry,
+    mid↔mid)``:
+
+      * a flipped-entry twin matches via the midpoint term (→ 0);
+      * the entry term is the original single-point distance, so the min is
+        never LARGER than today → a pair the single-point gate accepted is never
+        rejected (no PERFECT file can drop);
+      * because only these two ALIGNED terms are used (never the cross pairs
+        entry↔mid), two DIFFERENT coaxial holes that merely share one endpoint
+        (a:[0,10], b:[10,20]) do NOT false-pair: their entry↔entry = mid↔mid =
+        one depth apart.
+
+    Returns ``(entry, mid)`` with ``frame_offset`` applied. When axis_dir/depth
+    are unavailable the midpoint collapses to the entry (→ pure single-point).
+    ``None`` when the entry has no usable position (caller falls back).
+    """
+    base = _xyz_of(entry, frame_offset=frame_offset)
+    if base is None:
+        return None
+    d = entry.get("axis_dir")
+    depth = entry.get("entry_depth_mm")
+    if depth is None:
+        depth = entry.get("depth_mm")
+    if not (isinstance(d, (list, tuple)) and len(d) >= 3) or depth is None:
+        return base, base
+    try:
+        dx, dy, dz = float(d[0]), float(d[1]), float(d[2])
+        dep = float(depth)
+    except Exception:
+        return base, base
+    if abs(dep) < 1e-9:
+        return base, base
+    mid = (base[0] + dx * dep * 0.5, base[1] + dy * dep * 0.5, base[2] + dz * dep * 0.5)
+    return base, mid
+
+
 def _primary_dim(entry: dict, kind: str) -> float | None:
     """Most-distinguishing scalar dim per kind."""
     def _coerce(v) -> float | None:
@@ -258,6 +306,12 @@ def _greedy_pair(
             continue
         axyz = _xyz_of(a)
         adim = _primary_dim(a, kind)
+        # COMPLEX-CAD (2026-06-18): holes use an END-AGNOSTIC axis-endpoint min
+        # distance (see _hole_axis_points) — a through-hole's stored entry end
+        # can differ between orig/regen, so the single-point distance under-pairs
+        # true twins. ONLY holes; every other kind keeps the single-point path
+        # (bit-identical). a_pts is None when a has no usable position → fall back.
+        a_pts = _hole_axis_points(a) if (kind == "holes" and axyz is not None) else None
         best_bi = -1
         best_cost = float("inf")
         for bi, b in enumerate(b_list):
@@ -267,11 +321,28 @@ def _greedy_pair(
             if axyz is not None:
                 bxyz = _xyz_of(b, frame_offset=b_frame_offset)
                 if bxyz is not None:
-                    d = (
-                        (axyz[0] - bxyz[0]) ** 2
-                        + (axyz[1] - bxyz[1]) ** 2
-                        + (axyz[2] - bxyz[2]) ** 2
-                    ) ** 0.5
+                    if a_pts is not None:
+                        b_pts = _hole_axis_points(b, frame_offset=b_frame_offset)
+                        if b_pts is not None:
+                            # ALIGNED min(entry↔entry, mid↔mid) — end-agnostic,
+                            # superset of single-point, no stacked-hole false pair.
+                            d = min(
+                                sum((a_pts[i][k] - b_pts[i][k]) ** 2
+                                    for k in range(3)) ** 0.5
+                                for i in range(2)
+                            )
+                        else:
+                            d = (
+                                (axyz[0] - bxyz[0]) ** 2
+                                + (axyz[1] - bxyz[1]) ** 2
+                                + (axyz[2] - bxyz[2]) ** 2
+                            ) ** 0.5
+                    else:
+                        d = (
+                            (axyz[0] - bxyz[0]) ** 2
+                            + (axyz[1] - bxyz[1]) ** 2
+                            + (axyz[2] - bxyz[2]) ** 2
+                        ) ** 0.5
                     if d > tol_xyz_mm:
                         continue
                     cost += d
