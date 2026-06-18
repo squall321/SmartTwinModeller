@@ -477,21 +477,43 @@ def _hole_step(
 
     # Direction inferred from dominant axis component.
     dir_str = _axis_dir_to_str(axis_dir)
-    # COMPLEX-CAD pass-8 (2026-06-09 REVERT): override stays all-modes.
-    # The pass-7c BRepClass3d axis_origin standardiser got the entry side
-    # right for Ventilator but DRIFTED ~1 mm on as1_pe_203 holes
-    # (1.0 → 0.903 in preserve_brep). Until the probe is exact, the
-    # bbox-face override preserves as1_pe_203 PERFECT; Ventilator's
-    # 0.36 stays a known limitation tied to the override convention.
-    # COMPLEX-CAD pass-12 (2026-06-09): entry-Z override only in
-    # preserve_brep / import_step modes (shift == identity), where the
-    # catalog's axis_origin may still point to the deep cap. In box mode
-    # the catalog axis_origin (after shift) already lands at the correct
-    # box-local entry of the hole; overriding to the bbox face moves
-    # INTERIOR holes (e.g. as1_pe_203 hole 0 at world y=0 inside a body
-    # extending y=-686..1524) by hundreds of mm to the +Y face. Skip
-    # the override for box mode so interior holes land where the
-    # catalog says they do.
+
+    # COMPLEX-CAD (2026-06-18): preserve/import-mode (shift == identity) generic
+    # 'hole' whose TRUE cylinder length overflows the 200 mm clamp — emit at the
+    # RAW axis_origin + axis_dir with the BODY-RELATIVE entry_depth_mm, dropping
+    # BOTH the bbox-face entry-override (below) AND the 200 mm clamp (L404). The
+    # old path took depth_mm (the full cylinder length — as1_pe_203 hole 6 =
+    # 5080 mm), clamped it to a blind 200 mm cut, and the override moved the
+    # entry to a bbox face, together carving a fresh floor 200 mm INSIDE solid
+    # material (preserve hausdorff 200.0 mm). On the retained B-rep, a cut along
+    # the true axis for the body-clipped entry_depth_mm is a near-no-op.
+    #
+    # SCOPE — gated on depth_mm > 200 (i.e. the hole the clamp would actually
+    # bite). NORMAL holes (depth <= 200) keep the EXACT tuned override path: a
+    # broad override removal regressed 6 OTHER preserve files (SOT-89 lost
+    # PERFECT, Trimmer fell below the floor, USB_A crashed in OCCT), because the
+    # bbox-face override is load-bearing for the entry-side convention. Only
+    # as1_pe_203 carries >200 mm holes in the corpus, so this touches nothing
+    # else. Box mode (shift != identity) is unaffected (override required
+    # identity; box keeps the load-bearing clamp). Generic 'hole' only — the
+    # specialized hole skills returned above.
+    raw_depth_mm = float(hole.get("depth_mm") or 0.0)
+    if shift == (0.0, 0.0, 0.0) and raw_depth_mm > 200.0 * dimension_scale:
+        entry_depth = float(
+            hole.get("entry_depth_mm") or raw_depth_mm or 5.0 * dimension_scale
+        )
+        return _new_step(sid, "hole", {
+            "position": [ox, oy, oz],
+            "diameter_mm": primary_d,
+            "depth_mm": entry_depth,
+            "direction": dir_str,
+        })
+
+    # COMPLEX-CAD pass-8/12: bbox-face entry-Z override — preserve/import mode
+    # only (shift == identity), generic holes whose depth is within the clamp.
+    # Skipped in box mode (the catalog axis_origin after shift already lands at
+    # the correct box-local entry; overriding would move interior holes hundreds
+    # of mm). Load-bearing for the entry-side convention — do NOT remove broadly.
     axis_sel = _dominant_axis_sign(axis_dir)
     if (
         axis_sel is not None
