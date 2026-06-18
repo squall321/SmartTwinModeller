@@ -249,6 +249,14 @@ class AnalyzePart(SkillBase):
                                        in_body, shape, catalog,
                                        args.base_profile_mode))
 
+        # Surface the reconstruction fidelity (strategy + Hausdorff) in the HTML
+        # deliverable — the routing win (sparse assembly box 1009mm -> preserve
+        # 152mm) was otherwise invisible to the user. Additive + behind
+        # reconstruct=True, so the default report HTML golden stays byte-identical.
+        if args.include_html and report_html and isinstance(reconstruction, dict):
+            report_html = self._inject_reconstruction_html(
+                report_html, reconstruction)
+
         analysis = {
             "part_id": part_id,
             "bbox_mm": _bbox_mm(shape),
@@ -396,6 +404,48 @@ class AnalyzePart(SkillBase):
             out["hausdorff_mm"] = None
 
         return out
+
+    @staticmethod
+    def _inject_reconstruction_html(html: str, recon: dict) -> str:
+        """Append a 'Reconstruction fidelity' block to the quality-report HTML —
+        strategy + base mechanism + the geometry_deviation HAUSDORFF (the
+        ground-truth metric) + feature match_ratio. Inserted before </body>.
+        Additive (only when reconstruct=True + include_html=True), so the default
+        report HTML golden is byte-identical. 2026-06-18."""
+        from html import escape
+
+        haus = recon.get("hausdorff_mm")
+        match = recon.get("match_ratio")
+        strat = recon.get("strategy") or "box"
+        base = recon.get("base_mechanism")
+        haus_s = "—" if haus is None else f"{haus:.4g} mm"
+        match_s = "—" if match is None else f"{match:.4g}"
+
+        def _row(label: str, value: str, bold: bool = False) -> str:
+            v = f"<b>{value}</b>" if bold else value
+            return (
+                "<tr><td style=\"padding:2px 14px 2px 0;color:#656d76\">"
+                f"{escape(label)}</td><td>{v}</td></tr>"
+            )
+
+        block = (
+            "<section style=\"margin:18px 0;padding:12px 14px;border:1px solid "
+            "#d0d7de;border-radius:8px\">"
+            "<h2 style=\"font-size:15px;margin:0 0 8px\">Reconstruction fidelity</h2>"
+            "<table style=\"border-collapse:collapse;font-size:13px\">"
+            + _row("strategy", escape(str(strat)))
+            + _row("base mechanism", escape(str(base)) if base else "—")
+            + _row("Hausdorff (ground truth)", escape(haus_s), bold=True)
+            + _row("feature match_ratio", escape(match_s))
+            + "</table>"
+            "<p style=\"font-size:11px;color:#8c959f;margin:8px 0 0\">"
+            "Reconstruction quality is judged by geometry_deviation Hausdorff "
+            "(mm), not match_ratio.</p></section>"
+        )
+        idx = html.lower().rfind("</body>")
+        if idx != -1:
+            return html[:idx] + block + html[idx:]
+        return html + block
 
     @staticmethod
     def _reconstruct_preserve(in_body, shape, catalog):

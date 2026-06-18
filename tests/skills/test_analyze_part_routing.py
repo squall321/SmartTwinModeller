@@ -73,6 +73,12 @@ def test_multibody_assembly_routes_to_preserve():
             f"preserve reconstruction of plain boxes should be near-exact, "
             f"got hausdorff={rec.get('hausdorff_mm')}"
         )
+        # the strategy + Hausdorff must be SURFACED in the HTML deliverable
+        # (otherwise the routing win is invisible to the user)
+        html = res.extras["part_analysis"]["report_html"]
+        assert html and "Reconstruction fidelity" in html
+        assert "preserve" in html.lower()
+        assert "Hausdorff" in html
 
 
 def test_single_body_stays_on_box():

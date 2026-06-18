@@ -166,6 +166,7 @@ def _summarize_analysis(
     recon = pa.get("reconstruction")
     if isinstance(recon, dict):
         rec["reconstruction"] = {
+            "strategy": recon.get("strategy"),
             "match_ratio": recon.get("match_ratio"),
             "hausdorff_mm": recon.get("hausdorff_mm"),
             "base_mechanism": recon.get("base_mechanism"),
@@ -567,7 +568,20 @@ def _render_index_html(index: dict[str, Any]) -> str:
 
         recon = r.get("reconstruction") or {}
         haus = recon.get("hausdorff_mm")
-        haus_str = "—" if haus is None else f"{haus}"
+        if haus is None:
+            haus_str = "—"
+        else:
+            # surface WHICH strategy produced this hausdorff — a sparse-assembly
+            # part routed to preserve (152mm) vs a box failure (1009mm) read very
+            # differently, and the strategy was being dropped from the record.
+            strat = recon.get("strategy")
+            strat_lbl = (
+                "" if strat in (None, "box")
+                else " <span class='dims'>preserve</span>"
+                if "preserve" in str(strat)
+                else f" <span class='dims'>{escape(str(strat))}</span>"
+            )
+            haus_str = f"{haus}{strat_lbl}"
 
         err = r.get("error")
         if err:
