@@ -133,7 +133,8 @@ def _point_inside_solid(shape, x: float, y: float, z: float, tol: float = 1e-6) 
         return False
 
 
-def _body_entry_along_axis(shape, axis_origin, axis_dir, depth_mm: float):
+def _body_entry_along_axis(shape, axis_origin, axis_dir, depth_mm: float,
+                           body_bbox=None):
     """COMPLEX-CAD pass-23 (2026-06-10): given a cylinder's axis_origin
     + axis_dir + depth, compute the body's INNER ENTRY point where the
     cylinder first crosses the body bbox along ±axis_dir.
@@ -153,13 +154,21 @@ def _body_entry_along_axis(shape, axis_origin, axis_dir, depth_mm: float):
     case the first three values fall back to the input unchanged.
     """
     try:
-        from OCP.Bnd import Bnd_Box
-        from OCP.BRepBndLib import BRepBndLib
-        bb = Bnd_Box()
-        BRepBndLib.AddOptimal_s(shape, bb)
-        if bb.IsVoid():
-            return axis_origin, axis_dir, depth_mm, True
-        xmin, ymin, zmin, xmax, ymax, zmax = bb.Get()
+        # PERF (2026-06-18): the whole-shape optimal bbox is invariant across
+        # all hole groups within one _apply; the caller may hoist it once and
+        # thread it in via body_bbox. When absent (standalone callers) fall
+        # back to computing it here — bit-identical, since AddOptimal_s(shape)
+        # is deterministic + repeat-stable on the same unchanged shape.
+        if body_bbox is not None:
+            xmin, ymin, zmin, xmax, ymax, zmax = body_bbox
+        else:
+            from OCP.Bnd import Bnd_Box
+            from OCP.BRepBndLib import BRepBndLib
+            bb = Bnd_Box()
+            BRepBndLib.AddOptimal_s(shape, bb)
+            if bb.IsVoid():
+                return axis_origin, axis_dir, depth_mm, True
+            xmin, ymin, zmin, xmax, ymax, zmax = bb.Get()
     except Exception:
         return axis_origin, axis_dir, depth_mm, True
 
@@ -207,7 +216,7 @@ def _body_entry_along_axis(shape, axis_origin, axis_dir, depth_mm: float):
     return new_origin, axis_dir, new_depth, True
 
 
-def _rescue_band_anchored_entry(shape, p_lo, p_hi):
+def _rescue_band_anchored_entry(shape, p_lo, p_hi, body_bbox=None):
     """COMPLEX-CAD pass-24 (2026-06-10): second-chance entry probe for a
     hole the pass-23 phantom filter is about to drop.
 
@@ -250,13 +259,18 @@ def _rescue_band_anchored_entry(shape, p_lo, p_hi):
     if span <= 1e-9:
         return None
     try:
-        from OCP.Bnd import Bnd_Box
-        from OCP.BRepBndLib import BRepBndLib
-        bb = Bnd_Box()
-        BRepBndLib.AddOptimal_s(shape, bb)
-        if bb.IsVoid():
-            return None
-        xmin, ymin, zmin, xmax, ymax, zmax = bb.Get()
+        # PERF (2026-06-18): reuse the caller-hoisted whole-shape bbox when
+        # provided (see _body_entry_along_axis); fall back otherwise.
+        if body_bbox is not None:
+            xmin, ymin, zmin, xmax, ymax, zmax = body_bbox
+        else:
+            from OCP.Bnd import Bnd_Box
+            from OCP.BRepBndLib import BRepBndLib
+            bb = Bnd_Box()
+            BRepBndLib.AddOptimal_s(shape, bb)
+            if bb.IsVoid():
+                return None
+            xmin, ymin, zmin, xmax, ymax, zmax = bb.Get()
     except Exception:
         return None
 
@@ -277,14 +291,15 @@ def _rescue_band_anchored_entry(shape, p_lo, p_hi):
         (other[2] - origin[2]) / span,
     )
     eo, _ed, edepth, intersects = _body_entry_along_axis(
-        shape, origin, dirv, span
+        shape, origin, dirv, span, body_bbox=body_bbox
     )
     if not intersects:
         return None
     return origin, dirv, eo, edepth
 
 
-def _standardize_entry(shape, axis_origin, axis_dir, depth_mm: float):
+def _standardize_entry(shape, axis_origin, axis_dir, depth_mm: float,
+                       body_bbox=None):
     """COMPLEX-CAD pass-17 (2026-06-09): rewrite axis_origin/axis_dir so
     axis_origin sits at the EXIT (open) face of the cylinder — the body
     surface where you would put the drill bit — and axis_dir points
@@ -328,13 +343,18 @@ def _standardize_entry(shape, axis_origin, axis_dir, depth_mm: float):
     # the orig catalog's stored axis_origin changed too, breaking the
     # round-trip identity. Reverted.)
     try:
-        from OCP.Bnd import Bnd_Box
-        from OCP.BRepBndLib import BRepBndLib
-        bb = Bnd_Box()
-        BRepBndLib.AddOptimal_s(shape, bb)
-        if bb.IsVoid():
-            return axis_origin, axis_dir
-        xmin, ymin, zmin, xmax, ymax, zmax = bb.Get()
+        # PERF (2026-06-18): reuse the caller-hoisted whole-shape bbox when
+        # provided (see _body_entry_along_axis); fall back otherwise.
+        if body_bbox is not None:
+            xmin, ymin, zmin, xmax, ymax, zmax = body_bbox
+        else:
+            from OCP.Bnd import Bnd_Box
+            from OCP.BRepBndLib import BRepBndLib
+            bb = Bnd_Box()
+            BRepBndLib.AddOptimal_s(shape, bb)
+            if bb.IsVoid():
+                return axis_origin, axis_dir
+            xmin, ymin, zmin, xmax, ymax, zmax = bb.Get()
 
         def _dist_to_nearest_face(x, y, z) -> float:
             return min(
@@ -953,6 +973,31 @@ class ClassifyHoles(SkillBase):
         # deterministic + repeat-stable); scope auto-clears on exit so nothing
         # leaks across bodies. PD_DISABLE_BBOX_CACHE forces the legacy path.
         holes: list[dict[str, Any]] = []
+
+        # PERF (2026-06-18): the WHOLE-SHAPE optimal bbox is invariant across
+        # all hole groups (shape is read-only here), yet _standardize_entry /
+        # _body_entry_along_axis / _rescue_band_anchored_entry each recomputed
+        # BRepBndLib.AddOptimal_s(shape) once PER GROUP — on KR600 that is 434
+        # groups x ~16 s collapsed into a single line, the dominant cost behind
+        # the 800 s box-mode TIMEOUT. Hoist it to ONE call and thread it into
+        # the three helpers via body_bbox=; each falls back to its own
+        # AddOptimal_s when None, so standalone callers stay bit-identical.
+        # AddOptimal_s(shape) is deterministic + repeat-stable on the same
+        # unchanged shape, so the holes list is byte-identical. Shares the
+        # _BBOX_CACHE_DISABLED escape hatch with the per-face memo (orthogonal:
+        # that caches per-FACE boxes, this hoists the per-SHAPE box).
+        _body_bbox = None
+        if not _BBOX_CACHE_DISABLED:
+            try:
+                from OCP.Bnd import Bnd_Box
+                from OCP.BRepBndLib import BRepBndLib
+                _bb = Bnd_Box()
+                BRepBndLib.AddOptimal_s(shape, _bb)
+                if not _bb.IsVoid():
+                    _body_bbox = _bb.Get()
+            except Exception:
+                _body_bbox = None
+
         _bbox_scope = _bbox_cache_scope()
         _bbox_scope.__enter__()
         try:
@@ -974,7 +1019,8 @@ class ClassifyHoles(SkillBase):
             # entry endpoint by testing which side is INSIDE the solid.
             try:
                 new_o, new_d = _standardize_entry(
-                    shape, desc["axis_origin"], desc["axis_dir"], desc["depth_mm"]
+                    shape, desc["axis_origin"], desc["axis_dir"], desc["depth_mm"],
+                    body_bbox=_body_bbox,
                 )
                 desc["axis_origin"] = [round(float(v), 4) for v in new_o]
                 desc["axis_dir"] = [round(float(v), 4) for v in new_d]
@@ -1000,6 +1046,7 @@ class ClassifyHoles(SkillBase):
                 eo, ed, edepth, intersects = _body_entry_along_axis(
                     shape,
                     desc["axis_origin"], desc["axis_dir"], desc["depth_mm"],
+                    body_bbox=_body_bbox,
                 )
                 if not intersects:
                     # COMPLEX-CAD pass-24 (2026-06-10): before dropping,
@@ -1021,6 +1068,7 @@ class ClassifyHoles(SkillBase):
                         shape,
                         desc.get("_band_lo_point"),
                         desc.get("_band_hi_point"),
+                        body_bbox=_body_bbox,
                     )
                     if rescue is None:
                         continue
