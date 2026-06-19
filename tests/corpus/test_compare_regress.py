@@ -268,9 +268,18 @@ def test_clean_variant_pair_matches_baseline():
 
 
 @pytest.mark.slow
-def test_register_bodies_sign_flip_detected():
-    """V2-style self-proof: inject a register_bodies sign-flip → the recorded
-    registration_rmsd blows up → the gate flips to a REGRESSION (exit 1)."""
+def test_register_bodies_recovers_sign_flip_via_icp():
+    """The phase-4 ICP refinement (2026-06-15) made registration ROBUST to the
+    eigenvector sign-flip this self-proof was originally written to catch.
+
+    The sign-flip corrupts the proper-rotation candidates UPSTREAM of the ICP
+    seat-refinement; ICP re-locks the true alignment, so the recorded
+    registration_rmsd stays at the clean value (measured: clean 34.1948 ->
+    sign-flipped 34.1975, a 0.003mm residual far below RMSD_RISE_TOL=0.5) and
+    the gate does NOT flag it. This now asserts that PRODUCT robustness rather
+    than the obsolete "the flip blows up the rmsd" premise (which held only
+    pre-ICP). The gate's rmsd-rise DETECTION is covered independently by
+    test_rmsd_rise_is_a_regression with synthetic records."""
     pair = _variant_pair()
     if pair is None or not cr._pair_source_present(pair):
         pytest.skip("variant pair source files not present locally")
@@ -279,9 +288,12 @@ def test_register_bodies_sign_flip_detected():
     cr._force_register_all()
     from phone_designer.skills.inspect import register_bodies as rb
 
-    # Negate every proper-rotation candidate that maps B's eigen-frame onto
-    # A's — the canonical eigenvector-sign bug. The best fit becomes a
-    # reflected orientation and the recorded rmsd rises past RMSD_RISE_TOL.
+    clean_rmsd = cr._worker_pipeline(pair).get("registration_rmsd")
+    assert clean_rmsd is not None
+
+    # Negate every proper-rotation candidate (the canonical eigenvector-sign
+    # bug). Pre-ICP this reflected the seat and inflated the rmsd; ICP now
+    # recovers it.
     orig = rb._proper_rotations_between_frames
     rb._proper_rotations_between_frames = lambda Va, Vb: [(-R) for R in orig(Va, Vb)]
     try:
@@ -289,15 +301,15 @@ def test_register_bodies_sign_flip_detected():
     finally:
         rb._proper_rotations_between_frames = orig
 
-    base_rmsd = base["records"][pair["id"]]["registration_rmsd"]
     assert rec.get("registration_rmsd") is not None
-    assert rec["registration_rmsd"] > base_rmsd, (
-        "sign-flip should inflate registration_rmsd"
+    # ICP recovers: the sign-flipped rmsd stays ~clean (not inflated past tol).
+    assert abs(rec["registration_rmsd"] - clean_rmsd) < cr.RMSD_RISE_TOL, (
+        f"ICP should recover the sign-flip — rmsd "
+        f"{rec['registration_rmsd']} drifted from clean {clean_rmsd}"
     )
+    # and the gate does NOT flag the recovered run as a regression.
     out = cr.compare_to_baseline([rec], base)
-    assert out["ok"] is False, "gate must DETECT the register_bodies sign-flip"
-    assert any("registration_rmsd rose" in r["reason"]
-               for r in out["regressions"])
+    assert out["ok"] is True, out["regressions"]
 
 
 # ──────────────────────────────────────────────────────────────────────────────

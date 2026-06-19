@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generated_at": "2026-06-14T13:24:58+00:00",
+  "generated_at": "2026-06-19T01:16:50+00:00",
   "sim_drop_tol": 0.05,
   "rmsd_rise_tol": 0.5,
   "records": {
@@ -12,16 +12,16 @@
       "scale_b": null,
       "expected_label": "identical",
       "expected_scale": null,
-      "similarity": 1.0,
+      "similarity": 0.998687,
       "classification": "identical",
       "coarse_family": "same",
       "scale_factor": 1.0,
-      "registration_rmsd": 0.0,
+      "registration_rmsd": 0.05267,
       "hausdorff": 0.0,
       "rms": 0.0,
       "p95": 0.0,
       "error": null,
-      "duration_s": 18.6
+      "duration_s": 6.8
     },
     "facerec_1.5x_variant": {
       "id": "facerec_1.5x_variant",
@@ -35,12 +35,12 @@
       "classification": "parametric_variant",
       "coarse_family": "same",
       "scale_factor": 1.499714,
-      "registration_rmsd": 48.866838,
-      "hausdorff": 118.440692,
-      "rms": 28.873539,
-      "p95": 78.472508,
+      "registration_rmsd": 34.194822,
+      "hausdorff": 109.545837,
+      "rms": 28.546156,
+      "p95": 66.385868,
       "error": null,
-      "duration_s": 19.1
+      "duration_s": 6.8
     },
     "facerec_vs_splinecage_unrelated": {
       "id": "facerec_vs_splinecage_unrelated",
@@ -50,16 +50,16 @@
       "scale_b": null,
       "expected_label": "unrelated",
       "expected_scale": null,
-      "similarity": 0.15,
+      "similarity": 0.342673,
       "classification": "unrelated",
       "coarse_family": "different",
       "scale_factor": null,
-      "registration_rmsd": 31.077146,
-      "hausdorff": 209.979327,
-      "rms": 90.799018,
-      "p95": 153.52812,
+      "registration_rmsd": 0.293868,
+      "hausdorff": 209.051725,
+      "rms": 91.108455,
+      "p95": 151.854272,
       "error": null,
-      "duration_s": 15.4
+      "duration_s": 5.6
     }
   }
 }
