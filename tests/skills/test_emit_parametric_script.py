@@ -179,3 +179,42 @@ def test_mirror_pair_collapses_to_one_feature_plus_mirror():
     src = ps["script"]
     assert "mirror(_mir, about=Plane(" in src and "mirror_0_x_mm" in src
     assert ps["hausdorff_mm"] is not None and ps["hausdorff_mm"] < 1.5
+
+
+def test_revolve_base_recovered_for_turned_part():
+    """A solid of revolution emits an editable REVOLVE base (meridian + a
+    profile_scale radial driver), reconstructing exactly; the box-mode cuts (the
+    revolve's own cylindrical faces) are correctly skipped."""
+    from build123d import Cylinder, Pos
+    shaft = Cylinder(10, 10) + (Pos(0, 0, 12.5) * Cylinder(5, 15))
+    ps = EmitParametricScript().apply(shaft, {"verify": True}).extras["parametric_script"]
+    assert ps["coverage"]["emitted"].get("revolve_base") == 1
+    src = ps["script"]
+    assert "revolve(_prof, Axis.Z)" in src and "profile_scale" in src
+    assert ps["hausdorff_mm"] is not None and ps["hausdorff_mm"] < 0.5  # exact
+
+    # profile_scale is a genuine radial driver: x1.5 -> 1.5x the x-extent
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+
+    def _xext(part):
+        bb = Bnd_Box()
+        BRepBndLib.AddOptimal_s(part.wrapped, bb)
+        x0, _a, _b, x1, _c, _d = bb.Get()
+        return x1 - x0
+
+    ns1: dict = {}
+    ns15: dict = {}
+    exec(compile(src, "<s1>", "exec"), ns1, ns1)  # noqa: S102
+    exec(compile(src.replace("profile_scale = 1.0", "profile_scale = 1.5"),
+                 "<s15>", "exec"), ns15, ns15)  # noqa: S102
+    assert abs(_xext(ns15["part"]) / _xext(ns1["part"]) - 1.5) < 0.02
+
+
+def test_prismatic_part_keeps_box_base():
+    body = Box().apply(None, {"length_mm": 40.0, "width_mm": 30.0, "height_mm": 8.0}).body
+    body = Hole().apply(body, {"position": (0, 0, 8.0), "diameter_mm": 5.0,
+                               "depth_mm": 6.0, "direction": "-Z"}).body
+    ps = EmitParametricScript().apply(body, {"verify": True}).extras["parametric_script"]
+    assert "revolve_base" not in (ps["coverage"]["emitted"] or {})
+    assert "Box(housing_length, housing_width, housing_height)" in ps["script"]

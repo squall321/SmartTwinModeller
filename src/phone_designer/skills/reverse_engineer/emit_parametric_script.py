@@ -69,6 +69,7 @@ def build_parametric_script(
     key_dimensions: list[dict] | None,
     bbox: Any,
     patterns: list[dict] | None = None,
+    revolve_base: dict | None = None,
 ) -> dict[str, Any]:
     """Map an ordered box-mode plan + key dimensions to a build123d script.
 
@@ -119,11 +120,34 @@ def build_parametric_script(
             primary_bore_val = _r(d.get("value_mm") or 0.0)
 
     # ── feature tree + body lines ────────────────────────────────────────────
-    feature_tree: list[dict[str, Any]] = [
-        {"op": "base_box", "skill": "box", "params": [L, W, H]},
-    ]
-    lines: list[str] = [f"part = Pos({_r(cx)}, {_r(cy)}, {_r(cz)}) * Box({L}, {W}, {H})"]
+    feature_tree: list[dict[str, Any]] = []
+    lines: list[str] = []
     emitted: dict[str, int] = {}
+
+    # BASE: a recovered Z-axis REVOLVE (solid of revolution) when one was
+    # confidently recovered, else the box envelope. The revolve meridian is
+    # emitted with a `profile_scale` radial driver (edit it → the body resizes
+    # radially, a real parametric revolve), reproducing the true turned shape
+    # that a box base only crudely approximates.
+    rev = revolve_base if isinstance(revolve_base, dict) else None
+    rev_verts = (rev or {}).get("vertices")
+    use_revolve = bool(rev and rev_verts)
+    if rev and rev_verts:
+        ax = rev.get("axis_origin") or [0.0, 0.0, 0.0]
+        pscale = _add_param("profile_scale", 1.0, "profile_scale")
+        meridian = [[_r(v[0]), _r(v[1])] for v in rev_verts]
+        feature_tree.append({"op": "base_revolve", "skill": "revolve", "n_vertices": len(meridian)})
+        lines.append(f"# base: recovered solid of revolution (Z axis) — edit profile_scale to resize radially")
+        lines.append(f"_meridian = {meridian}")
+        lines.append(
+            "_prof = Plane.XZ * make_face(Polyline("
+            f"*[(r * {pscale}, z) for (r, z) in _meridian], close=True))")
+        lines.append(
+            f"part = Pos({_r(ax[0])}, {_r(ax[1])}, {_r(ax[2])}) * revolve(_prof, Axis.Z)")
+        emitted["revolve_base"] = 1
+    else:
+        feature_tree.append({"op": "base_box", "skill": "box", "params": [L, W, H]})
+        lines.append(f"part = Pos({_r(cx)}, {_r(cy)}, {_r(cz)}) * Box({L}, {W}, {H})")
     skipped: dict[str, int] = {}
 
     def _diam_token(diam: float) -> str:
@@ -161,11 +185,17 @@ def build_parametric_script(
 
     descriptors: list[dict] = []
     for s in plan_steps:
-        if s.get("skill") == "box":
+        sk = s.get("skill")
+        if sk == "box":
+            continue
+        if use_revolve:
+            # the revolve meridian already reproduces the full turned shape, so the
+            # box-mode cuts (the revolve's own cylindrical faces misread as holes)
+            # would double-cut — skip them all (base-only reconstruction).
+            skipped[sk] = skipped.get(sk, 0) + 1
             continue
         d = _descriptor(s)
         if d is None:
-            sk = s.get("skill")
             skipped[sk] = skipped.get(sk, 0) + 1  # freeform base / fillets / etc.
         else:
             descriptors.append(d)
@@ -400,8 +430,31 @@ class EmitParametricScript(SkillBase):
             return SkillResult(body=body, history=EntityHistoryMap(),
                                extras={"parametric_script": out})
 
+        # optional recovered BASE solid-of-revolution (Z-axis, polygon meridian,
+        # confident) — emitted as an editable revolve instead of a crude box base
+        # for turned parts. Conservative: prismatic bodies return kind!='revolve'
+        # so they keep the box base; the verify Hausdorff is the ground truth.
+        revolve_base = None
+        try:
+            from phone_designer.skills.inspect.classify_generating_op import (
+                ClassifyGeneratingOp,
+            )
+            go = ClassifyGeneratingOp().apply(body, {}).extras.get("generating_op") or {}
+            prof = go.get("profile_sketch") or {}
+            axis = go.get("axis") or {}
+            dirv = axis.get("dir") or [0.0, 0.0, 1.0]
+            if (go.get("kind") == "revolve"
+                    and float(go.get("confidence") or 0.0) >= 0.5
+                    and prof.get("kind") == "polygon" and prof.get("vertices")
+                    and len(dirv) >= 3 and abs(float(dirv[2])) > 0.99):
+                revolve_base = {"vertices": prof["vertices"],
+                                "axis_origin": axis.get("origin") or [0.0, 0.0, 0.0]}
+        except Exception:
+            revolve_base = None
+
         gen = build_parametric_script(
-            plan_steps, kd, bbox, patterns=cat.get("patterns"))
+            plan_steps, kd, bbox, patterns=cat.get("patterns"),
+            revolve_base=revolve_base)
         out.update(gen)
         out["ok"] = True
         out["n_parameters"] = len(gen["parameters"])
