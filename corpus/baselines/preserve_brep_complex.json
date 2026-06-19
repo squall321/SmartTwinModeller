@@ -1,0 +1,242 @@
+{
+  "schema": 1,
+  "mode": "preserve_brep",
+  "subset": "complex",
+  "generated_at": "2026-06-19T00:54:37+00:00",
+  "records": {
+    "complex/occt__screw.step": {
+      "file": "complex/occt__screw.step",
+      "mode": "preserve_brep",
+      "match_ratio": 0.875,
+      "per_kind": {
+        "holes": {
+          "a": 1,
+          "b": 1,
+          "matched": 0
+        },
+        "pockets": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        }
+      },
+      "volume_delta_pct": -66.832,
+      "hausdorff_mm": 3.815048,
+      "rms_mm": 0.682233,
+      "p95_mm": 1.831593,
+      "error": null,
+      "duration_s": 16.8,
+      "plan_steps": 2,
+      "executor_outcome": "PASS"
+    },
+    "complex/pythonocc__as1_pe_203.stp": {
+      "file": "complex/pythonocc__as1_pe_203.stp",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 7,
+          "b": 7,
+          "matched": 7
+        },
+        "pockets": {
+          "a": 18,
+          "b": 18,
+          "matched": 18
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        }
+      },
+      "volume_delta_pct": -0.062,
+      "hausdorff_mm": 153.3268,
+      "rms_mm": 12.565707,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 72.1,
+      "plan_steps": 22,
+      "executor_outcome": "PASS"
+    },
+    "complex/pythonocc__as1-oc-214.stp": {
+      "file": "complex/pythonocc__as1-oc-214.stp",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "pockets": {
+          "a": 11,
+          "b": 11,
+          "matched": 11
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        }
+      },
+      "volume_delta_pct": -0.062,
+      "hausdorff_mm": 6.00006,
+      "rms_mm": 0.476152,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 15.4,
+      "plan_steps": 8,
+      "executor_outcome": "PASS"
+    },
+    "complex/pythonocc__11752.stp": {
+      "file": "complex/pythonocc__11752.stp",
+      "mode": "preserve_brep",
+      "match_ratio": 0.8833,
+      "per_kind": {
+        "holes": {
+          "a": 143,
+          "b": 133,
+          "matched": 120
+        },
+        "pockets": {
+          "a": 4,
+          "b": 2,
+          "matched": 2
+        },
+        "loft_features": {
+          "a": 4,
+          "b": 4,
+          "matched": 4
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 67,
+          "b": 63,
+          "matched": 63
+        },
+        "edge_blends": {
+          "a": 80,
+          "b": 70,
+          "matched": 70
+        }
+      },
+      "volume_delta_pct": -100.687,
+      "hausdorff_mm": 19.252758,
+      "rms_mm": 1.045904,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 406.8,
+      "plan_steps": 143,
+      "executor_outcome": "FAIL"
+    },
+    "complex/occt__linkrods.step": {
+      "file": "complex/occt__linkrods.step",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 2,
+          "b": 2,
+          "matched": 2
+        },
+        "pockets": {
+          "a": 3,
+          "b": 3,
+          "matched": 3
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "edge_blends": {
+          "a": 8,
+          "b": 8,
+          "matched": 8
+        }
+      },
+      "volume_delta_pct": 0.0,
+      "hausdorff_mm": 0.0,
+      "rms_mm": 0.0,
+      "p95_mm": 0.0,
+      "error": null,
+      "duration_s": 26.2,
+      "plan_steps": 2,
+      "executor_outcome": "PASS"
+    },
+    "complex/pythonocc__Ventilator.stp": {
+      "file": "complex/pythonocc__Ventilator.stp",
+      "mode": "preserve_brep",
+      "match_ratio": 1.0,
+      "per_kind": {
+        "holes": {
+          "a": 14,
+          "b": 14,
+          "matched": 14
+        },
+        "pockets": {
+          "a": 1,
+          "b": 1,
+          "matched": 1
+        },
+        "symmetries": {
+          "a": 6,
+          "b": 6,
+          "matched": 6
+        },
+        "patterns": {
+          "a": 0,
+          "b": 1,
+          "matched": 0
+        },
+        "edge_blends": {
+          "a": 15,
+          "b": 15,
+          "matched": 15
+        }
+      },
+      "volume_delta_pct": -0.532,
+      "hausdorff_mm": 0.912253,
+      "rms_mm": 0.135354,
+      "p95_mm": 0.188414,
+      "error": null,
+      "duration_s": 85.8,
+      "plan_steps": 15,
+      "executor_outcome": "PASS"
+    },
+    "complex/pythonocc__KR600_R2830-4.stp": {
+      "file": "complex/pythonocc__KR600_R2830-4.stp",
+      "mode": "preserve_brep",
+      "match_ratio": null,
+      "per_kind": null,
+      "volume_delta_pct": null,
+      "hausdorff_mm": null,
+      "rms_mm": null,
+      "p95_mm": null,
+      "error": "TIMEOUT after 900s",
+      "duration_s": 900.0
+    },
+    "complex/pythonocc__RC_Buggy_2_front_suspension.stp": {
+      "file": "complex/pythonocc__RC_Buggy_2_front_suspension.stp",
+      "mode": "preserve_brep",
+      "match_ratio": null,
+      "per_kind": null,
+      "volume_delta_pct": null,
+      "hausdorff_mm": null,
+      "rms_mm": null,
+      "p95_mm": null,
+      "error": "TIMEOUT after 900s",
+      "duration_s": 900.0
+    }
+  }
+}
