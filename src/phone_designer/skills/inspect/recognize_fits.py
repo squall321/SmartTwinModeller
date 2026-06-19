@@ -180,6 +180,53 @@ def _tolerance_band_mm(
     }
 
 
+#: shaft ladder (all H7 hole) spanning clearance → interference, for naming the
+#: nearest standard fit to a MEASURED bore+shaft pair.
+_FIT_LADDER: list[str] = ["g6", "f7", "h6", "k6", "n6", "p6", "s6"]
+
+
+def _classify_measured_fit(
+    hole_mm: float, shaft_mm: float,
+) -> dict[str, Any] | None:
+    """Recognise an ACTUAL fit: measured clearance + nearest standard ISO fit.
+
+    The inverse of _recommend — given the as-measured bore and mating shaft, the
+    fit_type follows from the sign of the real gap (not a heuristic), and the
+    nearest standard designation is the ladder rung whose clearance midpoint is
+    closest to the measured gap.
+    """
+    bi = _band_index(hole_mm)
+    if bi is None:
+        return None
+    actual = round(hole_mm - shaft_mm, 4)  # +ve = gap, -ve = interference
+    cands: list[tuple[float, str, dict[str, Any], float]] = []
+    for s in _FIT_LADDER:
+        fit = _fit_clearance_mm(hole_mm, "H7", s)
+        if fit is None:
+            continue
+        cm = fit["clearance_mm"]
+        mid = (cm["min"] + cm["max"]) / 2.0
+        cands.append((abs(mid - actual), s, fit, round(mid, 4)))
+    if not cands:
+        return None
+    cands.sort(key=lambda c: c[0])
+    delta, s, fit, mid = cands[0]
+    fit_type = "clearance" if actual > 0 else "interference" if actual < 0 else "transition"
+    return {
+        "hole_mm": round(hole_mm, 4),
+        "shaft_mm": round(shaft_mm, 4),
+        "actual_clearance_mm": actual,
+        "fit_type": fit_type,
+        "nearest_standard_fit": {
+            "designation": f"H7/{s}",
+            "fit_type": fit["fit_type"],
+            "clearance_mm": fit["clearance_mm"],
+            "midpoint_mm": mid,
+            "delta_mm": round(delta, 4),
+        },
+    }
+
+
 def _recommend(nominal: float, role: str) -> dict[str, Any] | None:
     pair = _FIT_BY_ROLE.get(role.strip().lower())
     if pair is None:
@@ -234,6 +281,11 @@ class RecognizeFits(SkillBase):
             default=None,
             description="Score this nominal Ø directly (no CAD); skips geometry.",
         )
+        mating_diameter_mm: float | None = Field(
+            default=None,
+            description="Mating shaft Ø — with `diameter_mm` as the bore, RECOGNISE "
+                        "the actual fit (measured clearance + nearest standard fit).",
+        )
         max_features: int = Field(
             default=64, ge=1,
             description="Cap on reported features.",
@@ -282,9 +334,19 @@ class RecognizeFits(SkillBase):
         if args.diameter_mm is not None:
             f = _feature("hole", float(args.diameter_mm), None)
             if f is not None:
+                if args.mating_diameter_mm is not None:
+                    mf = _classify_measured_fit(
+                        float(args.diameter_mm), float(args.mating_diameter_mm))
+                    if mf is not None:
+                        f["measured_fit"] = mf
+                        assumptions.append(
+                            "measured-fit mode — actual clearance from the supplied "
+                            "bore+shaft pair; nearest standard fit named (fit_type is "
+                            "the real gap sign, not a heuristic).")
+                else:
+                    assumptions.append("direct diameter mode — single nominal scored "
+                                       "as a hole bore (no geometry).")
                 features.append(f)
-            assumptions.append("direct diameter mode — single nominal scored "
-                               "as a hole bore (no geometry).")
         else:
             from phone_designer.skills.reverse_engineer.extract_feature_catalog import (
                 ExtractFeatureCatalog,

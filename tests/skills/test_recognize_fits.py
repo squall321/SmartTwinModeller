@@ -61,6 +61,21 @@ def test_grade_is_estimate_and_recommendation_is_disclaimed():
     assert any("ISO 286" in a for a in r["assumptions"])
 
 
+def test_measured_fit_recognises_actual_clearance_and_nearest_standard():
+    # a Ø12 bore with a Ø11.98 shaft -> +0.020mm real gap -> nearest H7/g6
+    m = _fa(diameter_mm=12.0, mating_diameter_mm=11.98)["features"][0]["measured_fit"]
+    assert m["actual_clearance_mm"] == 0.02
+    assert m["fit_type"] == "clearance"  # sign of the real gap, not a heuristic
+    assert m["nearest_standard_fit"]["designation"] == "H7/g6"
+    # an oversize shaft is recognised as interference
+    press = _fa(diameter_mm=12.0, mating_diameter_mm=12.03)["features"][0]["measured_fit"]
+    assert press["actual_clearance_mm"] == -0.03
+    assert press["fit_type"] == "interference"
+    # exact nominal -> transition
+    exact = _fa(diameter_mm=12.0, mating_diameter_mm=12.0)["features"][0]["measured_fit"]
+    assert exact["fit_type"] == "transition"
+
+
 def test_geometry_mode_detects_hole_bores():
     b = Box().apply(None, {"length_mm": 80.0, "width_mm": 50.0, "height_mm": 20.0}).body
     for x in (-25.0, 0.0, 25.0):
