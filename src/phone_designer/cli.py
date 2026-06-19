@@ -555,6 +555,28 @@ def analyze(
         help="편집가능 build123d 파라메트릭 스크립트(.py)도 복원해 리포트 옆에 "
              "<out>.py 로 저장 (in-process 모드만). `script` 명령과 동일 능력.",
     ),
+    estimate_cost: bool = typer.Option(
+        False, "--estimate-cost",
+        help="정량 단가/사이클타임 추정(estimate_cost)도 리포트에 포함 "
+             "(--cost-process / --cost-material).",
+    ),
+    cost_process: str = typer.Option(
+        "cnc_3axis", "--cost-process",
+        help="estimate_cost 공정 (cnc_3axis | cnc_5axis | injection_mold_pa | …).",
+    ),
+    cost_material: str = typer.Option(
+        "aluminum", "--cost-material",
+        help="estimate_cost 재질 (aluminum | abs | titanium | …).",
+    ),
+    recognize_fits: bool = typer.Option(
+        False, "--recognize-fits",
+        help="원통 피처 ISO 286 공차밴드 + 표준 끼워맞춤 추천(recognize_fits)도 "
+             "포함 (--fit-role).",
+    ),
+    fit_role: str = typer.Option(
+        "clearance", "--fit-role",
+        help="recognize_fits 조립 역할 (clearance | transition | press | …).",
+    ),
 ):
     """단일 부품 front-door: CAD 파일 1개 → 품질 리포트(위상/벽두께/draft/blend/
     질량/DFM) + feature 카탈로그 + 편집가능 주요치수 + (선택)재구성 fidelity
@@ -601,6 +623,11 @@ def analyze(
         "pdf": want_pdf,
         "reconstruct": reconstruct,
         "emit_script": emit_script,
+        "estimate_cost": estimate_cost,
+        "cost_process": cost_process,
+        "cost_material": cost_material,
+        "recognize_fits": recognize_fits,
+        "fit_role": fit_role,
     })
     pa = res.extras["part_analysis"]
 
@@ -617,6 +644,23 @@ def analyze(
         typer.echo(
             f"    reconstruction: base={rec.get('base_mechanism')} "
             f"match={rec.get('match_ratio')} hausdorff_mm={rec.get('hausdorff_mm')}")
+    ce = pa.get("cost_estimate")
+    if ce:
+        typer.echo(
+            f"    cost[{ce.get('process')}/{ce.get('material')}]: "
+            f"${ce.get('unit_cost_usd')}/unit  cycle={ce.get('cycle_time_s')}s "
+            f"(grade={ce.get('grade')})")
+    fa = pa.get("fit_analysis")
+    if fa:
+        typer.echo(
+            f"    fits[{fa.get('role')}]: {fa.get('n_holes')} bores + "
+            f"{fa.get('n_shafts')} shafts → ISO 286 (grade={fa.get('grade')})")
+        for f in (fa.get("features") or [])[:4]:
+            rf = f.get("recommended_fit") or {}
+            typer.echo(
+                f"      Ø{f.get('nominal_mm')} {f.get('kind')} → "
+                f"{rf.get('designation')} {rf.get('fit_type')} "
+                f"clr={rf.get('clearance_mm')}")
     for stage, info in (pa.get("_stages") or {}).items():
         if not info.get("ok"):
             typer.echo(f"    [stage {stage} failed] {info.get('error')}")

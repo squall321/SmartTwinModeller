@@ -146,6 +146,36 @@ class AnalyzePart(SkillBase):
                         "(named key dimensions + relation-driven feature history) "
                         "via emit_parametric_script. OFF by default.",
         )
+        estimate_cost: bool = Field(
+            default=False,
+            description="Also produce a quantified unit-cost + cycle-time "
+                        "ESTIMATE (estimate_cost) for `cost_process`. OFF by "
+                        "default.",
+        )
+        cost_process: str = Field(
+            default="cnc_3axis",
+            description="Process for estimate_cost (cnc_3axis | cnc_5axis | "
+                        "injection_mold_pa | …) when estimate_cost=True.",
+        )
+        cost_material: str = Field(
+            default="aluminum",
+            description="Material for estimate_cost (aluminum | abs | titanium | …).",
+        )
+        cost_lot_size: int = Field(
+            default=1000, ge=1,
+            description="Production lot for estimate_cost amortisation.",
+        )
+        recognize_fits: bool = Field(
+            default=False,
+            description="Also assign ISO 286 tolerance bands + a recommended "
+                        "standard fit per cylindrical feature (recognize_fits) "
+                        "for `fit_role`. OFF by default.",
+        )
+        fit_role: str = Field(
+            default="clearance",
+            description="Assembly role for recognize_fits (clearance | transition "
+                        "| press | location | running | …).",
+        )
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
         from phone_designer.skills.create.import_step import ImportStep
@@ -275,6 +305,32 @@ class AnalyzePart(SkillBase):
                 ).extras.get("parametric_script")
             parametric_script = _safe("parametric_script", stages, _emit)
 
+        # ── 8. optional quantified unit-cost + cycle-time estimate ─────────
+        cost_estimate = None
+        if args.estimate_cost:
+            def _cost():
+                from phone_designer.skills.inspect.estimate_cost import (
+                    EstimateCost,
+                )
+                return EstimateCost().apply(in_body, {
+                    "process": args.cost_process,
+                    "material": args.cost_material,
+                    "lot_size": int(args.cost_lot_size),
+                }).extras.get("cost_estimate")
+            cost_estimate = _safe("estimate_cost", stages, _cost)
+
+        # ── 9. optional ISO 286 fit / tolerance recognition ────────────────
+        fit_analysis = None
+        if args.recognize_fits:
+            def _fits():
+                from phone_designer.skills.inspect.recognize_fits import (
+                    RecognizeFits,
+                )
+                return RecognizeFits().apply(in_body, {
+                    "role": args.fit_role,
+                }).extras.get("fit_analysis")
+            fit_analysis = _safe("recognize_fits", stages, _fits)
+
         analysis = {
             "part_id": part_id,
             "bbox_mm": _bbox_mm(shape),
@@ -285,6 +341,8 @@ class AnalyzePart(SkillBase):
             "key_dimensions": key_dims,
             "reconstruction": reconstruction,
             "parametric_script": parametric_script,
+            "cost_estimate": cost_estimate,
+            "fit_analysis": fit_analysis,
             "_stages": stages,
         }
         return SkillResult(

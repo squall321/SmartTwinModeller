@@ -118,3 +118,35 @@ def test_analyze_part_emit_script_off_by_default():
         res = AnalyzePart().apply(None, {"part_path": path})
         assert res.extras["part_analysis"]["parametric_script"] is None
         assert "parametric_script" not in res.extras["part_analysis"]["_stages"]
+
+
+def test_analyze_part_estimate_cost_in_report():
+    with tempfile.TemporaryDirectory() as d:
+        path = _synth_step(Path(d))
+        res = AnalyzePart().apply(None, {
+            "part_path": path, "estimate_cost": True,
+            "cost_process": "cnc_3axis", "cost_material": "aluminum"})
+        ce = res.extras["part_analysis"]["cost_estimate"]
+        assert ce and ce["grade"] == "estimate"
+        assert ce["unit_cost_usd"] > 0 and ce["cycle_time_s"] > 0
+        assert res.extras["part_analysis"]["_stages"]["estimate_cost"]["ok"]
+
+
+def test_analyze_part_recognize_fits_in_report():
+    with tempfile.TemporaryDirectory() as d:
+        path = _synth_step(Path(d))
+        res = AnalyzePart().apply(None, {
+            "part_path": path, "recognize_fits": True, "fit_role": "press"})
+        fa = res.extras["part_analysis"]["fit_analysis"]
+        assert fa and fa["standard"] == "ISO 286" and fa["grade"] == "estimate"
+        assert fa["role"] == "press"
+        assert res.extras["part_analysis"]["_stages"]["recognize_fits"]["ok"]
+
+
+def test_analyze_part_cost_and_fits_off_by_default():
+    with tempfile.TemporaryDirectory() as d:
+        path = _synth_step(Path(d))
+        pa = AnalyzePart().apply(None, {"part_path": path}).extras["part_analysis"]
+        assert pa["cost_estimate"] is None and pa["fit_analysis"] is None
+        assert "estimate_cost" not in pa["_stages"]
+        assert "recognize_fits" not in pa["_stages"]
