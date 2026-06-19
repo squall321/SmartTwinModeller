@@ -239,6 +239,46 @@ def build_parametric_script(
         emitted[f"{kind}_pattern"] = emitted.get(f"{kind}_pattern", 0) + 1
         grouped.update(members)
 
+    # ── 3a.5 — MIRROR pairs: a feature + its exact reflection about an axis-
+    #          aligned plane through the bbox centre → ONE feature + a `mirror`
+    #          op (edit one, both follow). Detected directly by geometric
+    #          reflection (more reliable than the noisy global symmetry score);
+    #          conservative — only an EXACT same-solid reflection pairs.
+    _MTOL = 0.4
+    for di, d in enumerate(descriptors):
+        if di in grouped:
+            continue
+        for axis, ctr in (("x", cx), ("y", cy)):
+            mx = _r(2 * cx - d["cx"]) if axis == "x" else d["cx"]
+            my = _r(2 * cy - d["cy"]) if axis == "y" else d["cy"]
+            if abs(mx - d["cx"]) < _MTOL and abs(my - d["cy"]) < _MTOL:
+                continue  # feature lies ON the plane (self-symmetric) — not a pair
+            partner = next(
+                (dj for dj, e in enumerate(descriptors)
+                 if dj != di and dj not in grouped
+                 and abs(e["cx"] - mx) < _MTOL and abs(e["cy"] - my) < _MTOL
+                 and e["solid"] == d["solid"] and abs(e["zc"] - d["zc"]) < _MTOL),
+                None)
+            if partner is None:
+                continue
+            if axis == "x":
+                handle = _add_param(f"mirror_{di}_x_mm", d["cx"], "mirror_x")
+                pos_expr = f"Pos({handle}, {d['cy']}, {d['zc']})"
+                plane_expr = f"Plane(origin=({_r(ctr)}, 0, 0), z_dir=(1, 0, 0))"
+            else:
+                handle = _add_param(f"mirror_{di}_y_mm", d["cy"], "mirror_y")
+                pos_expr = f"Pos({d['cx']}, {handle}, {d['zc']})"
+                plane_expr = f"Plane(origin=(0, {_r(ctr)}, 0), z_dir=(0, 1, 0))"
+            lines.append(f"# mirror pair about {axis}={_r(ctr)} — edit one, both follow")
+            lines.append(f"_mir = {pos_expr} * {d['solid']}")
+            lines.append("part -= _mir")
+            lines.append(f"part -= mirror(_mir, about={plane_expr})")
+            feature_tree.append({"op": "mirror_pair", "axis": axis})
+            emitted["mirror_pair"] = emitted.get("mirror_pair", 0) + 1
+            grouped.add(di)
+            grouped.add(partner)
+            break  # paired on this axis
+
     # ── 3b. emit every ungrouped descriptor individually ──────────────────────
     for di, d in enumerate(descriptors):
         if di in grouped:

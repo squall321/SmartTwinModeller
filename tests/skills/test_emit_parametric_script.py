@@ -164,3 +164,18 @@ def test_circular_pattern_emits_polar_loop_with_named_radius():
     src = ps["script"]
     assert "pattern_0_radius_mm" in src and "_math.cos" in src
     assert ps["hausdorff_mm"] is not None and ps["hausdorff_mm"] < 0.5
+
+
+def test_mirror_pair_collapses_to_one_feature_plus_mirror():
+    """Two holes that are exact reflections about the centre -> ONE feature + a
+    `mirror` op (edit one, both follow), reconstructing within the box-mode proxy
+    error."""
+    b = Box().apply(None, {"length_mm": 50.0, "width_mm": 30.0, "height_mm": 8.0}).body
+    for (x, y) in [(-15.0, 6.0), (15.0, 6.0)]:
+        b = Hole().apply(b, {"position": (x, y, 8.0), "diameter_mm": 4.0,
+                             "depth_mm": 5.0, "direction": "-Z"}).body
+    ps = EmitParametricScript().apply(b, {"verify": True}).extras["parametric_script"]
+    assert ps["coverage"]["emitted"].get("mirror_pair") == 1
+    src = ps["script"]
+    assert "mirror(_mir, about=Plane(" in src and "mirror_0_x_mm" in src
+    assert ps["hausdorff_mm"] is not None and ps["hausdorff_mm"] < 1.5
