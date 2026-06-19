@@ -43,7 +43,7 @@ def test_manifest_atomic_macro_counts():
 _DYNAMIC_ORCHESTRATOR_MACROS = {
     "compare_parts", "analyze_part", "generate_variant_family",
     "solve_driver_range", "assembly_reverse_engineer",
-    "emit_parametric_script", "estimate_cost",
+    "emit_parametric_script", "estimate_cost", "recognize_fits",
 }
 
 

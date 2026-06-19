@@ -110,6 +110,7 @@ import phone_designer.skills.inspect.hole_alignment_check  # noqa: F401
 import phone_designer.skills.inspect.estimate_cost  # noqa: F401
 import phone_designer.skills.inspect.mass_properties  # noqa: F401
 import phone_designer.skills.inspect.mesh_quality  # noqa: F401
+import phone_designer.skills.inspect.recognize_fits  # noqa: F401
 import phone_designer.skills.inspect.section_multi_plane  # noqa: F401
 import phone_designer.skills.inspect.surface_area_by_region  # noqa: F401
 from phone_designer.skills.inspect import datum_plane_assign as _i_datum_plane_assign  # noqa: F401
