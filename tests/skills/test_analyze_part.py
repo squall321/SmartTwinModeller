@@ -101,3 +101,20 @@ def test_analyze_part_no_reconstruct_skips_the_expensive_stage():
         assert "reconstruction" not in pa["_stages"]
         # the cheap stages still ran
         assert pa["_stages"]["feature_catalog"]["ok"]
+
+
+def test_analyze_part_emit_script_includes_editable_model():
+    with tempfile.TemporaryDirectory() as d:
+        path = _synth_step(Path(d))
+        res = AnalyzePart().apply(None, {"part_path": path, "emit_script": True})
+        ps = res.extras["part_analysis"]["parametric_script"]
+        assert ps and ps.get("ok") and "from build123d import" in ps.get("script", "")
+        assert res.extras["part_analysis"]["_stages"]["parametric_script"]["ok"]
+
+
+def test_analyze_part_emit_script_off_by_default():
+    with tempfile.TemporaryDirectory() as d:
+        path = _synth_step(Path(d))
+        res = AnalyzePart().apply(None, {"part_path": path})
+        assert res.extras["part_analysis"]["parametric_script"] is None
+        assert "parametric_script" not in res.extras["part_analysis"]["_stages"]

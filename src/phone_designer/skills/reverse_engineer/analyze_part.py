@@ -140,6 +140,12 @@ class AnalyzePart(SkillBase):
                         "silhouette / parametric / re-solidify bases (kept only "
                         "when their Hausdorff beats the box base).",
         )
+        emit_script: bool = Field(
+            default=False,
+            description="Also recover an EDITABLE build123d parametric script "
+                        "(named key dimensions + relation-driven feature history) "
+                        "via emit_parametric_script. OFF by default.",
+        )
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
         from phone_designer.skills.create.import_step import ImportStep
@@ -257,6 +263,18 @@ class AnalyzePart(SkillBase):
             report_html = self._inject_reconstruction_html(
                 report_html, reconstruction)
 
+        # ── 7. optional EDITABLE parametric build123d script ───────────────
+        parametric_script = None
+        if args.emit_script:
+            def _emit():
+                from phone_designer.skills.reverse_engineer.emit_parametric_script import (  # noqa: E501
+                    EmitParametricScript,
+                )
+                return EmitParametricScript().apply(
+                    in_body, {"verify": bool(args.reconstruct)},
+                ).extras.get("parametric_script")
+            parametric_script = _safe("parametric_script", stages, _emit)
+
         analysis = {
             "part_id": part_id,
             "bbox_mm": _bbox_mm(shape),
@@ -266,6 +284,7 @@ class AnalyzePart(SkillBase):
             "feature_catalog": cat_summary,
             "key_dimensions": key_dims,
             "reconstruction": reconstruction,
+            "parametric_script": parametric_script,
             "_stages": stages,
         }
         return SkillResult(

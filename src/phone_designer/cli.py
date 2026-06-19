@@ -550,15 +550,22 @@ def analyze(
              "(Windows 엔 in-process 인터럽트가 불가능). 이 모드는 html/json 만 "
              "출력하며 pdf 는 html 로 폴백.",
     ),
+    emit_script: bool = typer.Option(
+        False, "--emit-script",
+        help="편집가능 build123d 파라메트릭 스크립트(.py)도 복원해 리포트 옆에 "
+             "<out>.py 로 저장 (in-process 모드만). `script` 명령과 동일 능력.",
+    ),
 ):
     """단일 부품 front-door: CAD 파일 1개 → 품질 리포트(위상/벽두께/draft/blend/
-    질량/DFM) + feature 카탈로그 + 편집가능 주요치수 + (선택)재구성 fidelity.
+    질량/DFM) + feature 카탈로그 + 편집가능 주요치수 + (선택)재구성 fidelity
+    + (선택 --emit-script)편집가능 파라메트릭 build123d 스크립트.
 
     예:
       phone-designer analyze part.step
       phone-designer analyze part.step -o report.html
       phone-designer analyze part.step -o report.pdf --reconstruct
       phone-designer analyze part.step -o analysis.json --reconstruct
+      phone-designer analyze part.step -o r.html --reconstruct --emit-script
       phone-designer analyze big_assembly.step -o r.html --timeout-s 300
     """
     if not part.exists():
@@ -593,6 +600,7 @@ def analyze(
         "include_html": want_html or want_pdf or out is None,
         "pdf": want_pdf,
         "reconstruct": reconstruct,
+        "emit_script": emit_script,
     })
     pa = res.extras["part_analysis"]
 
@@ -612,6 +620,23 @@ def analyze(
     for stage, info in (pa.get("_stages") or {}).items():
         if not info.get("ok"):
             typer.echo(f"    [stage {stage} failed] {info.get('error')}")
+
+    # editable parametric script (--emit-script) → <out stem>.py (or <part>_model.py)
+    if emit_script:
+        ps = pa.get("parametric_script") or {}
+        if ps.get("script"):
+            py_path = (out.with_suffix(".py") if out is not None
+                       else part.with_name(f"{part.stem}_model.py"))
+            py_path.parent.mkdir(parents=True, exist_ok=True)
+            py_path.write_text(ps["script"], encoding="utf-8")
+            cov = ps.get("coverage") or {}
+            _h = ps.get("hausdorff_mm")
+            typer.echo(
+                f">>> wrote editable build123d script -> {py_path}"
+                + (f"  (reconstruction hausdorff {round(_h, 4)} mm)" if _h is not None else "")
+                + (f"  [not yet emitted: {cov.get('skipped')}]" if cov.get("skipped") else ""))
+        else:
+            typer.echo("[warn] --emit-script: no script produced", err=True)
 
     if out is None:
         raise typer.Exit(0)
