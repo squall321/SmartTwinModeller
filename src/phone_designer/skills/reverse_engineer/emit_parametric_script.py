@@ -22,6 +22,7 @@ identity alignment.
 """
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -67,12 +68,19 @@ def build_parametric_script(
     plan_steps: list[dict],
     key_dimensions: list[dict] | None,
     bbox: Any,
+    patterns: list[dict] | None = None,
 ) -> dict[str, Any]:
     """Map an ordered box-mode plan + key dimensions to a build123d script.
 
+    When ``patterns`` (the catalog's ``patterns`` array) is given, features that
+    belong to a recovered linear/circular pattern are emitted as ONE representative
+    + a parametric loop whose pitch (linear) or radius (circular) is a NAMED
+    editable parameter — true design intent (change the pitch, the whole pattern
+    moves) — instead of N independent cuts.
+
     Returns ``{"parameters": [...], "feature_tree": [...], "script": str,
     "coverage": {...}}``. ``coverage`` reports which step skills were emitted vs
-    skipped (honest about what v1 does NOT cover)."""
+    skipped (honest about what is NOT covered)."""
     if not (isinstance(bbox, (list, tuple)) and len(bbox) >= 6):
         bbox = (-10.0, -10.0, 0.0, 10.0, 10.0, 10.0)
     cx, cy, cz, zmax = _bbox_center_and_top(bbox)
@@ -125,46 +133,119 @@ def build_parametric_script(
             return primary_bore_name
         return f"{_r(diam)}"
 
-    for s in plan_steps:
+    # ── 1. each pocket/hole step → a positioned cut DESCRIPTOR (the build123d
+    #       cutting solid, independent of where it is placed) ──────────────────
+    def _descriptor(s: dict) -> dict | None:
         sk = s.get("skill")
         a = s.get("args") or {}
-        if sk == "box":
-            continue  # the base, already emitted
         if sk in ("extrude_pocket", "extrude_pocket_world"):
             sketch = a.get("sketch") or {}
             depth = _r(a.get("depth_mm"))
-            kind = sketch.get("kind")
-            px = _r(sketch.get("center_x_mm"))
-            py = _r(sketch.get("center_y_mm"))
             zc = _r(zmax - depth / 2.0)
-            if kind == "circle":
+            if sketch.get("kind") == "circle":
                 dia = _r(sketch.get("diameter_mm") or sketch.get("radius_mm", 0) * 2)
-                lines.append(
-                    f"part -= Pos({px}, {py}, {zc}) * Cylinder({_diam_token(dia)}/2, {depth})"
-                )
-            else:  # rectangle / default
+                solid = f"Cylinder({_diam_token(dia)}/2, {depth})"
+            else:
                 lp = _r(sketch.get("length_mm") or 5.0)
                 wp = _r(sketch.get("width_mm") or 5.0)
-                lines.append(
-                    f"part -= Pos({px}, {py}, {zc}) * Box({lp}, {wp}, {depth})"
-                )
-            feature_tree.append({"op": "pocket", "skill": sk, "at": [px, py], "depth": depth})
-            emitted[sk] = emitted.get(sk, 0) + 1
-        elif sk == "hole":
+                solid = f"Box({lp}, {wp}, {depth})"
+            return {"cx": _r(sketch.get("center_x_mm")), "cy": _r(sketch.get("center_y_mm")),
+                    "zc": zc, "solid": solid, "op": "pocket", "sk": sk}
+        if sk == "hole":
             pos = a.get("position") or [0, 0, 0]
-            dia = _r(a.get("diameter_mm"))
             depth = _r(a.get("depth_mm"))
-            hx, hy = _r(pos[0]), _r(pos[1])
-            zc = _r(zmax - depth / 2.0)
-            lines.append(
-                f"part -= Pos({hx}, {hy}, {zc}) * Cylinder({_diam_token(dia)}/2, {depth})"
-            )
-            feature_tree.append({"op": "hole", "skill": sk, "at": [hx, hy], "depth": depth})
-            emitted[sk] = emitted.get(sk, 0) + 1
+            return {"cx": _r(pos[0]), "cy": _r(pos[1]), "zc": _r(zmax - depth / 2.0),
+                    "solid": f"Cylinder({_diam_token(_r(a.get('diameter_mm')))}/2, {depth})",
+                    "op": "hole", "sk": sk}
+        return None
+
+    descriptors: list[dict] = []
+    for s in plan_steps:
+        if s.get("skill") == "box":
+            continue
+        d = _descriptor(s)
+        if d is None:
+            sk = s.get("skill")
+            skipped[sk] = skipped.get(sk, 0) + 1  # freeform base / fillets / etc.
         else:
-            # honest: v1 does not emit this op (freeform base, fillets, threaded
-            # holes via face-named position, etc.) — recorded in coverage.
-            skipped[sk] = skipped.get(sk, 0) + 1
+            descriptors.append(d)
+
+    # ── 2. group descriptors onto recovered patterns by position match ────────
+    pat_list = list(patterns or [])
+    _TOL = 0.5
+    members_of: list[list[int]] = [[] for _ in pat_list]
+
+    def _pattern_of(dx: float, dy: float) -> int | None:
+        for pi, p in enumerate(pat_list):
+            positions = p.get("positions") or []
+            if positions:  # linear / explicit-position pattern
+                for pp in positions:
+                    if abs(_r(pp[0]) - dx) <= _TOL and abs(_r(pp[1]) - dy) <= _TOL:
+                        return pi
+            elif p.get("pattern_kind") == "circular":  # ring: stored as center+radius
+                c = p.get("center") or [0.0, 0.0, 0.0]
+                rad = _r(p.get("radius_mm") or 0.0)
+                if rad > 0 and abs(
+                        math.hypot(dx - _r(c[0]), dy - _r(c[1])) - rad) <= _TOL:
+                    return pi
+        return None
+
+    grouped: set[int] = set()
+    for di, d in enumerate(descriptors):
+        pi = _pattern_of(d["cx"], d["cy"])
+        if pi is not None:
+            members_of[pi].append(di)
+
+    needs_math = False
+    # ── 3a. emit each REAL grouped pattern as a parametric loop ───────────────
+    for pi, members in enumerate(members_of):
+        if len(members) < 2:
+            continue  # not actually a grouped pattern in this plan → leave individual
+        p = pat_list[pi]
+        rep = descriptors[members[0]]
+        count = int(p.get("count") or len(members))
+        kind = p.get("pattern_kind") or "linear"
+        if kind == "circular":
+            # ring stored as center + radius + angular pitch; the representative
+            # member's angle fixes the loop's start so it reproduces the holes.
+            c = p.get("center") or [0.0, 0.0, 0.0]
+            cxs, cys = _r(c[0]), _r(c[1])
+            r0 = _r(p.get("radius_mm")
+                    or math.hypot(rep["cx"] - cxs, rep["cy"] - cys))
+            a0 = _r(math.degrees(math.atan2(rep["cy"] - cys, rep["cx"] - cxs)))
+            step_deg = _r(p.get("angular_pitch_deg") or (360.0 / max(count, 1)))
+            rad = _add_param(f"pattern_{pi}_radius_mm", r0 or 1.0, "pattern_radius")
+            needs_math = True
+            lines.append(f"# circular pattern — {count}x {rep['op']}, editable radius")
+            lines.append(f"for _i in range({count}):")
+            lines.append(f"    _ang = _math.radians({a0} + _i * {step_deg})")
+            lines.append(f"    _px = {cxs} + {rad} * _math.cos(_ang)")
+            lines.append(f"    _py = {cys} + {rad} * _math.sin(_ang)")
+            lines.append(f"    part -= Pos(_px, _py, {rep['zc']}) * {rep['solid']}")
+        else:  # linear
+            positions = p.get("positions") or []
+            sx, sy = ((_r(positions[0][0]), _r(positions[0][1]))
+                      if positions else (rep["cx"], rep["cy"]))
+            direction = p.get("direction") or [1.0, 0.0, 0.0]
+            dx = _r(direction[0])
+            dy = _r(direction[1]) if len(direction) > 1 else 0.0
+            pitch = _add_param(f"pattern_{pi}_pitch_mm", _r(p.get("spacing_mm")) or 1.0, "pattern_pitch")
+            lines.append(f"# linear pattern — {count}x {rep['op']}, editable pitch")
+            lines.append(f"for _i in range({count}):")
+            lines.append(f"    _px = {sx} + _i * {pitch} * {dx}")
+            lines.append(f"    _py = {sy} + _i * {pitch} * {dy}")
+            lines.append(f"    part -= Pos(_px, _py, {rep['zc']}) * {rep['solid']}")
+        feature_tree.append({"op": f"{kind}_pattern", "count": count, "members": len(members)})
+        emitted[f"{kind}_pattern"] = emitted.get(f"{kind}_pattern", 0) + 1
+        grouped.update(members)
+
+    # ── 3b. emit every ungrouped descriptor individually ──────────────────────
+    for di, d in enumerate(descriptors):
+        if di in grouped:
+            continue
+        lines.append(f"part -= Pos({d['cx']}, {d['cy']}, {d['zc']}) * {d['solid']}")
+        feature_tree.append({"op": d["op"], "skill": d["sk"], "at": [d["cx"], d["cy"]]})
+        emitted[d["sk"]] = emitted.get(d["sk"], 0) + 1
 
     header = [
         '"""Recovered parametric model (build123d) — reverse-engineered.',
@@ -174,6 +255,7 @@ def build_parametric_script(
         "to open the edited model in any CAD tool.",
         '"""',
         "from build123d import *  # noqa: F401,F403",
+        *(["import math as _math"] if needs_math else []),
         "",
         "# ── editable parameters (recovered key dimensions) ──────────────────",
     ]
@@ -278,7 +360,8 @@ class EmitParametricScript(SkillBase):
             return SkillResult(body=body, history=EntityHistoryMap(),
                                extras={"parametric_script": out})
 
-        gen = build_parametric_script(plan_steps, kd, bbox)
+        gen = build_parametric_script(
+            plan_steps, kd, bbox, patterns=cat.get("patterns"))
         out.update(gen)
         out["ok"] = True
         out["n_parameters"] = len(gen["parameters"])
