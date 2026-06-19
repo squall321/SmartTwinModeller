@@ -34,11 +34,26 @@ def test_manifest_atomic_macro_counts():
     assert len(macro) >= 2
 
 
+# Dynamic front-door / orchestrator macros build their SkillResult IN ``_apply``
+# (conditional, failure-isolated stages — NOT a fixed atomic sequence), so a
+# static ``expansion`` list is meaningless for them and ``expansion=None`` is
+# correct (SkillSpec allows ``list[str] | None``). Every OTHER (static composite)
+# macro must still declare its expansion, so this allowlist keeps that check
+# while exempting the legitimate orchestrators.
+_DYNAMIC_ORCHESTRATOR_MACROS = {
+    "compare_parts", "analyze_part", "generate_variant_family",
+    "solve_driver_range", "assembly_reverse_engineer",
+}
+
+
 def test_macro_skills_have_expansion():
     m = build_manifest()
     for s in m["skills"]:
-        if s["level"] == "macro":
-            assert s["expansion"] is not None, f"macro {s['name']} 의 expansion 누락"
+        if s["level"] == "macro" and s["name"] not in _DYNAMIC_ORCHESTRATOR_MACROS:
+            assert s["expansion"] is not None, (
+                f"static macro {s['name']} 의 expansion 누락 (동적 orchestrator 면 "
+                f"_DYNAMIC_ORCHESTRATOR_MACROS 에 추가)"
+            )
             assert len(s["expansion"]) >= 1, f"macro {s['name']} 의 expansion 비어있음"
 
 

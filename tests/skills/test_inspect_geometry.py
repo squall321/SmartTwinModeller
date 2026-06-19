@@ -125,6 +125,11 @@ def test_inspect_spec_metadata():
 
 
 def test_inspect_extras_default_is_empty_dict_for_other_skills():
-    """non-inspect skill 은 extras 가 빈 dict (backwards-compatible)."""
+    """non-inspect skill 은 자기 고유 extras 를 추가하지 않는다.
+
+    A9/V5 provenance (2026-06-11) 이후 SkillBase.apply 가 모든 skill 의 extras 에
+    ``_step_metrics`` (pre/post 볼륨·face count·duration — PlanExecutor 가
+    Step.metrics 로 복사) 를 단다. 따라서 'extras 가 완전히 빈 dict' 는 더 이상
+    참이 아니며, 기대 불변식은 '공통 provenance 키 외 skill 고유 extras 가 없음'."""
     r = Box().apply(None, {"length_mm": 10, "width_mm": 10, "height_mm": 10})
-    assert r.extras == {}
+    assert set(r.extras) <= {"_step_metrics"}, r.extras
