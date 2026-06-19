@@ -542,6 +542,14 @@ def analyze(
         "cnc_milling,injection_molding", "--processes",
         help="DFM 평가 공정 (쉼표 구분).",
     ),
+    timeout_s: int = typer.Option(
+        0, "--timeout-s",
+        help="0(기본)=in-process 분석(전체 기능, pdf 포함). >0 이면 분석을 "
+             "watchdog 가 붙은 격리 subprocess 에서 실행 — 대형 어셈블리가 "
+             "OCCT 안에서 무한 정지(hang)하는 대신 정직하게 timeout 으로 끝남 "
+             "(Windows 엔 in-process 인터럽트가 불가능). 이 모드는 html/json 만 "
+             "출력하며 pdf 는 html 로 폴백.",
+    ),
 ):
     """단일 부품 front-door: CAD 파일 1개 → 품질 리포트(위상/벽두께/draft/blend/
     질량/DFM) + feature 카탈로그 + 편집가능 주요치수 + (선택)재구성 fidelity.
@@ -551,6 +559,7 @@ def analyze(
       phone-designer analyze part.step -o report.html
       phone-designer analyze part.step -o report.pdf --reconstruct
       phone-designer analyze part.step -o analysis.json --reconstruct
+      phone-designer analyze big_assembly.step -o r.html --timeout-s 300
     """
     if not part.exists():
         typer.echo(f"[error] file not found: {part}", err=True)
@@ -564,6 +573,18 @@ def analyze(
     want_html = out is not None and out.suffix.lower() == ".html"
     want_pdf = out is not None and out.suffix.lower() == ".pdf"
     want_json = out is not None and out.suffix.lower() == ".json"
+
+    # ── watchdog path — large assemblies that may HANG in OCCT (174s import +
+    #    non-preemptible detector thread-pool). Delegate to the batch harness's
+    #    per-file subprocess+watchdog (the only way to bound an uninterruptible
+    #    OCCT call on Windows) so the run times out honestly instead of hanging.
+    if timeout_s and timeout_s > 0:
+        _analyze_with_watchdog(
+            part, out, reconstruct,
+            [p.strip() for p in processes.split(",") if p.strip()],
+            timeout_s, want_json=want_json, want_pdf=want_pdf,
+        )
+        return
 
     typer.echo(f">>> analyzing {part.name} ...")
     res = AnalyzePart().apply(None, {
@@ -620,6 +641,71 @@ def analyze(
             dump["report_pdf"] = rp
         out.write_text(_json.dumps(dump, indent=1, default=str), encoding="utf-8")
         typer.echo(f">>> wrote analysis JSON -> {out}")
+    raise typer.Exit(0)
+
+
+def _analyze_with_watchdog(part, out, reconstruct, processes, timeout_s,
+                           *, want_json, want_pdf):
+    """Run analyze_part in an isolated subprocess with a wall-clock watchdog
+    (reuses the batch harness ``run_one``). The child is killed on expiry, so a
+    huge assembly that hangs in OCCT (174s import + non-preemptible detector
+    thread-pool) costs at most ``timeout_s`` instead of hanging the CLI. Writes
+    the report to ``out`` and prints the console summary from the returned
+    compact record. pdf falls back to html in this mode (the batch worker
+    produces html/json)."""
+    import shutil
+    import tempfile
+
+    from phone_designer.corpus import batch_analyze
+
+    fmt = "json" if want_json else "html"
+    if want_pdf:
+        typer.echo("[note] --timeout-s watchdog mode produces HTML (not PDF); "
+                   "writing print-ready HTML instead.")
+    typer.echo(f">>> analyzing {part.name} (subprocess, {timeout_s}s watchdog) ...")
+    with tempfile.TemporaryDirectory(prefix="analyze_wd_") as td:
+        rec = batch_analyze.run_one(
+            str(part), fmt, reconstruct, processes, td, timeout_s=timeout_s,
+        )
+        if not rec.get("ok"):
+            err = rec.get("error") or "analysis produced no report"
+            typer.echo(f"[error] {err}", err=True)
+            if "TIMEOUT" in str(err):
+                typer.echo(
+                    "        large monolithic assemblies are a known scale "
+                    "limit (174s import + non-preemptible detector pool); the "
+                    "per-component path is the only route and yields feature "
+                    "match_ratio, not a reconstructed-body hausdorff.", err=True)
+            raise typer.Exit(code=1)
+
+        typer.echo(
+            f"    part: {rec.get('part_id')}  bbox_mm: {rec.get('bbox_mm')}  "
+            f"({rec.get('duration_s')}s)")
+        counts = rec.get("feature_counts") or {}
+        if counts:
+            typer.echo("    features: " + ", ".join(
+                f"{k}={v}" for k, v in counts.items() if v))
+        for d in (rec.get("key_dimensions") or [])[:6]:
+            typer.echo(f"    dim  {d.get('name')}: {d.get('value_mm')} mm")
+        recon = rec.get("reconstruction")
+        if recon:
+            typer.echo(
+                f"    reconstruction: strategy={recon.get('strategy')} "
+                f"base={recon.get('base_mechanism')} "
+                f"match={recon.get('match_ratio')} "
+                f"hausdorff_mm={recon.get('hausdorff_mm')}")
+
+        if out is not None:
+            report_name = (
+                rec.get("report_json") if fmt == "json" else rec.get("report_html")
+            )
+            if report_name:
+                target = out.with_suffix(".html") if want_pdf else out
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(Path(td) / report_name, target)
+                typer.echo(f">>> wrote {fmt.upper()} -> {target}")
+            else:
+                typer.echo("[warn] no report file produced", err=True)
     raise typer.Exit(0)
 
 
