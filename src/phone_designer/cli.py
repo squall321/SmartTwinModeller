@@ -709,6 +709,77 @@ def _analyze_with_watchdog(part, out, reconstruct, processes, timeout_s,
     raise typer.Exit(0)
 
 
+@app.command()
+def script(
+    part: Path = typer.Argument(..., help="역설계할 CAD 파일 (STEP/IGES/BREP)"),
+    out: Path = typer.Option(
+        None, "--out", "-o",
+        help="생성된 편집가능 build123d .py 스크립트 출력 경로 (미지정 시 콘솔 미리보기).",
+    ),
+    verify: bool = typer.Option(
+        False, "--verify",
+        help="생성 스크립트를 실행해 원본 대비 geometry_deviation Hausdorff 로 "
+             "재구성을 검증 (편집가능 스크립트가 실제로 부품을 복원하는지 증명).",
+    ),
+):
+    """역설계 → 편집가능 build123d 파라메트릭 스크립트.
+
+    복원된 주요치수를 최상단 명명 파라미터로, 그 아래 순서있는 피처 히스토리로
+    내보낸다. build123d 는 실제 CAD 커널(STEP export) 이므로 결과 .py 는 편집가능
+    파라메트릭 모델 — ``housing_length`` 를 바꿔 재실행하면 부품이 재생성된다.
+
+    예:
+      phone-designer script part.step -o model.py
+      phone-designer script part.step -o model.py --verify
+    """
+    if not part.exists():
+        typer.echo(f"[error] file not found: {part}", err=True)
+        raise typer.Exit(code=2)
+
+    from phone_designer.skills import export_manifest  # noqa: F401 — register
+    from phone_designer.skills.create.import_step import ImportStep
+    from phone_designer.skills.reverse_engineer.emit_parametric_script import (
+        EmitParametricScript,
+    )
+
+    typer.echo(f">>> recovering parametric script for {part.name} ...")
+    body = ImportStep().apply(None, {"path": str(part)}).body
+    res = EmitParametricScript().apply(body, {
+        "verify": verify, "edit_check_scale": 1.2,
+    })
+    ps = res.extras["parametric_script"]
+    if not ps.get("ok"):
+        typer.echo(f"[error] {ps.get('error')}", err=True)
+        raise typer.Exit(code=1)
+
+    cov = ps.get("coverage") or {}
+    typer.echo(
+        f"    parameters: {ps.get('n_parameters')}  "
+        f"feature nodes: {ps.get('n_feature_nodes')}  "
+        f"fully-covered: {cov.get('fully_covered')}")
+    if cov.get("skipped"):
+        typer.echo(f"    [not yet emitted] {cov.get('skipped')} "
+                   "(freeform base / fillets / face-named threaded holes)")
+    if verify and ps.get("hausdorff_mm") is not None:
+        typer.echo(
+            f"    reconstruction hausdorff (script vs original): "
+            f"{round(ps['hausdorff_mm'], 4)} mm")
+    ec = ps.get("edit_check") or {}
+    if ec.get("is_parametric"):
+        typer.echo(
+            f"    editable: housing_length x{ec.get('scale')} -> x extent "
+            f"{ec.get('base_x_mm')} -> {ec.get('edited_x_mm')} mm (parametric ✓)")
+
+    if out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(ps["script"], encoding="utf-8")
+        typer.echo(f">>> wrote editable build123d script -> {out}")
+    else:
+        typer.echo("--- script preview (use -o to save) ---")
+        typer.echo(ps["script"])
+    raise typer.Exit(0)
+
+
 @app.command("analyze-batch")
 def analyze_batch(
     paths: list[str] = typer.Argument(
