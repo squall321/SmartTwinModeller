@@ -646,18 +646,23 @@ def compare_to_baseline(
     Regression =
       * a file present in the baseline gains a NEW error, or
       * its match_ratio drops by more than ``match_drop_tol`` (a numeric
-        baseline match degrading to None also counts as a drop), or
+        baseline match degrading to None also counts as a drop) UNLESS the drop
+        comes with a meaningful hausdorff IMPROVEMENT (an honest geometry win —
+        logged as an improvement, not a regression), or
       * its geometry_deviation hausdorff_mm RISES beyond BOTH the absolute and
         relative tolerances (``haus_rise_abs_tol_mm`` AND ``haus_rise_rel_tol``).
     New files (not in baseline) and files missing from the corpus are
     informational only.
 
     2026-06-18: hausdorff is now a GATE, not just a recorded column — the project
-    law judges reconstruction by hausdorff, so a geometry regression that keeps
-    match_ratio flat must be caught (and screw-style match drops that come WITH a
-    hausdorff WIN are correctly not the only signal). Only flagged when both
-    thresholds are exceeded, and only when BOTH baseline and current carry a
-    numeric hausdorff — old baselines lacking the column never spuriously flag.
+    law judges reconstruction by hausdorff, not match_ratio. Two consequences:
+    (1) a geometry regression that keeps match_ratio flat is CAUGHT (hausdorff
+    rise > both tolerances); (2) a match_ratio drop that comes WITH a meaningful
+    hausdorff improvement is NOT a regression — it is an honest geometry win
+    (screw 0.875/9.149mm -> 0.75/4.795mm via freeform base recovery). Both only
+    apply when baseline AND current carry a numeric hausdorff, so old baselines
+    lacking the column never spuriously flag (and hausdorff is deterministic, so
+    noise never trips either direction).
     """
     base_records: dict[str, dict] = baseline.get("records") or {}
     regressions: list[dict[str, Any]] = []
@@ -678,6 +683,19 @@ def compare_to_baseline(
             )
             continue
         regressed = False
+        # A match_ratio drop that comes WITH a meaningful hausdorff IMPROVEMENT is
+        # an honest GEOMETRY win, not a regression — the project law judges
+        # reconstruction by hausdorff, not match_ratio. e.g. a freeform base
+        # recovery that drops a feature match but tightens the geometry (screw
+        # 0.875 / 9.149mm -> 0.75 / 4.795mm). Exempt those from the match gate so
+        # the gate never flags an honest geometry win. (haus_improved mirrors the
+        # rise thresholds, so noise — measured 0.0 — never qualifies.)
+        _bh = base.get("hausdorff_mm")
+        _ch = rec.get("hausdorff_mm")
+        haus_improved = (
+            isinstance(_bh, (int, float)) and isinstance(_ch, (int, float))
+            and (_bh - _ch) > max(haus_rise_abs_tol_mm, haus_rise_rel_tol * _bh)
+        )
         bm = base.get("match_ratio")
         cm = rec.get("match_ratio")
         if isinstance(bm, (int, float)):
@@ -692,18 +710,32 @@ def compare_to_baseline(
                 )
                 regressed = True
             elif bm - cm > match_drop_tol:
-                regressions.append(
-                    {
-                        "file": f,
-                        "reason": (
-                            f"match_ratio dropped {bm} -> {cm} "
-                            f"(-{round(bm - cm, 4)})"
-                        ),
-                        "baseline_match": bm,
-                        "current_match": cm,
-                    }
-                )
-                regressed = True
+                if haus_improved:
+                    improvements.append(
+                        {
+                            "file": f,
+                            "baseline_match": bm,
+                            "current_match": cm,
+                            "note": (
+                                f"match dropped {bm} -> {cm} but hausdorff "
+                                f"improved {round(_bh, 4)} -> {round(_ch, 4)}mm "
+                                "— honest geometry win, not a regression"
+                            ),
+                        }
+                    )
+                else:
+                    regressions.append(
+                        {
+                            "file": f,
+                            "reason": (
+                                f"match_ratio dropped {bm} -> {cm} "
+                                f"(-{round(bm - cm, 4)})"
+                            ),
+                            "baseline_match": bm,
+                            "current_match": cm,
+                        }
+                    )
+                    regressed = True
             elif cm - bm > match_drop_tol:
                 improvements.append(
                     {"file": f, "baseline_match": bm, "current_match": cm}

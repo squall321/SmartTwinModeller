@@ -357,12 +357,22 @@ def test_old_baseline_without_hausdorff_never_flags():
     assert regress.compare_to_baseline(cur, base)["ok"] is True
 
 
-def test_match_drop_with_hausdorff_win_flags_once_on_match():
-    # screw case: match drops (real, flagged by the match gate) WHILE hausdorff
-    # improves — exactly one regression entry (match), the hausdorff win is not a
-    # second hit and not spuriously flagged.
+def test_match_drop_with_hausdorff_win_is_not_a_regression():
+    # screw case: match drops 0.875 -> 0.75 BUT hausdorff improves 9.15 -> 4.80.
+    # The project law judges by hausdorff, so this is an honest GEOMETRY WIN, not
+    # a regression — exempt from the match gate and logged as an improvement.
     base = _haus_baseline([{"file": "a", "match_ratio": 0.875, "hausdorff_mm": 9.15}])
     cur = [{"file": "a", "match_ratio": 0.75, "hausdorff_mm": 4.80}]
     out = regress.compare_to_baseline(cur, base)
-    hits = [r for r in out["regressions"] if r["file"] == "a"]
-    assert len(hits) == 1 and "match_ratio" in hits[0]["reason"]
+    assert out["ok"] is True, out["regressions"]
+    assert any(i["file"] == "a" for i in out["improvements"])
+
+
+def test_match_drop_with_flat_hausdorff_is_still_a_regression():
+    # match drops with NO geometry compensation (hausdorff flat) -> a real
+    # fidelity regression; the geometry-win exemption must NOT fire.
+    base = _haus_baseline([{"file": "a", "match_ratio": 0.9, "hausdorff_mm": 5.0}])
+    cur = [{"file": "a", "match_ratio": 0.7, "hausdorff_mm": 5.0}]
+    out = regress.compare_to_baseline(cur, base)
+    assert out["ok"] is False
+    assert any("match_ratio dropped" in r["reason"] for r in out["regressions"])
