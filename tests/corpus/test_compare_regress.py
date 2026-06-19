@@ -298,3 +298,59 @@ def test_register_bodies_sign_flip_detected():
     assert out["ok"] is False, "gate must DETECT the register_bodies sign-flip"
     assert any("registration_rmsd rose" in r["reason"]
                for r in out["regressions"])
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# regress.compare_to_baseline — hausdorff gate (2026-06-18). Geometry is the
+# project-law truth metric: a change that worsens hausdorff while match_ratio
+# stays flat must be caught. Re-run noise is zero (deterministic), so the
+# tolerances (rise > 0.5mm AND > 5%) fire only on genuine geometry regressions.
+
+
+def _haus_baseline(recs):
+    return {"records": {r["file"]: r for r in recs}}
+
+
+def test_hausdorff_rise_at_flat_match_is_a_regression():
+    base = _haus_baseline([{"file": "a", "match_ratio": 1.0, "hausdorff_mm": 5.0}])
+    cur = [{"file": "a", "match_ratio": 1.0, "hausdorff_mm": 50.0}]  # +45mm/+900%
+    out = regress.compare_to_baseline(cur, base)
+    assert out["ok"] is False
+    assert any("hausdorff_mm rose" in r["reason"] for r in out["regressions"])
+
+
+def test_small_absolute_hausdorff_rise_within_tol_not_flagged():
+    # +0.3mm < 0.5mm absolute floor → tolerated even though match is flat
+    base = _haus_baseline([{"file": "a", "match_ratio": 1.0, "hausdorff_mm": 5.0}])
+    cur = [{"file": "a", "match_ratio": 1.0, "hausdorff_mm": 5.3}]
+    assert regress.compare_to_baseline(cur, base)["ok"] is True
+
+
+def test_small_relative_hausdorff_rise_within_tol_not_flagged():
+    # +1mm on 100mm = +1% < 5% relative floor → tolerated (large-part margin)
+    base = _haus_baseline([{"file": "a", "match_ratio": 1.0, "hausdorff_mm": 100.0}])
+    cur = [{"file": "a", "match_ratio": 1.0, "hausdorff_mm": 101.0}]
+    assert regress.compare_to_baseline(cur, base)["ok"] is True
+
+
+def test_hausdorff_drop_is_not_a_regression():
+    base = _haus_baseline([{"file": "a", "match_ratio": 1.0, "hausdorff_mm": 200.0}])
+    cur = [{"file": "a", "match_ratio": 1.0, "hausdorff_mm": 153.0}]  # honest win
+    assert regress.compare_to_baseline(cur, base)["ok"] is True
+
+
+def test_old_baseline_without_hausdorff_never_flags():
+    base = _haus_baseline([{"file": "a", "match_ratio": 1.0}])  # no hausdorff col
+    cur = [{"file": "a", "match_ratio": 1.0, "hausdorff_mm": 999.0}]
+    assert regress.compare_to_baseline(cur, base)["ok"] is True
+
+
+def test_match_drop_with_hausdorff_win_flags_once_on_match():
+    # screw case: match drops (real, flagged by the match gate) WHILE hausdorff
+    # improves — exactly one regression entry (match), the hausdorff win is not a
+    # second hit and not spuriously flagged.
+    base = _haus_baseline([{"file": "a", "match_ratio": 0.875, "hausdorff_mm": 9.15}])
+    cur = [{"file": "a", "match_ratio": 0.75, "hausdorff_mm": 4.80}]
+    out = regress.compare_to_baseline(cur, base)
+    hits = [r for r in out["regressions"] if r["file"] == "a"]
+    assert len(hits) == 1 and "match_ratio" in hits[0]["reason"]

@@ -65,6 +65,19 @@ PER_FILE_TIMEOUT_S = 300
 #: is flagged as a regression.
 MATCH_DROP_TOL = 0.005
 
+#: a baseline geometry_deviation hausdorff_mm may RISE by at most this much
+#: before the file is flagged as a regression. The project law is that
+#: reconstruction quality is judged by HAUSDORFF, not match_ratio — but the gate
+#: historically only watched match_ratio, so a change that worsened geometry while
+#: keeping match_ratio flat would slip through. A file is flagged only when the
+#: rise exceeds BOTH thresholds (absolute AND relative), so a negligible-mm rise
+#: on a large-hausdorff part and a negligible-relative rise on an already-tight
+#: part are both tolerated. Re-run noise is ZERO (hausdorff is deterministic for
+#: identical code — measured 0.0 max abs diff across 55 preserve_root files), so
+#: these tolerances only ever fire on a genuine geometry regression.
+HAUS_RISE_ABS_TOL_MM = 0.5
+HAUS_RISE_REL_TOL = 0.05
+
 _STEP_SUFFIXES = (".step", ".stp")
 
 
@@ -625,21 +638,26 @@ def compare_to_baseline(
     records: list[dict[str, Any]],
     baseline: dict[str, Any],
     match_drop_tol: float = MATCH_DROP_TOL,
+    haus_rise_abs_tol_mm: float = HAUS_RISE_ABS_TOL_MM,
+    haus_rise_rel_tol: float = HAUS_RISE_REL_TOL,
 ) -> dict[str, Any]:
     """Compare a fresh sweep against a baseline.
 
     Regression =
       * a file present in the baseline gains a NEW error, or
       * its match_ratio drops by more than ``match_drop_tol`` (a numeric
-        baseline match degrading to None also counts as a drop).
+        baseline match degrading to None also counts as a drop), or
+      * its geometry_deviation hausdorff_mm RISES beyond BOTH the absolute and
+        relative tolerances (``haus_rise_abs_tol_mm`` AND ``haus_rise_rel_tol``).
     New files (not in baseline) and files missing from the corpus are
     informational only.
 
-    phase-0 (2026-06-13): hausdorff_mm / rms_mm / p95_mm are RECORDED on
-    each per-file record but are deliberately NOT read here — they are
-    info-only and not yet a regression trigger (a later phase promotes
-    hausdorff to a gate). This keeps old baselines that lack those columns
-    from spuriously flagging.
+    2026-06-18: hausdorff is now a GATE, not just a recorded column — the project
+    law judges reconstruction by hausdorff, so a geometry regression that keeps
+    match_ratio flat must be caught (and screw-style match drops that come WITH a
+    hausdorff WIN are correctly not the only signal). Only flagged when both
+    thresholds are exceeded, and only when BOTH baseline and current carry a
+    numeric hausdorff — old baselines lacking the column never spuriously flag.
     """
     base_records: dict[str, dict] = baseline.get("records") or {}
     regressions: list[dict[str, Any]] = []
@@ -659,6 +677,7 @@ def compare_to_baseline(
                 {"file": f, "reason": f"new error: {cur_err}"}
             )
             continue
+        regressed = False
         bm = base.get("match_ratio")
         cm = rec.get("match_ratio")
         if isinstance(bm, (int, float)):
@@ -671,6 +690,7 @@ def compare_to_baseline(
                         "current_match": None,
                     }
                 )
+                regressed = True
             elif bm - cm > match_drop_tol:
                 regressions.append(
                     {
@@ -683,10 +703,35 @@ def compare_to_baseline(
                         "current_match": cm,
                     }
                 )
+                regressed = True
             elif cm - bm > match_drop_tol:
                 improvements.append(
                     {"file": f, "baseline_match": bm, "current_match": cm}
                 )
+
+        # hausdorff gate (2026-06-18) — geometry is the project-law truth metric.
+        # Independent of match_ratio: catches a change that worsens geometry while
+        # match_ratio stays flat. Only when both baseline+current carry a numeric
+        # hausdorff (old baselines without the column never flag) and the rise
+        # clears BOTH the absolute and relative thresholds.
+        if not regressed:
+            bh = base.get("hausdorff_mm")
+            ch = rec.get("hausdorff_mm")
+            if isinstance(bh, (int, float)) and isinstance(ch, (int, float)):
+                rise = ch - bh
+                if rise > haus_rise_abs_tol_mm and rise > haus_rise_rel_tol * bh:
+                    regressions.append(
+                        {
+                            "file": f,
+                            "reason": (
+                                f"hausdorff_mm rose {round(bh, 4)} -> "
+                                f"{round(ch, 4)} (+{round(rise, 4)}mm) — geometry "
+                                "regression at flat/ok match_ratio"
+                            ),
+                            "baseline_hausdorff_mm": bh,
+                            "current_hausdorff_mm": ch,
+                        }
+                    )
 
     run_files = {r["file"] for r in records}
     missing_files = sorted(set(base_records) - run_files)
