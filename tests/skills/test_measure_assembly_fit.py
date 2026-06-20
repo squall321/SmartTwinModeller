@@ -59,3 +59,38 @@ def test_single_solid_yields_no_fit():
     one = Box(30, 30, 20) - Cylinder(5.0, 21)  # a single solid, not an assembly
     r = MeasureAssemblyFit().apply(one, {}).extras["assembly_fit"]
     assert r["n_solids"] == 1 and r["n_fits"] == 0
+
+
+def _keyway(key_w, slot_w=10.0):
+    from build123d import Box, Compound, Pos
+    housing = Box(40, 40, 20) - Pos(0, 0, 6) * Box(slot_w, 50, 12)
+    key = Box(key_w, 40, 8)
+    return Compound(children=[housing, key])
+
+
+def test_prismatic_keyway_clearance_measured():
+    r = MeasureAssemblyFit().apply(_keyway(9.98), {}).extras["assembly_fit"]
+    prism = [f for f in r["fits"] if f["geometry"] == "prismatic"]
+    assert len(prism) == 1
+    f = prism[0]
+    assert f["width_mm"] == pytest.approx(10.0, abs=1e-3)
+    assert f["key_width_mm"] == pytest.approx(9.98, abs=1e-3)
+    assert f["actual_clearance_mm"] == pytest.approx(0.02, abs=1e-3)
+    assert f["fit_type"] == "clearance"
+    assert f["nearest_standard_fit"]["designation"] == "H7/g6"
+    assert f["slot_solid"] != f["key_solid"]
+
+
+def test_prismatic_interference_keyway():
+    f = [x for x in MeasureAssemblyFit().apply(_keyway(10.04), {})
+         .extras["assembly_fit"]["fits"] if x["geometry"] == "prismatic"][0]
+    assert f["actual_clearance_mm"] == pytest.approx(-0.04, abs=1e-3)
+    assert f["fit_type"] == "interference"
+
+
+def test_cylindrical_fit_does_not_spawn_fake_prismatic():
+    # a round bore + round shaft must yield ONE cylindrical fit, no prismatic
+    # (a bore through the block centre once faked a slot via a midplane probe)
+    r = MeasureAssemblyFit().apply(_assembly(9.98), {}).extras["assembly_fit"]
+    geoms = sorted(f["geometry"] for f in r["fits"])
+    assert geoms == ["cylindrical"]

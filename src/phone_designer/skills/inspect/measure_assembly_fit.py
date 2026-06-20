@@ -142,6 +142,63 @@ def _cyl_features(solid):
     return out
 
 
+def _planar_features(solid, max_faces=300):
+    """Parallel planar-face pairs of ``solid`` as slot/key WIDTH features.
+
+    Two parallel planar faces a width W apart are a prismatic feature. Classified
+    by their OUTWARD (orientation-corrected) normals: a SLOT's two walls face
+    TOWARD each other (into the gap), a KEY / tongue (or body bulk) faces AWAY.
+    This is robust where a midplane point-inside probe is not — e.g. a block with
+    a bore through its centre would read the centre as 'outside' and fake a slot.
+    """
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GeomAbs import GeomAbs_Plane
+    from OCP.GProp import GProp_GProps
+    from OCP.TopAbs import TopAbs_REVERSED
+
+    from phone_designer.skills._resolvers import _all_faces
+
+    planes = []
+    for f in _all_faces(solid):
+        s = BRepAdaptor_Surface(f)
+        if s.GetType() != GeomAbs_Plane:
+            continue
+        n = s.Plane().Axis().Direction()
+        nv = _unit((n.X(), n.Y(), n.Z()))
+        if f.Orientation() == TopAbs_REVERSED:
+            nv = (-nv[0], -nv[1], -nv[2])   # outward normal
+        g = GProp_GProps()
+        BRepGProp.SurfaceProperties_s(f, g)
+        c = g.CentreOfMass()
+        planes.append((nv, (c.X(), c.Y(), c.Z()), float(g.Mass())))
+        if len(planes) > max_faces:
+            break
+    feats = []
+    for i in range(len(planes)):
+        na, ca, aa = planes[i]
+        for j in range(i + 1, len(planes)):
+            nb, cb, ab = planes[j]
+            if abs(_dot(na, nb)) < 0.99:   # parallel
+                continue
+            ab_vec = (cb[0] - ca[0], cb[1] - ca[1], cb[2] - ca[2])
+            width = abs(_dot(ab_vec, na))
+            lateral = math.sqrt(max(_dot(ab_vec, ab_vec) - width * width, 0.0))
+            if width < 0.5 or lateral > 2.0 * math.sqrt(max(min(aa, ab), 1e-9)):
+                continue
+            da, db = _dot(na, ab_vec), _dot(nb, ab_vec)
+            if da > 0 and db < 0:
+                kind = "slot"        # outward normals face each other → void between
+            elif da < 0 and db > 0:
+                kind = "key"         # face away → material between (tongue/bulk)
+            else:
+                continue
+            center = tuple((ca[k] + cb[k]) / 2.0 for k in range(3))
+            feats.append({"kind": kind, "width": width, "normal": na,
+                          "center": center})
+    return feats
+
+
 def _coaxial(b, s):
     """Parallel + collinear axes, with overlapping axial extents."""
     if abs(_dot(b["axis"], s["axis"])) < _AXIS_PARALLEL:
@@ -166,11 +223,12 @@ def _coaxial(b, s):
     name="measure_assembly_fit",
     category="inspect",
     level="macro",
-    summary="Measure a real assembled fit: split an assembly's solids, match a "
-            "bore in one solid to a COAXIAL shaft in another, and measure the "
-            "actual clearance — then name the nearest standard ISO 286 fit. The "
-            "clearance + fit_type are MEASURED from geometry (result_grade="
-            "'measured'); bore-vs-shaft via a radial point-inside-solid probe.",
+    summary="Measure a real assembled fit: split an assembly's solids and match a "
+            "bore↔shaft (cylindrical) OR a slot↔key (prismatic) across solids, "
+            "measuring the actual clearance — then name the nearest standard ISO "
+            "286 fit. Clearance + fit_type are MEASURED from geometry "
+            "(result_grade='measured'); bore/shaft via a radial point-inside "
+            "probe, slot/key via outward-normal facing.",
     selector_kinds=[],
     history_rules={},
     produces_features=["assembly_fit"],
@@ -202,11 +260,12 @@ class MeasureAssemblyFit(SkillBase):
         shape = _occt_shape(body)
         solids = list(iter_solid_components(shape))
         assumptions: list[str] = [
-            "clearance is MEASURED between a coaxial bore (one solid) and shaft "
-            "(another solid); fit_type follows from the real gap sign.",
-            "bore vs shaft via a radial point-inside-solid probe (robust to STEP "
-            "orientation flips).",
-            "nearest standard fit is an ISO 286 reference label (Ø ≤ 180mm).",
+            "clearance is MEASURED between coaxial bore↔shaft (cylindrical) or "
+            "coplanar slot↔key (prismatic) across two solids; fit_type follows "
+            "from the real gap sign.",
+            "bore vs shaft via a radial point-inside-solid probe; slot vs key via "
+            "outward-normal facing (walls face in = slot, flanks face out = key).",
+            "nearest standard fit is an ISO 286 reference label (size ≤ 180mm).",
         ]
         if len(solids) < 2:
             assumptions.append(f"only {len(solids)} solid(s) — need ≥2 for a fit.")
@@ -248,6 +307,7 @@ class MeasureAssemblyFit(SkillBase):
             shaft_mm = round(2.0 * s["radius"], 4)
             mf = _classify_measured_fit(hole_mm, shaft_mm)
             entry = {
+                "geometry": "cylindrical",
                 "hole_solid": b["solid"],
                 "shaft_solid": s["solid"],
                 "axis_dir": [round(v, 4) for v in b["axis"]],
@@ -265,6 +325,57 @@ class MeasureAssemblyFit(SkillBase):
                                      else "transition")
                 assumptions.append(
                     f"Ø{hole_mm} outside ISO table — fit_type only, no standard fit.")
+            fits.append(entry)
+
+        # ── prismatic (key / keyway) fits: a SLOT in one solid + a coplanar KEY
+        #    in another, matched by width. Same ISO machinery (IT grades apply to
+        #    a width as much as a diameter). ──────────────────────────────────
+        prism = []
+        for si, sol in enumerate(solids):
+            for pf in _planar_features(sol):
+                pf["solid"] = si
+                prism.append(pf)
+        slots = [f for f in prism if f["kind"] == "slot"]
+        keys = [f for f in prism if f["kind"] == "key"]
+        used_key = [False] * len(keys)
+        for sl in slots:
+            best = None
+            for k, ky in enumerate(keys):
+                if used_key[k] or ky["solid"] == sl["solid"]:
+                    continue
+                if abs(_dot(sl["normal"], ky["normal"])) < 0.99:
+                    continue
+                if abs(sl["width"] - ky["width"]) > args.radius_tol_mm:
+                    continue
+                dist = math.sqrt(sum((sl["center"][i] - ky["center"][i]) ** 2
+                                     for i in range(3)))
+                if dist > max(sl["width"], ky["width"]) + 5.0:  # co-located
+                    continue
+                score = abs(sl["width"] - ky["width"])
+                if best is None or score < best[0]:
+                    best = (score, k, ky)
+            if best is None:
+                continue
+            _, k, ky = best
+            used_key[k] = True
+            wf = round(sl["width"], 4)
+            wm = round(ky["width"], 4)
+            mf = _classify_measured_fit(wf, wm)
+            entry = {
+                "geometry": "prismatic",
+                "slot_solid": sl["solid"],
+                "key_solid": ky["solid"],
+                "axis_dir": [round(v, 4) for v in sl["normal"]],
+                "width_mm": wf,
+                "key_width_mm": wm,
+                "actual_clearance_mm": round(wf - wm, 4),
+            }
+            if mf is not None:
+                entry["fit_type"] = mf["fit_type"]
+                entry["nearest_standard_fit"] = mf["nearest_standard_fit"]
+            else:
+                entry["fit_type"] = ("clearance" if wf > wm else "interference"
+                                     if wf < wm else "transition")
             fits.append(entry)
 
         out = {

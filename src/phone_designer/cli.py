@@ -694,11 +694,15 @@ def analyze(
             f"{af.get('n_fits')} fit(s) (grade={af.get('grade')})")
         for f in (af.get("fits") or [])[:6]:
             n = f.get("nearest_standard_fit") or {}
+            if f.get("geometry") == "prismatic":
+                lhs = (f"slot W{f.get('width_mm')}(s{f.get('slot_solid')}) ↔ "
+                       f"key W{f.get('key_width_mm')}(s{f.get('key_solid')})")
+            else:
+                lhs = (f"bore Ø{f.get('hole_mm')}(s{f.get('hole_solid')}) ↔ "
+                       f"shaft Ø{f.get('shaft_mm')}(s{f.get('shaft_solid')})")
             typer.echo(
-                f"      bore Ø{f.get('hole_mm')}(s{f.get('hole_solid')}) ↔ "
-                f"shaft Ø{f.get('shaft_mm')}(s{f.get('shaft_solid')})  "
-                f"clr={f.get('actual_clearance_mm'):+}mm {f.get('fit_type')} "
-                f"~ {n.get('designation')}")
+                f"      {lhs}  clr={f.get('actual_clearance_mm'):+}mm "
+                f"{f.get('fit_type')} ~ {n.get('designation')}")
     for stage, info in (pa.get("_stages") or {}).items():
         if not info.get("ok"):
             typer.echo(f"    [stage {stage} failed] {info.get('error')}")
