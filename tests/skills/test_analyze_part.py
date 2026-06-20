@@ -164,3 +164,16 @@ def test_analyze_part_sheet_metal_stage_runs():
         assert sm and sm["grade"] == "estimate"
         assert sm["is_sheet_metal"] is False  # a thick box, not a sheet
         assert pa["_stages"]["sheet_metal"]["ok"]
+
+
+def test_analyze_part_measure_fits_stage_runs():
+    # the synth is a single solid (no assembly), but the stage must run cleanly
+    with tempfile.TemporaryDirectory() as d:
+        path = _synth_step(Path(d))
+        pa = AnalyzePart().apply(None, {
+            "part_path": path, "measure_fits": True}).extras["part_analysis"]
+        af = pa["assembly_fit"]
+        assert af and af["grade"] == "measured"
+        assert af["n_solids"] == 1 and af["n_fits"] == 0  # not an assembly
+        assert pa["_stages"]["assembly_fit"]["ok"]
+        assert pa["sheet_metal"] is None  # other opt-in stages stay off

@@ -582,6 +582,11 @@ def analyze(
         help="판금 인식 + 굽힘 테이블(detect_sheet_metal)도 포함 — 두께·굽힘 "
              "반경/각도/전개길이 + 굽힘 보정(bend allowance/deduction).",
     ),
+    measure_fits: bool = typer.Option(
+        False, "--measure-fits",
+        help="어셈블리(솔리드 ≥2)면 솔리드 간 보어↔축 끼워맞춤을 실측"
+             "(measure_assembly_fit) — 실제 틈새 + 표준 끼워맞춤.",
+    ),
 ):
     """단일 부품 front-door: CAD 파일 1개 → 품질 리포트(위상/벽두께/draft/blend/
     질량/DFM) + feature 카탈로그 + 편집가능 주요치수 + (선택)재구성 fidelity
@@ -634,6 +639,7 @@ def analyze(
         "recognize_fits": recognize_fits,
         "fit_role": fit_role,
         "sheet_metal": sheet_metal,
+        "measure_fits": measure_fits,
     })
     pa = res.extras["part_analysis"]
 
@@ -681,6 +687,18 @@ def analyze(
                     f"BA={b.get('bend_allowance_mm')} BD={b.get('bend_deduction_mm')}")
         else:
             typer.echo(f"    sheet-metal: no (thickness={sm.get('thickness_mm')})")
+    af = pa.get("assembly_fit")
+    if af:
+        typer.echo(
+            f"    assembly-fit: {af.get('n_solids')} solids → "
+            f"{af.get('n_fits')} fit(s) (grade={af.get('grade')})")
+        for f in (af.get("fits") or [])[:6]:
+            n = f.get("nearest_standard_fit") or {}
+            typer.echo(
+                f"      bore Ø{f.get('hole_mm')}(s{f.get('hole_solid')}) ↔ "
+                f"shaft Ø{f.get('shaft_mm')}(s{f.get('shaft_solid')})  "
+                f"clr={f.get('actual_clearance_mm'):+}mm {f.get('fit_type')} "
+                f"~ {n.get('designation')}")
     for stage, info in (pa.get("_stages") or {}).items():
         if not info.get("ok"):
             typer.echo(f"    [stage {stage} failed] {info.get('error')}")

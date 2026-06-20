@@ -185,6 +185,12 @@ class AnalyzePart(SkillBase):
             default=0.44,
             description="K-factor for detect_sheet_metal bend allowances.",
         )
+        measure_fits: bool = Field(
+            default=False,
+            description="If the part is an ASSEMBLY (≥2 solids), MEASURE real "
+                        "bore↔shaft fits between solids (measure_assembly_fit). "
+                        "OFF by default.",
+        )
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
         from phone_designer.skills.create.import_step import ImportStep
@@ -352,6 +358,17 @@ class AnalyzePart(SkillBase):
                 }).extras.get("sheet_metal")
             sheet_metal = _safe("sheet_metal", stages, _sheet)
 
+        # ── 11. optional assembly bore↔shaft fit MEASUREMENT (≥2 solids) ────
+        assembly_fit = None
+        if args.measure_fits:
+            def _afit():
+                from phone_designer.skills.inspect.measure_assembly_fit import (
+                    MeasureAssemblyFit,
+                )
+                return MeasureAssemblyFit().apply(
+                    in_body, {}).extras.get("assembly_fit")
+            assembly_fit = _safe("assembly_fit", stages, _afit)
+
         analysis = {
             "part_id": part_id,
             "bbox_mm": _bbox_mm(shape),
@@ -365,6 +382,7 @@ class AnalyzePart(SkillBase):
             "cost_estimate": cost_estimate,
             "fit_analysis": fit_analysis,
             "sheet_metal": sheet_metal,
+            "assembly_fit": assembly_fit,
             "_stages": stages,
         }
         return SkillResult(
