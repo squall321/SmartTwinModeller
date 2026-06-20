@@ -60,6 +60,23 @@ def test_u_channel_two_bends():
     assert r["flat_pattern"]["bends_share_single_axis"] is True
 
 
+def test_l_bracket_developed_length():
+    # flat blank = horizontal flat (~28) + vertical flat (~18) + bend allowance
+    # (~4.52) ≈ 50.5mm, width = the bend-line length (25mm)
+    fp = _sm(_l_bracket())["flat_pattern"]
+    assert fp["developed_length_mm"] == pytest.approx(50.5, abs=1.0)
+    assert fp["blank_width_mm"] == pytest.approx(25.0, abs=0.5)
+    assert fp["flat_blank_area_mm2"] > 0
+
+
+def test_flat_blank_developed_length_is_its_own_extent():
+    from build123d import Box, Pos
+    fp = _sm(Pos(0, 0, 1.0) * Box(50, 30, 2.0))["flat_pattern"]
+    # an unbent blank's developed pattern is just the plate itself
+    assert fp["developed_length_mm"] == pytest.approx(50.0, abs=0.5)
+    assert fp["flat_blank_area_mm2"] == pytest.approx(1500.0, abs=20.0)
+
+
 def test_flat_blank_is_sheet_with_no_bends():
     from build123d import Box, Pos
     r = _sm(Pos(0, 0, 1.0) * Box(50, 30, 2.0))

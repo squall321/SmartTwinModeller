@@ -250,7 +250,8 @@ class DetectSheetMetal(SkillBase):
             "(angle = bend-cylinder arc extent).",
             f"bend allowance/deduction use an ASSUMED K-factor {args.k_factor} "
             "(material/process, not geometry) → graded 'estimate'.",
-            "full 2D flat-pattern nest NOT generated in v1 (see flat_pattern.note).",
+            "developed length/area = sheet mid-surface (flange area + neutral bend "
+            "strips); a true 2D blank OUTLINE with cutouts is the remaining limit.",
         ]
 
         thickness, cover_area = _thickness(planes, bbox_ref)
@@ -282,16 +283,45 @@ class DetectSheetMetal(SkillBase):
                 f"NOT classified sheet-metal (thin={thin}, planar coverage="
                 f"{round(coverage,2)}, thickness={thickness}).")
 
+        # ── flat pattern: developed blank AREA + (single-axis) developed LENGTH ─
+        # One side of the sheet = half the thickness-pair face area (cover_area/2);
+        # each bend adds its neutral-strip developed area = bend_allowance × line.
+        # For an L-bracket this reproduces the hand calc (Σ flange flats + Σ BA).
         axes = {tuple(b["axis_dir"]) for b in bends}
         single_axis = len(axes) <= 1
-        flat_pattern = {
-            "bends_share_single_axis": single_axis,
+        flat_pattern: dict[str, Any] = {
             "k_factor": args.k_factor,
             "total_bend_allowance_mm": round(total_ba, 4),
-            "note": ("developed length = Σ outer flange dims − Σ bend_deduction_mm "
-                     "(provided per bend). A true 2D flat-pattern outline/nest is "
-                     "not generated in v1."),
+            "bends_share_single_axis": single_axis,
         }
+        if thickness:
+            bend_dev_area = sum(b["bend_allowance_mm"] * b["bend_line_length_mm"]
+                                for b in bends)
+            blank_area = cover_area / 2.0 + bend_dev_area
+            if bends and single_axis:
+                blank_width = max(b["bend_line_length_mm"] for b in bends)
+            elif size:
+                blank_width = sorted(size)[1]   # median = smaller sheet-face dim
+            else:
+                blank_width = None
+            developed_length = (round(blank_area / blank_width, 3)
+                                if (single_axis and blank_width and blank_width > 1e-6)
+                                else None)
+            flat_pattern.update({
+                "flat_blank_area_mm2": round(blank_area, 2),
+                "developed_length_mm": developed_length,
+                "blank_width_mm": round(blank_width, 3) if blank_width else None,
+                "note": ("developed length/area from the sheet mid-surface (flange "
+                         "area + neutral bend strips at K-factor); developed_length "
+                         "is single-bend-axis only. A true 2D outline with cutouts "
+                         "is the remaining limit."),
+            })
+        else:
+            flat_pattern.update({
+                "flat_blank_area_mm2": None, "developed_length_mm": None,
+                "blank_width_mm": None,
+                "note": "no constant thickness → not a sheet blank.",
+            })
 
         out = {
             "is_sheet_metal": is_sheet,
