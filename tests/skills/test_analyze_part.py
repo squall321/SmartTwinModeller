@@ -148,5 +148,19 @@ def test_analyze_part_cost_and_fits_off_by_default():
         path = _synth_step(Path(d))
         pa = AnalyzePart().apply(None, {"part_path": path}).extras["part_analysis"]
         assert pa["cost_estimate"] is None and pa["fit_analysis"] is None
+        assert pa["sheet_metal"] is None
         assert "estimate_cost" not in pa["_stages"]
         assert "recognize_fits" not in pa["_stages"]
+        assert "sheet_metal" not in pa["_stages"]
+
+
+def test_analyze_part_sheet_metal_stage_runs():
+    # the box+hole synth is NOT sheet metal, but the stage must run and report
+    with tempfile.TemporaryDirectory() as d:
+        path = _synth_step(Path(d))
+        pa = AnalyzePart().apply(None, {
+            "part_path": path, "sheet_metal": True}).extras["part_analysis"]
+        sm = pa["sheet_metal"]
+        assert sm and sm["grade"] == "estimate"
+        assert sm["is_sheet_metal"] is False  # a thick box, not a sheet
+        assert pa["_stages"]["sheet_metal"]["ok"]

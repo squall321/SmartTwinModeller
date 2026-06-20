@@ -176,6 +176,15 @@ class AnalyzePart(SkillBase):
             description="Assembly role for recognize_fits (clearance | transition "
                         "| press | location | running | …).",
         )
+        sheet_metal: bool = Field(
+            default=False,
+            description="Also recognise a bent sheet-metal part + recover its bend "
+                        "table (detect_sheet_metal). OFF by default.",
+        )
+        sheet_k_factor: float = Field(
+            default=0.44,
+            description="K-factor for detect_sheet_metal bend allowances.",
+        )
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
         from phone_designer.skills.create.import_step import ImportStep
@@ -331,6 +340,18 @@ class AnalyzePart(SkillBase):
                 }).extras.get("fit_analysis")
             fit_analysis = _safe("recognize_fits", stages, _fits)
 
+        # ── 10. optional sheet-metal recognition + bend table ──────────────
+        sheet_metal = None
+        if args.sheet_metal:
+            def _sheet():
+                from phone_designer.skills.inspect.detect_sheet_metal import (
+                    DetectSheetMetal,
+                )
+                return DetectSheetMetal().apply(in_body, {
+                    "k_factor": float(args.sheet_k_factor),
+                }).extras.get("sheet_metal")
+            sheet_metal = _safe("sheet_metal", stages, _sheet)
+
         analysis = {
             "part_id": part_id,
             "bbox_mm": _bbox_mm(shape),
@@ -343,6 +364,7 @@ class AnalyzePart(SkillBase):
             "parametric_script": parametric_script,
             "cost_estimate": cost_estimate,
             "fit_analysis": fit_analysis,
+            "sheet_metal": sheet_metal,
             "_stages": stages,
         }
         return SkillResult(

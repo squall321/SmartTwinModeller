@@ -577,6 +577,11 @@ def analyze(
         "clearance", "--fit-role",
         help="recognize_fits 조립 역할 (clearance | transition | press | …).",
     ),
+    sheet_metal: bool = typer.Option(
+        False, "--sheet-metal",
+        help="판금 인식 + 굽힘 테이블(detect_sheet_metal)도 포함 — 두께·굽힘 "
+             "반경/각도/전개길이 + 굽힘 보정(bend allowance/deduction).",
+    ),
 ):
     """단일 부품 front-door: CAD 파일 1개 → 품질 리포트(위상/벽두께/draft/blend/
     질량/DFM) + feature 카탈로그 + 편집가능 주요치수 + (선택)재구성 fidelity
@@ -628,6 +633,7 @@ def analyze(
         "cost_material": cost_material,
         "recognize_fits": recognize_fits,
         "fit_role": fit_role,
+        "sheet_metal": sheet_metal,
     })
     pa = res.extras["part_analysis"]
 
@@ -661,6 +667,20 @@ def analyze(
                 f"      Ø{f.get('nominal_mm')} {f.get('kind')} → "
                 f"{rf.get('designation')} {rf.get('fit_type')} "
                 f"clr={rf.get('clearance_mm')}")
+    sm = pa.get("sheet_metal")
+    if sm:
+        if sm.get("is_sheet_metal"):
+            typer.echo(
+                f"    sheet-metal: t={sm.get('thickness_mm')}mm  "
+                f"{sm.get('n_bends')} bend(s)  conf={sm.get('confidence')} "
+                f"(grade={sm.get('grade')})")
+            for b in (sm.get("bends") or [])[:6]:
+                typer.echo(
+                    f"      bend R{b.get('radius_mm')} {b.get('angle_deg')}° "
+                    f"line={b.get('bend_line_length_mm')}mm "
+                    f"BA={b.get('bend_allowance_mm')} BD={b.get('bend_deduction_mm')}")
+        else:
+            typer.echo(f"    sheet-metal: no (thickness={sm.get('thickness_mm')})")
     for stage, info in (pa.get("_stages") or {}).items():
         if not info.get("ok"):
             typer.echo(f"    [stage {stage} failed] {info.get('error')}")

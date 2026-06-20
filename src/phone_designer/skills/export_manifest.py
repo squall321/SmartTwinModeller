@@ -107,6 +107,7 @@ import phone_designer.skills.inspect.gdt_parallelism  # noqa: F401
 import phone_designer.skills.inspect.gdt_perpendicularity  # noqa: F401
 import phone_designer.skills.inspect.gdt_position  # noqa: F401
 import phone_designer.skills.inspect.hole_alignment_check  # noqa: F401
+import phone_designer.skills.inspect.detect_sheet_metal  # noqa: F401
 import phone_designer.skills.inspect.estimate_cost  # noqa: F401
 import phone_designer.skills.inspect.mass_properties  # noqa: F401
 import phone_designer.skills.inspect.mesh_quality  # noqa: F401
