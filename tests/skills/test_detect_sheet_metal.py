@@ -144,6 +144,27 @@ def test_rounded_edge_is_not_counted_as_a_hem():
     assert r["n_hems"] == 0          # NOT a hem (no return flange)
 
 
+def test_thick_part_outside_gauge_is_not_sheet():
+    # an 8mm-thick slab is plate/machined, not formed sheet (gauge bound rejects
+    # thick assemblies whose minimum wall was mis-read as 'thin')
+    from build123d import Box, Pos
+    r = _sm(Pos(0, 0, 4.0) * Box(120, 90, 8.0))
+    assert r["is_sheet_metal"] is False
+    assert any("gauge range" in a for a in r["assumptions"])
+
+
+def test_flat_blank_is_flagged_ambiguous_with_lower_confidence():
+    # a flat unformed blank cannot be told from a machined plate / moulded slab
+    from build123d import Box, Pos
+    flat = _sm(Pos(0, 0, 1.0) * Box(50, 30, 2.0))
+    bent = _sm(_l_bracket())
+    assert flat["is_sheet_metal"] is True
+    assert flat["flat_unformed"] is True          # honestly flagged
+    assert bent["flat_unformed"] is False         # a formed bracket is unambiguous
+    assert bent["confidence"] > flat["confidence"]  # forming is stronger evidence
+    assert any("FLAT (unformed)" in a for a in flat["assumptions"])
+
+
 def test_k_factor_raises_bend_allowance():
     soft = _sm(_l_bracket(), k_factor=0.33)["bends"][0]["bend_allowance_mm"]
     hard = _sm(_l_bracket(), k_factor=0.50)["bends"][0]["bend_allowance_mm"]

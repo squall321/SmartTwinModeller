@@ -6,6 +6,20 @@ recognises a constant-thickness bent-sheet part and recovers its BEND TABLE:
 thickness, and per bend the radius, angle, bend-line length, and the
 press-brake allowances (bend allowance + bend deduction) a quoter needs.
 
+PRECISION (validated against the 161-file corpus — the corpus is mostly NON-sheet
+machined/revolved parts, so over-firing is the real risk):
+  * thickness must be in a real sheet GAUGE range [0.15, 6.0]mm — this rejects
+    thick assemblies whose minimum wall was mis-read as "thin" (e.g. one assembly
+    measured a 254mm "thickness");
+  * a bend's line must span ≥1.5×thickness — a tiny cylinder (an IC lead, a pin)
+    is NOT a bend;
+  * confidence is HONEST about ambiguity: a FORMED part (real bends/hems) is
+    strong sheet evidence → high confidence; a FLAT thin part is geometrically
+    indistinguishable from a laser-cut/machined plate or a thin moulded body
+    (`flat_unformed=True`, reduced confidence). And even a formed part's bends
+    cannot be told apart from cooling fins / stamped lead-frames / pulley grooves
+    of the same local geometry — `assumptions` says so.
+
 HONEST scope (the anti-fake-precision rule applies):
   * thickness, bend RADIUS, bend ANGLE and bend-line LENGTH are MEASURED from
     the B-rep — the bend angle is read straight off the bend cylinder's arc
@@ -186,6 +200,11 @@ def _collect_bends(cyls, thickness):
         # bend-line length = developed area / (radius * arc) of the inner surface
         line_len = (inner["area"] / (inner["radius"] * arc_rad)
                     if inner["radius"] * arc_rad > 1e-9 else 0.0)
+        # A genuine press-brake bend spans the material — its bend line is at
+        # least ~1.5× the thickness. A tiny cylinder (an IC lead, a pin) is NOT a
+        # bend; this drops those false positives.
+        if thickness and line_len < 1.5 * thickness:
+            continue
         bends.append({
             "radius_mm": round(inner["radius"], 4),
             "angle_deg": round(math.degrees(arc_rad), 2),
@@ -335,6 +354,17 @@ class DetectSheetMetal(SkillBase):
             default=2000, ge=1,
             description="Skip (honest sentinel) above this face count.",
         )
+        min_thickness_mm: float = Field(
+            default=0.15,
+            description="Below this, the 'thickness' is foil/sub-feature noise, "
+                        "not a sheet-metal gauge → not classified sheet.",
+        )
+        max_thickness_mm: float = Field(
+            default=6.0,
+            description="Above this, the part is plate/machined, not formed sheet "
+                        "metal → not classified sheet (a real physical bound that "
+                        "rejects thick assemblies measured as 'thin').",
+        )
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
         from phone_designer.skills._resolvers import _all_faces
@@ -379,8 +409,16 @@ class DetectSheetMetal(SkillBase):
         # for a recognised sheet part — running it on (say) an extrusion would
         # report its decorative edge fillets as fake bends/hems.
         thin = bool(thickness and bbox_ref and thickness < 0.34 * bbox_ref)
-        is_sheet = bool(thin and coverage >= _SHEET_COVERAGE_MIN)
-        confidence = round(coverage * (1.0 if thin else 0.4), 3) if thickness else 0.0
+        # Sheet metal has a real physical GAUGE range: below ~0.15mm the measured
+        # "thickness" is foil/sub-feature noise, above ~6mm it is plate/machined
+        # (this rejects thick assemblies whose minimum wall was read as a sheet).
+        in_gauge = bool(thickness and args.min_thickness_mm <= thickness
+                        <= args.max_thickness_mm)
+        is_sheet = bool(thin and in_gauge and coverage >= _SHEET_COVERAGE_MIN)
+        if thickness and not in_gauge:
+            assumptions.append(
+                f"thickness {round(thickness,3)}mm outside the sheet gauge range "
+                f"[{args.min_thickness_mm},{args.max_thickness_mm}]mm → not sheet.")
 
         t = thickness or 0.0
         total_ba = 0.0
@@ -413,6 +451,26 @@ class DetectSheetMetal(SkillBase):
             assumptions.append(
                 f"NOT classified sheet-metal (thin={thin}, planar coverage="
                 f"{round(coverage,2)}, thickness={thickness}).")
+
+        # Honest confidence: a FORMED part (real bends/hems) is strong evidence of
+        # sheet metal; a FLAT thin part is geometrically AMBIGUOUS — it could be a
+        # sheet blank, a laser-cut/machined plate, or a thin moulded body, and
+        # geometry alone cannot tell them apart. Reflect that, don't overclaim.
+        is_formed = bool(bends or hems)
+        flat_unformed = bool(is_sheet and not is_formed)
+        base_conf = coverage if (thin and in_gauge) else coverage * 0.4
+        confidence = round(base_conf * (1.0 if is_formed else 0.6), 3) \
+            if thickness else 0.0
+        if flat_unformed:
+            assumptions.append(
+                "FLAT (unformed) constant-thickness part — geometry alone cannot "
+                "distinguish a sheet blank from a laser-cut/machined plate or a "
+                "thin moulded body; confidence reduced accordingly.")
+        if is_formed:
+            assumptions.append(
+                "bend recovery is GEOMETRIC — a forming bend, a cooling fin, a "
+                "stamped lead-frame and a pulley groove can share the same local "
+                "geometry and are not distinguished; verify bends against function.")
 
         # ── flat pattern: developed blank AREA + (single-axis) developed LENGTH ─
         # One side of the sheet = half the thickness-pair face area (cover_area/2);
@@ -458,6 +516,7 @@ class DetectSheetMetal(SkillBase):
         out = {
             "is_sheet_metal": is_sheet,
             "confidence": confidence,
+            "flat_unformed": flat_unformed,
             "thickness_mm": round(thickness, 4) if thickness else None,
             "n_bends": len(bends),
             "bends": bends,
