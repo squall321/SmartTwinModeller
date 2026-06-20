@@ -47,6 +47,10 @@ _PARALLEL_TOL = 0.99   # |dot(n1,n2)| above this → parallel planes
 # kills the extrusion edge-round false positives (anti-fake-accuracy).
 _BEND_ARC_MIN = math.radians(5.0)
 _BEND_ARC_MAX = math.radians(170.0)
+# A ~180° (≥170°) arc is a WRAP: either a rounded-over sheet EDGE (its two planar
+# neighbours are the one sheet's faces, offset ≈ thickness) or a folded HEM (a
+# return flange, neighbour offset ≥ ~1.5×thickness — an open hem with a real gap).
+_WRAP_ARC_MIN = math.radians(170.0)
 _SHEET_COVERAGE_MIN = 0.7  # sheet metal = most planar area is the two thin faces
 
 
@@ -137,8 +141,13 @@ def _thickness(planes, bbox_ref):
             bins[key] = bins.get(key, 0.0) + ai + aj
     if not bins:
         return None, 0.0
-    best = max(bins.items(), key=lambda kv: kv[1])
-    return best[0], best[1]
+    # thickness = the SMALLEST gap among the top-area bins. A doubled-over hem
+    # makes a base↔return-flange gap that can TIE the true wall gap by area; the
+    # real thickness is the minimum consistent wall, so break ties toward smaller.
+    max_area = max(bins.values())
+    top = [(g, a) for g, a in bins.items() if a >= 0.9 * max_area]
+    gap, area = min(top, key=lambda ga: ga[0])
+    return gap, area
 
 
 def _collect_bends(cyls, thickness):
@@ -186,6 +195,113 @@ def _collect_bends(cyls, thickness):
             "_arc_rad": arc_rad,
         })
     return bends
+
+
+def _edge_face_map(shape):
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
+    from OCP.TopExp import TopExp
+    from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
+
+    m = TopTools_IndexedDataMapOfShapeListOfShape()
+    TopExp.MapShapesAndAncestors_s(shape, TopAbs_EDGE, TopAbs_FACE, m)
+    return m
+
+
+def _neighbor_plane_offset(cyl_face, axis, efm):
+    """Max perpendicular offset between two PARALLEL FLANGE faces adjacent to
+    ``cyl_face``. Only flanges (normal ⟂ to the cylinder axis) count — the
+    end-cap faces (normal ∥ axis, far apart) are NOT the fold's flanges. For a
+    rounded sheet edge this ≈ thickness (the one sheet's two sides); for a hem it
+    is the doubled-over gap (≥ ~1.5×thickness)."""
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_Plane
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    planes, seen = [], set()
+    it = TopExp_Explorer(cyl_face, TopAbs_EDGE)
+    while it.More():
+        try:
+            for sh in efm.FindFromKey(it.Current()):
+                if sh.IsSame(cyl_face):
+                    continue
+                s = BRepAdaptor_Surface(TopoDS.Face_s(sh))
+                if s.GetType() != GeomAbs_Plane:
+                    continue
+                pl = s.Plane()
+                n = pl.Axis().Direction()
+                lc = pl.Location()
+                normal = _unit((n.X(), n.Y(), n.Z()))
+                if abs(_dot(normal, axis)) > 0.1:
+                    continue  # end-cap (normal ∥ axis) — not a fold flange
+                key = (round(normal[0], 2), round(normal[1], 2), round(normal[2], 2),
+                       round(lc.X() * normal[0] + lc.Y() * normal[1]
+                             + lc.Z() * normal[2], 2))
+                if key in seen:
+                    continue
+                seen.add(key)
+                planes.append((normal, (lc.X(), lc.Y(), lc.Z())))
+        except Exception:  # noqa: BLE001
+            pass
+        it.Next()
+    best = 0.0
+    for i in range(len(planes)):
+        ni, pi = planes[i]
+        for j in range(i + 1, len(planes)):
+            nj, pj = planes[j]
+            if abs(_dot(ni, nj)) < _PARALLEL_TOL:
+                continue
+            diff = (pj[0] - pi[0], pj[1] - pi[1], pj[2] - pi[2])
+            best = max(best, abs(_dot(diff, ni)))
+    return best
+
+
+def _collect_wraps(cyls, thickness, efm):
+    """Classify ≥170° wrap cylinders into hems (real return-flange folds) and
+    rounded edges, grouping concentric inner+outer surfaces. Returns
+    (hems, rounded_edge_count)."""
+    t = thickness or 0.0
+    cand = [c for c in cyls if c["arc"] >= _WRAP_ARC_MIN]
+    used = [False] * len(cand)
+    hems, rounded = [], 0
+    for i, c in enumerate(cand):
+        if used[i]:
+            continue
+        group = [c]
+        used[i] = True
+        for j in range(i + 1, len(cand)):
+            if used[j]:
+                continue
+            d = cand[j]
+            if abs(_dot(c["axis"], d["axis"])) < _PARALLEL_TOL:
+                continue
+            off = (d["loc"][0] - c["loc"][0], d["loc"][1] - c["loc"][1],
+                   d["loc"][2] - c["loc"][2])
+            along = _dot(off, c["axis"])
+            perp = math.sqrt(max(_dot(off, off) - along * along, 0.0))
+            if perp > 0.05 * max(c["radius"], 1.0):
+                continue
+            group.append(d)
+            used[j] = True
+        inner = min(group, key=lambda x: x["radius"])
+        gap = max(_neighbor_plane_offset(g["face"], g["axis"], efm) for g in group)
+        if t and abs(gap - t) < 0.5 * t:
+            rounded += 1                       # rounded sheet edge — not a hem
+            continue
+        if t and gap < 1.5 * t:
+            continue                            # ambiguous tight fold — conservative
+        arc_rad = sum(x["arc"] for x in group) / len(group)
+        line_len = (inner["area"] / (inner["radius"] * arc_rad)
+                    if inner["radius"] * arc_rad > 1e-9 else 0.0)
+        hems.append({
+            "radius_mm": round(inner["radius"], 4),
+            "angle_deg": round(math.degrees(arc_rad), 2),
+            "bend_line_length_mm": round(line_len, 3),
+            "axis_dir": [round(v, 4) for v in inner["axis"]],
+            "_arc_rad": arc_rad,
+        })
+    return hems, rounded
 
 
 @skill(
@@ -239,7 +355,7 @@ class DetectSheetMetal(SkillBase):
             elif kind == "cylinder":
                 r, axis, loc, arc = payload
                 cyls.append({"radius": r, "axis": axis, "loc": loc, "arc": arc,
-                             "area": area, "centroid": centroid})
+                             "area": area, "centroid": centroid, "face": f})
 
         size = _bbox(shape)
         # median extent = the smaller of the two sheet "face" dimensions; the
@@ -258,26 +374,41 @@ class DetectSheetMetal(SkillBase):
         total_planar_area = sum(p["area"] for p in planes) or 1.0
         coverage = min(cover_area / total_planar_area, 1.0)
 
-        bends = _collect_bends(cyls, thickness)
-
-        # bend allowance / deduction per bend (need thickness)
-        t = thickness or 0.0
-        total_ba = 0.0
-        for b in bends:
-            arc_rad = b.pop("_arc_rad")
-            r = b["radius_mm"]
-            ba = arc_rad * (r + args.k_factor * t)
-            bd = 2.0 * (r + t) * math.tan(arc_rad / 2.0) - ba
-            b["bend_allowance_mm"] = round(ba, 4)
-            b["bend_deduction_mm"] = round(bd, 4)
-            total_ba += ba
-
-        # is_sheet_metal: a consistent thin thickness covering most planar area,
-        # thin relative to the part, and at least the look of a sheet (bends OR
-        # high coverage of a thin constant wall).
+        # is_sheet_metal FIRST: a consistent thin thickness covering most planar
+        # area, thin relative to the part. Bend/hem recovery is meaningful ONLY
+        # for a recognised sheet part — running it on (say) an extrusion would
+        # report its decorative edge fillets as fake bends/hems.
         thin = bool(thickness and bbox_ref and thickness < 0.34 * bbox_ref)
         is_sheet = bool(thin and coverage >= _SHEET_COVERAGE_MIN)
         confidence = round(coverage * (1.0 if thin else 0.4), 3) if thickness else 0.0
+
+        t = thickness or 0.0
+        total_ba = 0.0
+        bends: list[dict[str, Any]] = []
+        hems: list[dict[str, Any]] = []
+        rounded_edges = 0
+        if is_sheet:
+            bends = _collect_bends(cyls, thickness)
+            hems, rounded_edges = _collect_wraps(cyls, thickness, _edge_face_map(shape))
+
+            def _allow(feat):
+                nonlocal total_ba
+                arc_rad = feat.pop("_arc_rad")
+                r = feat["radius_mm"]
+                ba = arc_rad * (r + args.k_factor * t)
+                feat["bend_allowance_mm"] = round(ba, 4)
+                # bend deduction = 2(r+t)·tan(θ/2) − BA blows up as θ→180° (a hem):
+                # the outside-dimension method is undefined there, so report None.
+                if arc_rad / 2.0 >= math.radians(85.0):
+                    feat["bend_deduction_mm"] = None
+                else:
+                    feat["bend_deduction_mm"] = round(
+                        2.0 * (r + t) * math.tan(arc_rad / 2.0) - ba, 4)
+                total_ba += ba
+
+            for _feat in bends + hems:
+                _allow(_feat)
+
         if not is_sheet:
             assumptions.append(
                 f"NOT classified sheet-metal (thin={thin}, planar coverage="
@@ -287,7 +418,8 @@ class DetectSheetMetal(SkillBase):
         # One side of the sheet = half the thickness-pair face area (cover_area/2);
         # each bend adds its neutral-strip developed area = bend_allowance × line.
         # For an L-bracket this reproduces the hand calc (Σ flange flats + Σ BA).
-        axes = {tuple(b["axis_dir"]) for b in bends}
+        formed = bends + hems  # hems add a fold strip to the flat pattern too
+        axes = {tuple(b["axis_dir"]) for b in formed}
         single_axis = len(axes) <= 1
         flat_pattern: dict[str, Any] = {
             "k_factor": args.k_factor,
@@ -296,10 +428,10 @@ class DetectSheetMetal(SkillBase):
         }
         if thickness:
             bend_dev_area = sum(b["bend_allowance_mm"] * b["bend_line_length_mm"]
-                                for b in bends)
+                                for b in formed)
             blank_area = cover_area / 2.0 + bend_dev_area
-            if bends and single_axis:
-                blank_width = max(b["bend_line_length_mm"] for b in bends)
+            if formed and single_axis:
+                blank_width = max(b["bend_line_length_mm"] for b in formed)
             elif size:
                 blank_width = sorted(size)[1]   # median = smaller sheet-face dim
             else:
@@ -329,6 +461,9 @@ class DetectSheetMetal(SkillBase):
             "thickness_mm": round(thickness, 4) if thickness else None,
             "n_bends": len(bends),
             "bends": bends,
+            "n_hems": len(hems),
+            "hems": hems,
+            "rounded_edges": rounded_edges,
             "k_factor": args.k_factor,
             "total_bend_allowance_mm": round(total_ba, 4),
             "flat_pattern": flat_pattern,

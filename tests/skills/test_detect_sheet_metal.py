@@ -92,6 +92,58 @@ def test_solid_block_is_not_sheet_metal():
     assert r["n_bends"] == 0
 
 
+def _concentric_hem():
+    # base flange (z 0-2) + 180° fold (inner R2/outer R4, concentric at (4,4)) +
+    # return flange (z 6-8) doubled back — an OPEN hem with a real gap.
+    from build123d import (BuildLine, BuildSketch, Line, Plane, Polyline,
+                           RadiusArc, extrude, make_face)
+    with BuildSketch(Plane.XZ) as s:
+        with BuildLine():
+            Polyline((40, 0), (4, 0))
+            RadiusArc((4, 0), (4, 8), 4.0)        # outer fold, center (4,4)
+            Polyline((4, 8), (30, 8))
+            Line((30, 8), (30, 6))
+            Polyline((30, 6), (4, 6))
+            RadiusArc((4, 6), (4, 2), 2.0)        # inner fold, concentric (4,4)
+            Polyline((4, 2), (40, 2))
+            Line((40, 2), (40, 0))
+        make_face()
+    return extrude(s.sketch, amount=25)
+
+
+def _rounded_edge_plate():
+    # a plate whose +X edge is rounded over to a 180° semicircle (radius t/2)
+    from build123d import (BuildLine, BuildSketch, Line, Plane, Polyline,
+                           RadiusArc, extrude, make_face)
+    with BuildSketch(Plane.XZ) as s:
+        with BuildLine():
+            Polyline((0, 0), (48, 0))
+            RadiusArc((48, 0), (48, 2), 1.0)      # semicircle cap radius t/2
+            Polyline((48, 2), (0, 2))
+            Line((0, 2), (0, 0))
+        make_face()
+    return extrude(s.sketch, amount=30)
+
+
+def test_hem_recognised_as_a_fold_not_a_bend():
+    r = _sm(_concentric_hem())
+    assert r["is_sheet_metal"] is True
+    assert r["thickness_mm"] == pytest.approx(2.0, abs=0.05)
+    assert r["n_hems"] == 1 and r["rounded_edges"] == 0
+    h = r["hems"][0]
+    assert h["angle_deg"] == pytest.approx(180.0, abs=1.0)
+    assert h["bend_allowance_mm"] > 0
+    # a 180° fold has no meaningful bend deduction (tan(θ/2)→∞)
+    assert h["bend_deduction_mm"] is None
+
+
+def test_rounded_edge_is_not_counted_as_a_hem():
+    r = _sm(_rounded_edge_plate())
+    assert r["is_sheet_metal"] is True
+    assert r["rounded_edges"] == 1   # the one sheet's two sides, offset ≈ thickness
+    assert r["n_hems"] == 0          # NOT a hem (no return flange)
+
+
 def test_k_factor_raises_bend_allowance():
     soft = _sm(_l_bracket(), k_factor=0.33)["bends"][0]["bend_allowance_mm"]
     hard = _sm(_l_bracket(), k_factor=0.50)["bends"][0]["bend_allowance_mm"]
