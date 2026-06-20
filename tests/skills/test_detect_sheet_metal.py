@@ -183,3 +183,33 @@ def test_extrusion_not_sheet_and_no_fake_bends():
     r = _sm(body)
     assert r["is_sheet_metal"] is False
     assert r["n_bends"] == 0
+
+
+# ── corpus-backed regression guard: pin the STABLE classification of three
+#    representative real parts (not brittle exact counts) so a future detector
+#    change that regresses them is caught. Validated across the 161-file sweep.
+def _sm_file(rel):
+    from phone_designer.skills.create.import_step import ImportStep
+    return _sm(ImportStep().apply(None, {"path": rel}).body)
+
+
+_USB = Path("corpus/oem/kicad__USB_A_Molex_67643_Horizontal.step")
+_WASHER = Path("corpus/oem/revolved/freecad__washer_DIN125_M10.step")
+
+
+@pytest.mark.skipif(not _USB.exists(), reason="corpus USB-A absent")
+def test_corpus_formed_shield_is_confident_sheet():
+    # a stamped/formed USB-A shield IS sheet metal, with real bends → confident
+    r = _sm_file(str(_USB))
+    assert r["is_sheet_metal"] is True
+    assert r["flat_unformed"] is False
+    assert r["n_bends"] > 0
+
+
+@pytest.mark.skipif(not _WASHER.exists(), reason="corpus washer absent")
+def test_corpus_flat_washer_is_ambiguous_not_overconfident():
+    # a flat washer blank classifies as sheet but is honestly flagged ambiguous
+    r = _sm_file(str(_WASHER))
+    assert r["is_sheet_metal"] is True
+    assert r["flat_unformed"] is True
+    assert r["confidence"] <= 0.7   # flat → NOT reported at full confidence
