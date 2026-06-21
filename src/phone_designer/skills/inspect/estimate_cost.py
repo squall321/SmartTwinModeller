@@ -152,6 +152,44 @@ def _cut_perimeter_mm(sm: dict, R: dict, assumptions: list) -> float | None:
     return base * R["sm_perimeter_complexity_factor"]
 
 
+def _laser_brake_ops(perim, t, n_holes, n_forms, lot, R):
+    """Laser-cut + press-brake operation costs for the SAME part (used by the
+    laser route AND by the stamping route's crossover). Returns (ops_dict,
+    cut_s, pierce_s, speed, cycle_run_s)."""
+    spd = _laser_speed_mm_min(t or 1.0, R)
+    cut_s = perim / spd * 60.0
+    pierce_s = (n_holes + 1) * R["sm_pierce_s_per_hole"]
+    run = max(cut_s + pierce_s, R["sm_min_cut_s"])
+    setup = R["sm_laser_setup_min"] * 60.0 / max(lot, 1)
+    ops = {
+        "laser_cut": round((run + setup) / 3600.0 * R["sm_laser_machine_usd_per_hr"], 4),
+        "handling": round(R["sm_laser_handling_s_per_part"] / 3600.0
+                          * R["sm_laser_machine_usd_per_hr"], 4),
+    }
+    brun = 0.0
+    if n_forms > 0:
+        brun = n_forms * R["sm_brake_s_per_bend"] + R["sm_brake_handling_s_per_part"]
+        bsetup = R["sm_brake_setup_min"] * 60.0 / max(lot, 1)
+        ops["press_brake"] = round((brun + bsetup) / 3600.0
+                                   * R["sm_brake_machine_usd_per_hr"], 4)
+    cycle = run + R["sm_laser_handling_s_per_part"] + brun
+    return ops, cut_s, pierce_s, spd, cycle, brun
+
+
+def _stamp_tooling_and_crossover(material_usd, lb_ops, n_stations, R):
+    """Progressive-die tooling $ + the crossover lot where stamping (material +
+    machine, tooling amortised) beats laser+brake. The crossover is the HONEST
+    gate: below it, laser+brake is cheaper, so a stamping estimate is below-scale."""
+    tooling = (R["sm_stamp_tooling_base_usd"]
+               + n_stations * R["sm_stamp_tooling_usd_per_station"])
+    stamp_unit = (material_usd
+                  + R["sm_stamp_s_per_part"] / 3600.0 * R["sm_stamp_machine_usd_per_hr"])
+    lb_unit = material_usd + sum(lb_ops.values())
+    denom = lb_unit - stamp_unit           # per-part saving of stamping vs laser+brake
+    crossover = int(tooling / denom) if denom > 1e-6 else None
+    return tooling, crossover
+
+
 def _sheet_cost(sm: dict, proc: str, density: float, price_per_kg: float,
                 R: dict, lot: int, n_holes: int, volume_cm3: float,
                 reliability: str, assumptions: list):
@@ -194,29 +232,31 @@ def _sheet_cost(sm: dict, proc: str, density: float, price_per_kg: float,
     if perim is None:
         perim = 4.0 * math.sqrt(max(sheet_vol_cm3 * 1000.0 / max(t or 1.0, 0.05), 1.0))
 
-    def _brake(bd):
-        if n_forms > 0:
-            run = n_forms * R["sm_brake_s_per_bend"] + R["sm_brake_handling_s_per_part"]
-            setup = R["sm_brake_setup_min"] * 60.0 / max(lot, 1)
-            bd["press_brake"] = round((run + setup) / 3600.0
-                                      * R["sm_brake_machine_usd_per_hr"], 4)
-            return run
-        return 0.0
+    n_stations = max(2, n_bends + n_hems + math.ceil(n_holes / 2) + 2)
+    # laser+brake ops for THIS part — used directly by the laser route and by the
+    # stamping/turret routes only to compute the honest crossover lot.
+    lb_ops, cut_s, pierce_s, spd, lb_cycle, brun = _laser_brake_ops(
+        perim, t, n_holes, n_forms, lot, R)
+    tooling, crossover = _stamp_tooling_and_crossover(
+        material_usd, lb_ops, n_stations, R)
+    extra["stamping_crossover_lot"] = crossover
 
     if "stamp" in proc or "progressive" in proc:
-        n_stations = max(2, n_bends + n_hems + math.ceil(n_holes / 2) + 2)
-        tooling = (R["sm_stamp_tooling_base_usd"]
-                   + n_stations * R["sm_stamp_tooling_usd_per_station"])
         breakdown["stamp_machine"] = round(
             R["sm_stamp_s_per_part"] / 3600.0 * R["sm_stamp_machine_usd_per_hr"], 4)
         breakdown["tooling_amortised"] = round(tooling / max(lot, 1), 4)
         cycle_time_s = round(R["sm_stamp_s_per_part"], 1)
-        if lot < 1000 and reliability == "ok":
+        # HONEST gate: stamping is below-scale when the lot is below the crossover
+        # where it actually beats laser+brake (NOT a magic lot<1000 constant) —
+        # otherwise a $60k die at lot 1001 would falsely read 'ok'.
+        if crossover and lot < crossover and reliability == "ok":
             reliability = "below_scale"
         assumptions.append(
             f"stamping: {n_stations}-station die ${tooling:.0f}/{lot} "
             f"= ${breakdown['tooling_amortised']}; cycle {R['sm_stamp_s_per_part']}s "
-            "(forms all features in one stroke, independent of n_bends).")
+            "(forms all features in one stroke, independent of n_bends). "
+            + (f"Laser+brake is cheaper below lot ~{crossover}." if crossover else
+               "Crossover N/A."))
     elif "turret" in proc or "punch" in proc:
         hits = n_holes + math.ceil(perim / R["sm_nibble_pitch_mm"])
         run = max(hits * R["sm_turret_s_per_hit"], R["sm_min_cut_s"])
@@ -225,24 +265,16 @@ def _sheet_cost(sm: dict, proc: str, density: float, price_per_kg: float,
                                           * R["sm_turret_machine_usd_per_hr"], 4)
         breakdown["handling"] = round(R["sm_laser_handling_s_per_part"] / 3600.0
                                       * R["sm_turret_machine_usd_per_hr"], 4)
-        brun = _brake(breakdown)
+        if "press_brake" in lb_ops:
+            breakdown["press_brake"] = lb_ops["press_brake"]
         cycle_time_s = round(run + R["sm_laser_handling_s_per_part"] + brun, 1)
         assumptions.append(
             f"turret: {hits} hits ({n_holes} holes + nibbled outline @"
             f"{R['sm_nibble_pitch_mm']}mm) — nibbled edge is stair-stepped, prefer "
             "laser for cosmetic/irregular outlines.")
     else:  # laser + press-brake (default sheet route)
-        spd = _laser_speed_mm_min(t or 1.0, R)
-        cut_s = perim / spd * 60.0
-        pierce_s = (n_holes + 1) * R["sm_pierce_s_per_hole"]
-        run = max(cut_s + pierce_s, R["sm_min_cut_s"])
-        setup = R["sm_laser_setup_min"] * 60.0 / max(lot, 1)
-        breakdown["laser_cut"] = round((run + setup) / 3600.0
-                                       * R["sm_laser_machine_usd_per_hr"], 4)
-        breakdown["handling"] = round(R["sm_laser_handling_s_per_part"] / 3600.0
-                                      * R["sm_laser_machine_usd_per_hr"], 4)
-        brun = _brake(breakdown)
-        cycle_time_s = round(run + R["sm_laser_handling_s_per_part"] + brun, 1)
+        breakdown.update(lb_ops)
+        cycle_time_s = round(lb_cycle, 1)
         # brake-infeasible guard: many folds on a tiny body → a hand-brake route
         # is a costing fiction (the 12-bend USB-A shield); point to stamping.
         if (n_forms >= 6 and bbox and min(float(v) for v in bbox) < 15.0
@@ -252,16 +284,6 @@ def _sheet_cost(sm: dict, proc: str, density: float, price_per_kg: float,
                 f"brake-infeasible: {n_forms} forms on a <15mm body — a hand-brake "
                 "route is a costing fiction; use progressive-die/multi-slide "
                 "(see sheet_progressive_die).")
-        # stamping crossover (decision aid)
-        n_stations = max(2, n_bends + n_hems + math.ceil(n_holes / 2) + 2)
-        tooling = (R["sm_stamp_tooling_base_usd"]
-                   + n_stations * R["sm_stamp_tooling_usd_per_station"])
-        stamp_unit = (material_usd
-                      + R["sm_stamp_s_per_part"] / 3600.0 * R["sm_stamp_machine_usd_per_hr"])
-        lb_unit = sum(breakdown.values())
-        denom = lb_unit - stamp_unit
-        crossover = int(tooling / denom) if denom > 1e-6 else None
-        extra["stamping_crossover_lot"] = crossover
         assumptions.append(
             f"laser+brake: speed {round(spd)}mm/min@{t}mm, cut {round(cut_s, 1)}s + "
             f"{round(pierce_s, 1)}s pierce; {n_forms} forms×{R['sm_brake_s_per_bend']}s. "

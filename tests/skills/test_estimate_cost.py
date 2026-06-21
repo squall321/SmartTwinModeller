@@ -150,3 +150,9 @@ def test_corpus_formed_shield_laser_brake_vs_stamping():
     s100k = _e("sheet_progressive_die", 100_000)
     assert "tooling_amortised" in s100["breakdown_usd"]
     assert s100k["unit_cost_usd"] < s100["unit_cost_usd"]   # tooling amortises
+    # honest gate: stamping below the economic crossover (laser+brake cheaper) is
+    # below_scale, not falsely 'ok'; above it, ok — gated on the real crossover,
+    # NOT a magic lot<1000 constant
+    assert s100["reliability"] == "below_scale"
+    assert s100k["reliability"] == "ok"
+    assert s100["drivers"]["stamping_crossover_lot"] > 1000
