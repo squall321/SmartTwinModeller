@@ -38,6 +38,21 @@ from phone_designer.skills._spec import SkillBase, SkillResult
 
 _AXIS_PARALLEL = 0.999    # |dot| above this → parallel axes
 _AXIS_COLLINEAR_MM = 0.15  # perpendicular distance between axis lines for coaxial
+# A measured clearance below this is essentially ZERO — the CAD was modeled at
+# NOMINAL (a Ø10 pin in a Ø10 hole, touching), so the gap doesn't reflect a real
+# manufactured fit. Flagged rather than reported as a definite transition.
+_NOMINAL_TOL_MM = 0.005
+
+
+def _fit_classification(nominal: float, clr: float):
+    """(fit_type, nominal_coincident, implausible). A measured INTERFERENCE much
+    larger than a real press fit (a Ø3 shaft can't go in a Ø2.5 bore) means the
+    two coaxial cylinders are NOT actually a mating pair → implausible."""
+    if abs(clr) < _NOMINAL_TOL_MM:
+        return "nominal", True, False
+    if clr < 0 and abs(clr) > 0.05 * nominal + 0.02:
+        return "interference", False, True   # implausible: not a real fit
+    return ("clearance" if clr > 0 else "interference"), False, False
 
 
 def _occt_shape(body: Any):
@@ -250,6 +265,11 @@ class MeasureAssemblyFit(SkillBase):
             default=400, ge=2,
             description="Skip (honest sentinel) above this solid count.",
         )
+        max_fits: int = Field(
+            default=64, ge=1,
+            description="Cap the reported fits (a big assembly has many coaxial "
+                        "pairs); the count + type tally are always full.",
+        )
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
         from phone_designer.skills.assembly._compound import iter_solid_components
@@ -286,6 +306,7 @@ class MeasureAssemblyFit(SkillBase):
                 (bores if c["kind"] == "bore" else shafts).append(c)
 
         fits = []
+        seen: set = set()   # dedup: a solid-pair + nominal + axis is ONE fit
         used_shaft = [False] * len(shafts)
         for b in bores:
             best = None
@@ -305,7 +326,15 @@ class MeasureAssemblyFit(SkillBase):
             used_shaft[j] = True
             hole_mm = round(2.0 * b["radius"], 4)
             shaft_mm = round(2.0 * s["radius"], 4)
-            mf = _classify_measured_fit(hole_mm, shaft_mm)
+            clr = round(hole_mm - shaft_mm, 4)
+            fit_type, nominal_co, implausible = _fit_classification(hole_mm, clr)
+            if implausible:
+                continue  # interference far too large → not a real mating pair
+            key = (min(b["solid"], s["solid"]), max(b["solid"], s["solid"]),
+                   round(hole_mm, 1), tuple(round(v, 2) for v in b["axis"]))
+            if key in seen:
+                continue
+            seen.add(key)
             entry = {
                 "geometry": "cylindrical",
                 "hole_solid": b["solid"],
@@ -314,17 +343,13 @@ class MeasureAssemblyFit(SkillBase):
                 "axis_origin": [round(v, 4) for v in b["origin"]],
                 "hole_mm": hole_mm,
                 "shaft_mm": shaft_mm,
-                "actual_clearance_mm": round(hole_mm - shaft_mm, 4),
+                "actual_clearance_mm": clr,
+                "fit_type": fit_type,
+                "nominal_coincident": nominal_co,
             }
+            mf = None if nominal_co else _classify_measured_fit(hole_mm, shaft_mm)
             if mf is not None:
-                entry["fit_type"] = mf["fit_type"]
                 entry["nearest_standard_fit"] = mf["nearest_standard_fit"]
-            else:
-                entry["fit_type"] = ("clearance" if hole_mm > shaft_mm
-                                     else "interference" if hole_mm < shaft_mm
-                                     else "transition")
-                assumptions.append(
-                    f"Ø{hole_mm} outside ISO table — fit_type only, no standard fit.")
             fits.append(entry)
 
         # ── prismatic (key / keyway) fits: a SLOT in one solid + a coplanar KEY
@@ -360,7 +385,15 @@ class MeasureAssemblyFit(SkillBase):
             used_key[k] = True
             wf = round(sl["width"], 4)
             wm = round(ky["width"], 4)
-            mf = _classify_measured_fit(wf, wm)
+            clr = round(wf - wm, 4)
+            fit_type, nominal_co, implausible = _fit_classification(wf, clr)
+            if implausible:
+                continue
+            key = (min(sl["solid"], ky["solid"]), max(sl["solid"], ky["solid"]),
+                   round(wf, 1), tuple(round(v, 2) for v in sl["normal"]))
+            if key in seen:
+                continue
+            seen.add(key)
             entry = {
                 "geometry": "prismatic",
                 "slot_solid": sl["solid"],
@@ -368,20 +401,32 @@ class MeasureAssemblyFit(SkillBase):
                 "axis_dir": [round(v, 4) for v in sl["normal"]],
                 "width_mm": wf,
                 "key_width_mm": wm,
-                "actual_clearance_mm": round(wf - wm, 4),
+                "actual_clearance_mm": clr,
+                "fit_type": fit_type,
+                "nominal_coincident": nominal_co,
             }
+            mf = None if nominal_co else _classify_measured_fit(wf, wm)
             if mf is not None:
-                entry["fit_type"] = mf["fit_type"]
                 entry["nearest_standard_fit"] = mf["nearest_standard_fit"]
-            else:
-                entry["fit_type"] = ("clearance" if wf > wm else "interference"
-                                     if wf < wm else "transition")
             fits.append(entry)
 
+        # fit_type tally (always full) + honest note about nominal-modeled CAD
+        type_counts: dict[str, int] = {}
+        for f in fits:
+            type_counts[f["fit_type"]] = type_counts.get(f["fit_type"], 0) + 1
+        if type_counts.get("nominal"):
+            assumptions.append(
+                "many fits are NOMINAL-coincident (clr≈0): the CAD is modeled at "
+                "nominal, so the measured gap is ~0 and does NOT reflect the "
+                "manufactured fit — the real fit class depends on tolerances not "
+                "present in the geometry.")
+        truncated = len(fits) > args.max_fits
         out = {
             "n_solids": len(solids),
             "n_fits": len(fits),
-            "fits": fits,
+            "fit_type_counts": type_counts,
+            "fits": fits[:args.max_fits],
+            "truncated": truncated,
             "assumptions": assumptions,
             "grade": "measured",
         }

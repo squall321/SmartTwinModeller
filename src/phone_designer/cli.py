@@ -658,10 +658,12 @@ def analyze(
             f"match={rec.get('match_ratio')} hausdorff_mm={rec.get('hausdorff_mm')}")
     ce = pa.get("cost_estimate")
     if ce:
+        rel = ce.get("reliability")
         typer.echo(
             f"    cost[{ce.get('process')}/{ce.get('material')}]: "
             f"${ce.get('unit_cost_usd')}/unit  cycle={ce.get('cycle_time_s')}s "
-            f"(grade={ce.get('grade')})")
+            f"(grade={ce.get('grade')}"
+            + (f", {rel}" if rel and rel != "ok" else "") + ")")
     fa = pa.get("fit_analysis")
     if fa:
         typer.echo(
@@ -689,9 +691,11 @@ def analyze(
             typer.echo(f"    sheet-metal: no (thickness={sm.get('thickness_mm')})")
     af = pa.get("assembly_fit")
     if af:
+        tc = af.get("fit_type_counts") or {}
         typer.echo(
             f"    assembly-fit: {af.get('n_solids')} solids → "
-            f"{af.get('n_fits')} fit(s) (grade={af.get('grade')})")
+            f"{af.get('n_fits')} fit(s) {tc} (grade={af.get('grade')}"
+            + ("; truncated" if af.get("truncated") else "") + ")")
         for f in (af.get("fits") or [])[:6]:
             n = f.get("nearest_standard_fit") or {}
             if f.get("geometry") == "prismatic":

@@ -142,6 +142,26 @@ class EstimateCost(SkillBase):
             volume_cm3 = float(mp.get("volume_mm3") or 0.0) / 1000.0
         except Exception as exc:  # noqa: BLE001
             assumptions.append(f"mass_properties failed ({type(exc).__name__}); volume=0")
+        # ── input-scale validation: the cost model only applies to a single
+        # machinable/mouldable part of plausible size. Flag (don't silently emit
+        # a confident number for) a degenerate, micro, or assembly-scale input.
+        reliability = "ok"
+        if volume_cm3 <= 0.0:
+            reliability = "degenerate_geometry"
+            assumptions.append(
+                f"non-positive volume ({round(volume_cm3,4)}cm³) — open/inverted "
+                "shell or non-solid; cost is UNRELIABLE.")
+            volume_cm3 = abs(volume_cm3)   # keep the math finite for the breakdown
+        elif volume_cm3 < 0.01:
+            reliability = "below_scale"
+            assumptions.append(
+                f"tiny part ({round(volume_cm3,5)}cm³) — below the scale of the "
+                "modelled processes (CNC/IM); cost is indicative only.")
+        elif volume_cm3 > 1.0e6:
+            reliability = "above_scale"
+            assumptions.append(
+                f"very large volume ({round(volume_cm3,0)}cm³, >1m³) — likely an "
+                "ASSEMBLY, not a single machined part; cost is UNRELIABLE.")
         mass_g = volume_cm3 * density
 
         n_holes = n_pockets = n_bosses = 0
@@ -217,6 +237,7 @@ class EstimateCost(SkillBase):
             "process": proc,
             "material": mat_label,
             "lot_size": args.lot_size,
+            "reliability": reliability,
             "unit_cost_usd": unit_cost,
             "cycle_time_s": cycle_time_s,
             "breakdown_usd": breakdown,

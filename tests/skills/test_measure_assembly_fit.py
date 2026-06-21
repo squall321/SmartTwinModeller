@@ -7,6 +7,8 @@ the real gap sign, and the nearest standard ISO fit is named. result_grade is
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from phone_designer.skills.inspect.measure_assembly_fit import MeasureAssemblyFit
@@ -43,9 +45,23 @@ def test_interference_fit_is_recognised():
     assert f["fit_type"] == "interference"
 
 
-def test_transition_at_exact_nominal():
+def test_exact_nominal_is_flagged_coincident_not_transition():
+    # CAD modeled at nominal (Ø10 pin in Ø10 hole) → clr 0 is NOMINAL-coincident,
+    # honestly flagged, NOT reported as a definite transition fit
     f = _fit(10.0)["fits"][0]
-    assert f["fit_type"] == "transition"
+    assert f["fit_type"] == "nominal"
+    assert f["nominal_coincident"] is True
+    assert "nearest_standard_fit" not in f  # no standard fit claimed at clr≈0
+
+
+def test_implausible_interference_is_rejected():
+    # a Ø11 shaft cannot physically go into a Ø10 bore (~10% interference) — the
+    # two coaxial cylinders are NOT a real mating pair
+    from build123d import Box, Compound, Cylinder
+    asm = Compound(children=[Box(30, 30, 20) - Cylinder(5.0, 21),
+                             Cylinder(5.5, 20)])
+    r = MeasureAssemblyFit().apply(asm, {}).extras["assembly_fit"]
+    assert r["n_fits"] == 0
 
 
 def test_unrelated_cylinder_not_matched_as_fit():
@@ -59,6 +75,23 @@ def test_single_solid_yields_no_fit():
     one = Box(30, 30, 20) - Cylinder(5.0, 21)  # a single solid, not an assembly
     r = MeasureAssemblyFit().apply(one, {}).extras["assembly_fit"]
     assert r["n_solids"] == 1 and r["n_fits"] == 0
+
+
+_BIG_ASSEMBLY = Path("corpus/oem/pythonocc__as1_pe_203.step")
+
+
+@pytest.mark.skipif(not _BIG_ASSEMBLY.exists(), reason="corpus assembly absent")
+def test_corpus_assembly_fits_deduped_and_nominal():
+    # a real 18-solid assembly: fits are NOMINAL-coincident (CAD modeled at
+    # nominal) and DEDUPED — no two cylindrical fits share solids+Ø+axis
+    from phone_designer.skills.create.import_step import ImportStep
+    body = ImportStep().apply(None, {"path": str(_BIG_ASSEMBLY)}).body
+    r = MeasureAssemblyFit().apply(body, {}).extras["assembly_fit"]
+    assert r["n_solids"] >= 2 and r["n_fits"] > 0
+    assert all(f.get("nominal_coincident") for f in r["fits"])  # nominal-modeled
+    cyl = [(f["hole_solid"], f["shaft_solid"], f["hole_mm"], tuple(f["axis_dir"]))
+           for f in r["fits"] if f["geometry"] == "cylindrical"]
+    assert len(cyl) == len(set(cyl))   # deduped (was listing each pair twice)
 
 
 def _keyway(key_w, slot_w=10.0):

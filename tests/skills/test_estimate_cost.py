@@ -7,6 +7,10 @@ moulding unit cost). result_grade='estimate' — a model, not a quote.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from phone_designer.skills.create.box import Box
 from phone_designer.skills.inspect.estimate_cost import EstimateCost
 from phone_designer.skills.modify_pocket.hole import Hole
@@ -60,3 +64,41 @@ def test_rate_override_changes_the_estimate():
     fast = _est(b, process="cnc_3axis", material="aluminum",
                 rates={"cnc_machine_usd_per_hr": 100.0})
     assert fast["breakdown_usd"]["machine"] > base["breakdown_usd"]["machine"]
+
+
+def test_normal_part_is_reliable():
+    e = _est(_al_housing(), process="cnc_3axis", material="aluminum")
+    assert e["reliability"] == "ok"
+
+
+def test_micro_part_flagged_below_scale():
+    # a 2x2x2mm part (8mm³ = 0.008cm³) is below the CNC/IM model's scale
+    micro = Box().apply(None, {"length_mm": 2.0, "width_mm": 2.0,
+                               "height_mm": 2.0}).body
+    e = _est(micro, process="cnc_3axis", material="aluminum")
+    assert e["reliability"] == "below_scale"
+    assert any("below the scale" in a for a in e["assumptions"])
+
+
+# ── corpus-backed regression guards (validated across the 161-file sweep): the
+#    cost model must FLAG inputs outside its validity, not emit confident garbage.
+def _cost_file(rel):
+    from phone_designer.skills.create.import_step import ImportStep
+    return EstimateCost().apply(
+        ImportStep().apply(None, {"path": rel}).body, {}).extras["cost_estimate"]
+
+
+_DEGENERATE = Path("corpus/oem/pythonocc__splinecage.step")
+_BIG_ASSEMBLY = Path("corpus/oem/pythonocc__as1_pe_203.step")
+
+
+@pytest.mark.skipif(not _DEGENERATE.exists(), reason="corpus splinecage absent")
+def test_corpus_degenerate_geometry_flagged():
+    # splinecage measures a NEGATIVE volume (open/inverted shell) → unreliable
+    assert _cost_file(str(_DEGENERATE))["reliability"] == "degenerate_geometry"
+
+
+@pytest.mark.skipif(not _BIG_ASSEMBLY.exists(), reason="corpus assembly absent")
+def test_corpus_assembly_scale_flagged():
+    # a multi-m³ assembly is not a single machined part → flagged, not a $3M quote
+    assert _cost_file(str(_BIG_ASSEMBLY))["reliability"] == "above_scale"
