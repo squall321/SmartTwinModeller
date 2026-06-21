@@ -166,6 +166,23 @@ def test_analyze_part_sheet_metal_stage_runs():
         assert pa["_stages"]["sheet_metal"]["ok"]
 
 
+def test_analyze_part_manufacturing_html_section():
+    # the manufacturing analyses render in the HTML report when opted-in, and the
+    # default report (no flags) stays free of the section (golden preserved)
+    with tempfile.TemporaryDirectory() as d:
+        path = _synth_step(Path(d))
+        base = AnalyzePart().apply(None, {
+            "part_path": path, "include_html": True}
+        ).extras["part_analysis"]["report_html"]
+        assert "Manufacturing analysis" not in base   # not injected when OFF
+        mfg = AnalyzePart().apply(None, {
+            "part_path": path, "include_html": True,
+            "estimate_cost": True, "recognize_fits": True}
+        ).extras["part_analysis"]["report_html"]
+        assert "Manufacturing analysis" in mfg
+        assert "Cost estimate" in mfg and "Fits / tolerances" in mfg
+
+
 def test_analyze_part_measure_fits_stage_runs():
     # the synth is a single solid (no assembly), but the stage must run cleanly
     with tempfile.TemporaryDirectory() as d:

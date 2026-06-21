@@ -369,6 +369,15 @@ class AnalyzePart(SkillBase):
                     in_body, {}).extras.get("assembly_fit")
             assembly_fit = _safe("assembly_fit", stages, _afit)
 
+        # Surface the opt-in manufacturing analyses in the HTML deliverable (they
+        # were otherwise structured-only / headless). Additive + behind their
+        # flags, so the default report HTML golden stays byte-identical.
+        if args.include_html and report_html and any(
+                [cost_estimate, fit_analysis, sheet_metal, assembly_fit]):
+            report_html = self._inject_manufacturing_html(
+                report_html, cost=cost_estimate, fits=fit_analysis,
+                sheet=sheet_metal, asmfit=assembly_fit)
+
         analysis = {
             "part_id": part_id,
             "bbox_mm": _bbox_mm(shape),
@@ -559,6 +568,84 @@ class AnalyzePart(SkillBase):
             "Reconstruction quality is judged by geometry_deviation Hausdorff "
             "(mm), not match_ratio.</p></section>"
         )
+        idx = html.lower().rfind("</body>")
+        if idx != -1:
+            return html[:idx] + block + html[idx:]
+        return html + block
+
+    @staticmethod
+    def _inject_manufacturing_html(html, cost=None, fits=None, sheet=None,
+                                   asmfit=None) -> str:
+        """Append a 'Manufacturing analysis' section (cost / tolerances / sheet
+        metal / assembly fits) before </body>. Additive — only present analyses
+        render, and only when their opt-in flag was set, so the default report
+        HTML golden stays byte-identical. Honest grades/reliability are shown."""
+        from html import escape
+
+        def _row(label, value, bold=False, muted=False):
+            v = f"<b>{value}</b>" if bold else value
+            col = "#cf222e" if muted else "#24292f"
+            return (f"<tr><td style=\"padding:2px 14px 2px 0;color:#656d76\">"
+                    f"{escape(str(label))}</td><td style=\"color:{col}\">{v}"
+                    f"</td></tr>")
+
+        parts: list[tuple[str, str]] = []
+        if isinstance(cost, dict):
+            rel = cost.get("reliability", "ok")
+            rows = (_row("process / material",
+                         escape(f"{cost.get('process')} / {cost.get('material')}"))
+                    + _row("unit cost", f"${cost.get('unit_cost_usd')}", bold=True)
+                    + _row("cycle time", f"{cost.get('cycle_time_s')} s")
+                    + _row("reliability", escape(str(rel)), muted=(rel != "ok")))
+            parts.append(("Cost estimate (grade: estimate)", rows))
+        if isinstance(fits, dict) and fits.get("features"):
+            frows = ""
+            for f in fits["features"][:8]:
+                rf = f.get("recommended_fit") or {}
+                frows += _row(
+                    f"Ø{f.get('nominal_mm')} {f.get('kind')}",
+                    escape(f"{rf.get('designation', '—')} {rf.get('fit_type', '')} "
+                           f"clr {rf.get('clearance_mm', '')}"))
+            parts.append((f"Fits / tolerances — role "
+                          f"{escape(str(fits.get('role')))} (ISO 286, "
+                          f"grade: estimate)", frows))
+        if isinstance(sheet, dict) and sheet.get("is_sheet_metal"):
+            fp = sheet.get("flat_pattern") or {}
+            dev = fp.get("developed_length_mm")
+            srows = (_row("thickness", f"{sheet.get('thickness_mm')} mm", bold=True)
+                     + _row("bends / hems",
+                            f"{sheet.get('n_bends')} / {sheet.get('n_hems')}")
+                     + _row("developed length", f"{dev} mm" if dev else "—")
+                     + _row("confidence",
+                            f"{sheet.get('confidence')}"
+                            + (" (flat / ambiguous)" if sheet.get("flat_unformed")
+                               else ""),
+                            muted=bool(sheet.get("flat_unformed"))))
+            parts.append(("Sheet metal (grade: estimate)", srows))
+        if isinstance(asmfit, dict) and asmfit.get("n_fits"):
+            arows = (_row("solids / fits",
+                          f"{asmfit.get('n_solids')} / {asmfit.get('n_fits')}")
+                     + _row("fit types",
+                            escape(str(asmfit.get("fit_type_counts") or {}))))
+            parts.append(("Assembly fits (grade: measured)", arows))
+        if not parts:
+            return html
+
+        body = ""
+        for title, rows in parts:
+            body += (f"<h3 style=\"font-size:13px;margin:10px 0 4px\">"
+                     f"{escape(title)}</h3>"
+                     f"<table style=\"border-collapse:collapse;font-size:13px\">"
+                     f"{rows}</table>")
+        block = (
+            "<section style=\"margin:18px 0;padding:12px 14px;border:1px solid "
+            "#d0d7de;border-radius:8px\">"
+            "<h2 style=\"font-size:15px;margin:0 0 8px\">Manufacturing analysis</h2>"
+            + body +
+            "<p style=\"font-size:11px;color:#8c959f;margin:8px 0 0\">"
+            "Cost / tolerances / sheet-metal are heuristic ESTIMATES; assembly "
+            "fits are MEASURED. Grades and reliability flags are shown above."
+            "</p></section>")
         idx = html.lower().rfind("</body>")
         if idx != -1:
             return html[:idx] + block + html[idx:]
