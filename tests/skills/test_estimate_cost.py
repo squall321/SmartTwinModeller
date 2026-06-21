@@ -102,3 +102,51 @@ def test_corpus_degenerate_geometry_flagged():
 def test_corpus_assembly_scale_flagged():
     # a multi-m³ assembly is not a single machined part → flagged, not a $3M quote
     assert _cost_file(str(_BIG_ASSEMBLY))["reliability"] == "above_scale"
+
+
+# ── sheet-metal processes (laser+brake / turret / progressive-die stamping) ──
+def _flat_sheet():
+    return Box().apply(None, {"length_mm": 60.0, "width_mm": 40.0,
+                              "height_mm": 2.0}).body
+
+
+def test_sheet_laser_brake_flat_blank_has_no_brake():
+    e = _est(_flat_sheet(), process="sheet_laser_brake", material="steel")
+    assert "laser_cut" in e["breakdown_usd"] and "handling" in e["breakdown_usd"]
+    assert "press_brake" not in e["breakdown_usd"]   # flat blank → no forming
+    assert e["reliability"] == "ok"
+    assert e["grade"] == "estimate"
+    assert "stamping_crossover_lot" in e["drivers"]   # route decision aid
+
+
+def test_sheet_process_on_non_sheet_is_flagged():
+    # a thick housing is not sheet metal — the sheet estimate must say so
+    e = _est(_al_housing(), process="sheet_laser_brake", material="aluminum")
+    assert e["reliability"] == "not_sheet_metal"
+    assert any("not recognised as sheet" in a.lower()
+               or "not sheet" in a.lower() for a in e["assumptions"])
+
+
+_USB = Path("corpus/oem/kicad__USB_A_Molex_67643_Horizontal.step")
+
+
+@pytest.mark.skipif(not _USB.exists(), reason="corpus USB-A absent")
+def test_corpus_formed_shield_laser_brake_vs_stamping():
+    # a 12-bend micro shield: laser+brake is flagged infeasible (hand-brake is a
+    # fiction at that scale); stamping tooling amortises away with volume
+    from phone_designer.skills.create.import_step import ImportStep
+    body = ImportStep().apply(None, {"path": str(_USB)}).body
+
+    def _e(proc, lot):
+        return EstimateCost().apply(body, {
+            "process": proc, "material": "stainless", "lot_size": lot}
+        ).extras["cost_estimate"]
+
+    lb = _e("sheet_laser_brake", 1000)
+    assert "press_brake" in lb["breakdown_usd"]      # it IS formed
+    assert lb["reliability"] == "brake_infeasible_forming"
+
+    s100 = _e("sheet_progressive_die", 100)
+    s100k = _e("sheet_progressive_die", 100_000)
+    assert "tooling_amortised" in s100["breakdown_usd"]
+    assert s100k["unit_cost_usd"] < s100["unit_cost_usd"]   # tooling amortises
