@@ -111,6 +111,7 @@ import phone_designer.skills.inspect.detect_sheet_metal  # noqa: F401
 import phone_designer.skills.inspect.estimate_cost  # noqa: F401
 import phone_designer.skills.inspect.mass_properties  # noqa: F401
 import phone_designer.skills.inspect.measure_assembly_fit  # noqa: F401
+import phone_designer.skills.inspect.recommend_process  # noqa: F401
 import phone_designer.skills.inspect.mesh_quality  # noqa: F401
 import phone_designer.skills.inspect.recognize_fits  # noqa: F401
 import phone_designer.skills.inspect.section_multi_plane  # noqa: F401
