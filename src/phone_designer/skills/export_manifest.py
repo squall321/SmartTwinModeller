@@ -18,6 +18,7 @@ import phone_designer.skills.compose.tag_face  # noqa: F401
 import phone_designer.skills.compose.union  # noqa: F401
 import phone_designer.skills.create.box  # noqa: F401
 import phone_designer.skills.create.extrude_profile_world  # noqa: F401
+import phone_designer.skills.create.generate_from_spec  # noqa: F401
 import phone_designer.skills.create.place_freeform_solid  # noqa: F401
 import phone_designer.skills.create.place_generating_op_solid  # noqa: F401
 import phone_designer.skills.create.disc_with_dome  # noqa: F401
