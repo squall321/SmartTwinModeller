@@ -20,7 +20,8 @@ def test_server_and_tools_registered():
     tools = asyncio.new_event_loop().run_until_complete(mcp_server.mcp.list_tools())
     names = {t.name for t in tools}
     assert {"cad_list_skills", "cad_get_skill_schema", "cad_generate",
-            "cad_analyze", "cad_estimate_cost", "cad_recommend_process"} <= names
+            "cad_analyze", "cad_estimate_cost", "cad_recommend_process",
+            "cad_export"} <= names
 
 
 def _bracket_spec():
@@ -62,3 +63,26 @@ def test_bad_spec_is_isolated_not_crashed():
 def test_get_skill_schema_unknown_is_structured_error():
     r = mcp_server.cad_get_skill_schema("definitely_not_a_skill")
     assert r["ok"] is False and "unknown skill" in r["error"]
+
+
+def test_body_id_session_cache_and_export():
+    # cad_generate mints a body_id; later tools take it (no path re-passing) and
+    # cad_export re-exports the cached body without regenerating
+    g = mcp_server.cad_generate(
+        [{"op": "box", "args": {"length_mm": 50, "width_mm": 30,
+                                "height_mm": 8}}], name="cube", formats=["step"])
+    bid = g["body_id"]
+    assert bid and g["resource_uris"]
+    c = mcp_server.cad_estimate_cost(body_id=bid, process="cnc_3axis")
+    assert c["ok"] and c["unit_cost_usd"] > 0
+    e = mcp_server.cad_export(body_id=bid, formats=["stl"])
+    assert e["ok"] and "stl" in e["files"] and e["resource_uris"]
+
+
+def test_resolve_guards_one_of_body_id_or_path():
+    # exactly-one-of contract + unknown body_id are structured errors, not crashes
+    assert mcp_server.cad_estimate_cost()["ok"] is False                 # neither
+    assert mcp_server.cad_estimate_cost(part_path="x.step",
+                                        body_id="body_1")["ok"] is False  # both
+    r = mcp_server.cad_estimate_cost(body_id="body_does_not_exist")
+    assert r["ok"] is False and "unknown body_id" in r["error"]

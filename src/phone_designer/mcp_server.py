@@ -8,12 +8,14 @@ args model), composes a build spec, and calls ``cad_generate`` — no custom NL
 parser needed.
 
 Tools (all ``cad_*``-namespaced): cad_list_skills, cad_get_skill_schema,
-cad_generate, cad_analyze, cad_estimate_cost, cad_recommend_process.
+cad_generate, cad_analyze, cad_estimate_cost, cad_recommend_process, cad_export.
 
-STATE / ARTIFACT MODEL: tool calls are stateless, so geometry flows as FILES.
+STATE / ARTIFACT MODEL: geometry flows as FILES + a session BODY CACHE.
 ``cad_generate`` writes the result to a STEP (+ optional STL / editable .py) in a
-workspace dir and returns the paths; the analysis tools take a ``step_path``. The
-workspace defaults to ``$PHONE_DESIGNER_MCP_WORKSPACE`` or a temp dir.
+workspace dir, caches the live body, and returns the file paths + ``resource_uris``
+(file:// URIs) + a ``body_id``. The analysis/export tools accept EXACTLY ONE of
+``body_id`` (resolved to the cached body / STEP — no re-import) or ``part_path``.
+The workspace defaults to ``$PHONE_DESIGNER_MCP_WORKSPACE`` or a temp dir.
 
 Every cost / process recommendation is grade='estimate' (a model, not a quote) and
 says so. Tools never crash the server — they return a structured ``{ok: False,
@@ -42,6 +44,34 @@ def _safe_name(name: str) -> str:
     """Sanitise an artifact basename — no path traversal / separators."""
     base = re.sub(r"[^A-Za-z0-9_.-]", "_", (name or "part").strip()) or "part"
     return base[:64]
+
+
+# ── session body cache: cad_generate mints a body_id; later tools can pass the
+# body_id (resolved to its cached body + STEP) instead of re-passing a file path.
+# The server is one stdio process, so the cache lives for the session.
+_BODIES: dict[str, dict] = {}
+_BODY_SEQ = [0]
+
+
+def _mint_body_id() -> str:
+    _BODY_SEQ[0] += 1
+    return f"body_{_BODY_SEQ[0]}"
+
+
+def _uri(path: str) -> str:
+    return "file:///" + str(path).replace("\\", "/").lstrip("/")
+
+
+def _resolve(part_path: str | None, body_id: str | None):
+    """Return (body, step_path) from EXACTLY ONE of body_id | part_path."""
+    if bool(part_path) == bool(body_id):
+        raise ValueError("provide exactly one of part_path | body_id")
+    if body_id:
+        rec = _BODIES.get(body_id)
+        if rec is None:
+            raise ValueError(f"unknown body_id '{body_id}' (generate one first)")
+        return rec["body"], rec.get("step_path")
+    return _import_step(part_path), part_path
 
 
 def _err(exc: Exception) -> dict:
@@ -162,28 +192,39 @@ def cad_generate(spec: list[dict], name: str = "part",
             status = "ok"
         else:
             status = "partial"
+        body_id = None
+        if body is not None and gen.get("is_solid"):
+            body_id = _mint_body_id()
+            _BODIES[body_id] = {"body": body, "step_path": files.get("step"),
+                                "name": name}
         return {"ok": gen.get("ok", False), "status": status,
-                "is_solid": gen.get("is_solid"),
+                "body_id": body_id, "is_solid": gen.get("is_solid"),
                 "volume_mm3": gen.get("volume_mm3"), "bbox_mm": gen.get("bbox_mm"),
                 "n_steps": gen.get("n_steps"), "n_ok": gen.get("n_ok"),
                 "steps": gen.get("steps"), "spec_errors": gen.get("spec_errors"),
-                "files": files}
+                "files": files,
+                "resource_uris": [_uri(p) for p in files.values()]}
     except Exception as exc:  # noqa: BLE001
         return _err(exc)
 
 
-# ── analysis: run the quality/manufacturing report on a STEP ──────────────────
+# ── analysis: each tool accepts EXACTLY ONE of body_id | part_path ────────────
 @mcp.tool()
-def cad_analyze(step_path: str, processes: list[str] | None = None,
-                 estimate_cost: bool = False, recognize_fits: bool = False,
-                 sheet_metal: bool = False, measure_fits: bool = False) -> dict:
-    """Run the single-part analysis on a STEP file: quality report (topology /
-    wall / draft / blends / DFM) + optional cost, ISO-286 fits, sheet-metal bend
-    table, assembly fits. Writes the HTML report to the workspace; returns the
-    structured analysis. All manufacturing numbers are grade='estimate'."""
+def cad_analyze(part_path: str = "", body_id: str = "",
+                processes: list[str] | None = None,
+                estimate_cost: bool = False, recognize_fits: bool = False,
+                sheet_metal: bool = False, measure_fits: bool = False) -> dict:
+    """Run the single-part analysis on a cad_generate body_id OR a STEP part_path
+    (exactly one): quality report (topology / wall / draft / blends / DFM) +
+    optional cost, ISO-286 fits, sheet-metal bend table, assembly fits. Writes the
+    HTML report to the workspace; returns the structured analysis. All
+    manufacturing numbers are grade='estimate'."""
     try:
         _ensure_skills()
         from phone_designer.skills.reverse_engineer.analyze_part import AnalyzePart
+        _, step_path = _resolve(part_path or None, body_id or None)
+        if not step_path:
+            return {"ok": False, "error": "no STEP file for this body_id"}
         out = Path(step_path).with_suffix(".report.html")
         pa = AnalyzePart().apply(None, {
             "part_path": step_path,
@@ -195,7 +236,9 @@ def cad_analyze(step_path: str, processes: list[str] | None = None,
         html = pa.pop("report_html", None)
         if html:
             out.write_text(html, encoding="utf-8")
-        return {"ok": True, "report_html_path": str(out) if html else None,
+        return {"ok": True,
+                "report_html_path": str(out) if html else None,
+                "resource_uris": [_uri(str(out))] if html else [],
                 "part_id": pa.get("part_id"), "bbox_mm": pa.get("bbox_mm"),
                 "feature_counts": (pa.get("feature_catalog") or {}).get("counts"),
                 "cost_estimate": pa.get("cost_estimate"),
@@ -208,15 +251,18 @@ def cad_analyze(step_path: str, processes: list[str] | None = None,
 
 
 @mcp.tool()
-def cad_estimate_cost(step_path: str, process: str = "cnc_3axis",
-                  material: str = "aluminum", lot_size: int = 1000) -> dict:
-    """Estimate unit cost + cycle time for a STEP part in a process (cnc_3axis |
-    cnc_5axis | injection_mold_pa | sheet_laser_brake | sheet_progressive_die | …).
-    grade='estimate' — a transparent heuristic, not a quote."""
+def cad_estimate_cost(part_path: str = "", body_id: str = "",
+                      process: str = "cnc_3axis", material: str = "aluminum",
+                      lot_size: int = 1000) -> dict:
+    """Estimate unit cost + cycle time for a cad_generate body_id OR a STEP
+    part_path (exactly one) in a process (cnc_3axis | cnc_5axis | injection_mold_pa
+    | sheet_laser_brake | sheet_progressive_die | …). grade='estimate' — a
+    transparent heuristic, not a quote."""
     try:
         _ensure_skills()
         from phone_designer.skills.inspect.estimate_cost import EstimateCost
-        ce = EstimateCost().apply(_import_step(step_path), {
+        body, _ = _resolve(part_path or None, body_id or None)
+        ce = EstimateCost().apply(body, {
             "process": process, "material": material, "lot_size": lot_size,
         }).extras["cost_estimate"]
         return {"ok": True, **ce}
@@ -225,16 +271,17 @@ def cad_estimate_cost(step_path: str, process: str = "cnc_3axis",
 
 
 @mcp.tool()
-def cad_recommend_process(step_path: str, material: str = "aluminum",
-                      lot_size: int = 1000) -> dict:
-    """Recommend the cheapest VIABLE manufacturing process for a STEP part at a
-    given lot + material, with cost-vs-volume crossovers (synthesises cost + DFM +
-    sheet detection). NOTE: slower than the other tools (multiple cost models).
-    grade='estimate'."""
+def cad_recommend_process(part_path: str = "", body_id: str = "",
+                          material: str = "aluminum", lot_size: int = 1000) -> dict:
+    """Recommend the cheapest VIABLE manufacturing process for a cad_generate
+    body_id OR a STEP part_path (exactly one) at a given lot + material, with
+    cost-vs-volume crossovers (synthesises cost + DFM + sheet detection).
+    NOTE: slower than the other tools (multiple cost models). grade='estimate'."""
     try:
         _ensure_skills()
         from phone_designer.skills.inspect.recommend_process import RecommendProcess
-        pr = RecommendProcess().apply(_import_step(step_path), {
+        body, _ = _resolve(part_path or None, body_id or None)
+        pr = RecommendProcess().apply(body, {
             "material": material, "lot_size": lot_size,
         }).extras["process_recommendation"]
         # trim the verbose matrices for the LLM; keep the decision-relevant parts
@@ -244,6 +291,41 @@ def cad_recommend_process(step_path: str, material: str = "aluminum",
                 "advisories_unpriced": pr.get("advisories_unpriced"),
                 "overall_flag": pr.get("overall_flag"),
                 "confidence_note": pr.get("confidence_note"), "grade": "estimate"}
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+def cad_export(body_id: str = "", part_path: str = "",
+               formats: list[str] | None = None, name: str = "") -> dict:
+    """Re-export a cad_generate body_id (or an existing STEP part_path) to STEP /
+    STL / editable .py in the workspace WITHOUT regenerating. `formats` ⊆
+    {"step","stl","py"} (default ["step"])."""
+    try:
+        _ensure_skills()
+        from build123d import export_stl
+        body, src_step = _resolve(part_path or None, body_id or None)
+        stem = str(_WORKSPACE / _safe_name(
+            name or (_BODIES.get(body_id, {}).get("name") if body_id else None)
+            or "export"))
+        files: dict[str, str] = {}
+        for f in [x.lower() for x in (formats or ["step"])]:
+            if f == "step" and _write_step(body, stem + ".step"):
+                files["step"] = stem + ".step"
+            elif f == "stl":
+                export_stl(body, stem + ".stl")
+                files["stl"] = stem + ".stl"
+            elif f == "py":
+                from phone_designer.skills.reverse_engineer.emit_parametric_script import (  # noqa: E501
+                    EmitParametricScript,
+                )
+                ps = EmitParametricScript().apply(body, {}).extras.get(
+                    "parametric_script") or {}
+                if ps.get("script"):
+                    Path(stem + "_model.py").write_text(ps["script"], encoding="utf-8")
+                    files["py"] = stem + "_model.py"
+        return {"ok": bool(files), "files": files,
+                "resource_uris": [_uri(p) for p in files.values()]}
     except Exception as exc:  # noqa: BLE001
         return _err(exc)
 
