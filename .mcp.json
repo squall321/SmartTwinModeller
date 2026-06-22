@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "phone-designer-cad": {
+      "command": "python",
+      "args": ["-m", "phone_designer.mcp_server"],
+      "env": {
+        "PYTHONPATH": "src",
+        "PHONE_DESIGNER_UI_HEADLESS": "1"
+      }
+    }
+  }
+}

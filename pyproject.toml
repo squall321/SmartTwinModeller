@@ -46,6 +46,9 @@ dev = [
     "mypy>=1.10",
 ]
 mesh-advanced = ["pymeshlab"]
+# mcp: run the modeller as an MCP server (python -m phone_designer.mcp_server)
+# so an LLM client (Claude, …) can model + analyse parts by calling tools.
+mcp = ["mcp>=1.0"]
 # report-pdf: true .pdf export (text + embedded PNG views) via reportlab.
 # Optional — the print-optimized self-contained HTML remains the
 # dependency-free, high-fidelity deliverable; reportlab adds a low-fidelity
@@ -55,6 +58,7 @@ report-pdf = ["reportlab>=4"]
 
 [project.scripts]
 phone-designer = "phone_designer.cli:app"
+phone-designer-mcp = "phone_designer.mcp_server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
