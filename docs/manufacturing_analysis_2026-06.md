@@ -1,7 +1,7 @@
 # 제조성 분석 (Manufacturing RE) 능력 — 정리 (2026-06)
 
 측정된 형상을 **설계자/견적자가 실제로 쓰는 숫자**(원가·공차·끼워맞춤·판금
-전개)로 변환하는 inspect 능력군. 전부 `analyze_part` front-door + CLI 플래그로
+전개 + **공정 선정**)로 변환하는 inspect 능력군. 전부 `analyze_part` front-door + CLI 플래그로
 통합되고, **전 detector가 161-파일 corpus로 검증**되었으며, anti-fake-accuracy
 원칙대로 **유효성 밖이면 정직하게 flag**(grade / reliability) 한다.
 
@@ -87,6 +87,33 @@ linear/circular 패턴 루프, mirror, revolve base). `verify=True`는 스크립
 geometry_deviation **HAUSDORFF**로 채점(match_ratio 아님). CLI: `script <part> -o model.py`.
 
 ---
+
+## 6. `recommend_process` — 비용순위·실현성-게이트 공정 선정 (grade: estimate, 정점)
+
+부품 + 생산량 + 재질 → **가장 싸고 실현가능한 공정**을 비용-vs-생산량 crossover와 함께 추천.
+위 3개(estimate_cost·dfm_verdict·detect_sheet_metal)를 **종합**하는 상위 능력. 다중-에이전트
+설계 패널(실제 catalog/소스 read)이 설계·적대적 검증.
+
+- **실현성 우선:** 후보를 하나의 상태로 융합 (viable < viable_marginal < unproven <
+  not_applicable < infeasible). **infeasible는 절대 추천 안 함.**
+- 정직한 게이트 (패널 + corpus 검증으로 확립):
+  - **성형 판금**은 SHEET 공정 추천 — CNC/사출은 not_applicable(굽힌 실드를 솔리드에서
+    절삭/몰딩 불가; 초기 버그 $124 CNC를 수정).
+  - dfm **임계 미달**(min-wall 0.3<0.4)은 *marginal 경고*지 불가 아님(실제 0.3mm 실드 존재);
+    사출 언더컷(사이드액션 없이)·brake-infeasible·진성 degenerate만 hard-infeasible.
+  - estimate_cost 과부하 flag를 부피로 구분(degenerate는 부피≤0만; below_scale→marginal).
+  - **die_cast_al / 3d_printing**은 dfm 스펙은 있으나 비용모델 없음 → **절대 가격 안 매김**
+    (estimate_cost가 조용히 CNC 가격 매김), unpriced advisory로만.
+- **성능:** 모든 estimate_cost 모델이 정확히 `unit(L)=base+T/L`(상각항 1개) → 전체 생산량
+  사다리 + crossover lot을 공정당 2호출로 **해석적(closed-form, 정확)** 계산; not_applicable
+  후보는 비용호출 없이 게이트. (테스트 55분 → 26초.)
+- **검증:** USB-A 실드 → sheet_turret_brake@1k → sheet_progressive_die@500k(crossover
+  ~36.7k); 평판 → 스탬핑 최저, winners 생산량별 turret→laser→stamping; 솔리드블록 → 판금
+  not_applicable. grade 'estimate'를 macro + 모든 ranking row에 assert.
+
+출력: `process_recommendation` {recommendation, ranking[], excluded[], cost_matrix,
+winner_by_lot, crossovers[], advisories_unpriced[], overall_flag, confidence_note, …}.
+(주의: 복잡 판금부품은 estimate_cost 내부 재검출로 느릴 수 있음 — cost_hint=3.0.)
 
 ## front-door 통합 (`analyze_part`)
 
