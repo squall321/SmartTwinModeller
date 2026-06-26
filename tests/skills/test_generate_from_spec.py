@@ -59,6 +59,13 @@ def test_bad_args_step_isolated():
     assert statuses.get("hole") in ("fail", "skipped")
 
 
+def test_malformed_args_is_isolated_not_crashed():
+    # a non-object 'args' (e.g. a string) must be a spec_error, not a ValueError
+    r = _gen([{"op": "box", "args": "not_a_dict"}])
+    assert r["ok"] is False
+    assert any("'args' must be an object" in e for e in r["spec_errors"])
+
+
 def test_generated_body_flows_into_analysis():
     body = GenerateFromSpec().apply(None, {"spec": [
         {"op": "box", "args": {"length_mm": 60, "width_mm": 40,

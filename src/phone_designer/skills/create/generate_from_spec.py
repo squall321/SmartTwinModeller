@@ -98,6 +98,11 @@ class GenerateFromSpec(SkillBase):
             if not op:
                 spec_errors.append(f"step {i}: missing 'op'/'skill'")
                 continue
+            if not isinstance(sargs, dict):
+                # a non-object 'args' would crash dict(sargs) — isolate it.
+                spec_errors.append(
+                    f"step {i}: 'args' must be an object, got {type(sargs).__name__}")
+                continue
             try:
                 registry.get(op)   # pre-check the skill exists (clear error)
             except Exception:  # noqa: BLE001
