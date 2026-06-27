@@ -249,6 +249,7 @@ from phone_designer.skills.create.worm_thread import WormThread
 import phone_designer.skills.repair.fill_small_holes  # noqa: F401
 import phone_designer.skills.repair.shape_heal  # noqa: F401
 import phone_designer.skills.repair.repair_dfm  # noqa: F401
+import phone_designer.skills.reverse_engineer.cost_min_variant_search  # noqa: F401
 import phone_designer.skills.repair.sew_faces_to_shell  # noqa: F401
 import phone_designer.skills.repair.close_shell_to_solid  # noqa: F401
 import phone_designer.skills.repair.simplify_to_canonical  # noqa: F401
