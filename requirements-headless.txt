@@ -1,0 +1,21 @@
+# Headless dependency set for the SmartTwinModeller MCP server / CLI analysis on
+# Linux (or any server without a display). Verified: the full MCP surface
+# (cad_generate / cad_analyze / cad_estimate_cost / cad_recommend_process /
+# cad_export + discovery) loads NO UI stack, so the heavy GL/Qt packages
+# (pyvista, pyvistaqt, vtk, PySide6) are OMITTED here. Everything else from
+# pyproject is kept. Rendered PNG views + the desktop UI panels are NOT available
+# with this set (they need the full install: pip install '.[<ui>]' or the wheels).
+build123d>=0.9.0,<1.0
+cadquery-ocp>=7.7
+trimesh>=4.4
+pygltflib>=1.16
+numpy>=1.26
+scipy>=1.13
+pydantic>=2.7
+pyyaml>=6.0
+typer>=0.12
+loguru>=0.7
+keyring>=24
+simpleeval>=0.9.13
+anthropic>=0.40
+mcp>=1.0

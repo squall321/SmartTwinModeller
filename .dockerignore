@@ -1,0 +1,27 @@
+# keep the build context small — the image needs only src + pyproject + scripts +
+# requirements-headless.txt (see Dockerfile). Exclude the 81MB corpus, the venv,
+# tests/fixtures, git history, caches, and generated artifacts.
+.git/
+.gitignore
+venv/
+.venv/
+env/
+corpus/
+run_logs/
+fixtures/
+reference/
+tests/
+docs/
+**/__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.step
+*.stp
+*.stl
+*.glb
+uv.lock
+PHONE_DESIGNER_PLAN.md
+plans/
