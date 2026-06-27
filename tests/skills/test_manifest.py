@@ -45,7 +45,7 @@ _DYNAMIC_ORCHESTRATOR_MACROS = {
     "solve_driver_range", "assembly_reverse_engineer",
     "emit_parametric_script", "estimate_cost", "recognize_fits",
     "detect_sheet_metal", "measure_assembly_fit", "recommend_process",
-    "generate_from_spec",
+    "generate_from_spec", "repair_dfm",
 }
 
 

@@ -9,6 +9,7 @@ mutate (face count drops after `simplify_to_canonical`, edges merged, etc.).
 
 from phone_designer.skills.repair.close_shell_to_solid import CloseShellToSolid
 from phone_designer.skills.repair.remove_micro_features import RemoveMicroFeatures
+from phone_designer.skills.repair.repair_dfm import RepairDfm
 from phone_designer.skills.repair.sew_faces_to_shell import SewFacesToShell
 from phone_designer.skills.repair.shape_heal import ShapeHeal
 from phone_designer.skills.repair.simplify_to_canonical import SimplifyToCanonical
@@ -19,4 +20,5 @@ __all__ = [
     "CloseShellToSolid",
     "SimplifyToCanonical",
     "RemoveMicroFeatures",
+    "RepairDfm",
 ]
