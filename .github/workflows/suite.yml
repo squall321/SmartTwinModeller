@@ -1,0 +1,158 @@
+name: suite
+
+# D11/D12: the comprehensive safety net beyond the fidelity gate.
+#   * suite          — the FULL pytest suite on Windows (headless), the broad
+#                      regression net the -m fidelity gate does not cover.
+#   * headless-linux — scripts/headless_smoke.py on ubuntu: the CROSS-PLATFORM
+#                      proof (the MCP surface generates + exports + costs with NO
+#                      UI/GL stack), matching Dockerfile / DEPLOY_LINUX.md.
+#   * corpus-regress — RE round-trip vs the committed corpus baselines
+#                      (preserve_brep_root + box_root), the project's anti-fake
+#                      gate: a match_ratio drop / hausdorff rise / new error fails.
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+concurrency:
+  group: suite-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  suite:
+    name: full pytest suite (windows, headless)
+    runs-on: windows-latest
+    timeout-minutes: 75
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Create venv (matches local layout — venv\Scripts\python.exe)
+        shell: pwsh
+        run: |
+          python -m venv venv
+          venv\Scripts\python.exe -m pip install --upgrade pip wheel setuptools
+
+      - name: Install project + dev extras
+        shell: pwsh
+        run: |
+          venv\Scripts\python.exe -m pip install -e ".[dev]"
+
+      - name: Full suite (headless — UI tests self-skip without a display)
+        shell: pwsh
+        env:
+          PHONE_DESIGNER_UI_HEADLESS: "1"
+          QT_QPA_PLATFORM: offscreen
+          PYTHONUTF8: "1"
+        run: |
+          venv\Scripts\python.exe -m pytest tests/ -q --tb=short --strict-markers
+
+  headless-linux:
+    name: headless smoke (ubuntu — cross-platform proof)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-headless.txt
+
+      # OCCT (inside the cadquery-ocp wheel) links these X11/GL libs even headless.
+      - name: Install OCCT system libs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1 libglu1-mesa libxrender1 libxext6 libsm6 libice6 \
+            libx11-6 libfontconfig1 libgomp1
+
+      - name: Install headless deps + package (--no-deps, no UI/GL/Qt stack)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-headless.txt
+          python -m pip install --no-deps -e .
+
+      - name: Headless smoke — generate + STEP/STL + cost, assert no UI stack
+        env:
+          PHONE_DESIGNER_UI_HEADLESS: "1"
+        run: |
+          python scripts/headless_smoke.py
+
+  corpus-regress:
+    name: corpus regression vs committed baselines
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install project + dev extras
+        shell: pwsh
+        run: |
+          python -m venv venv
+          venv\Scripts\python.exe -m pip install --upgrade pip wheel setuptools
+          venv\Scripts\python.exe -m pip install -e ".[dev]"
+
+      # preserve_brep root is the BLOCKING gate: the reconstruction is
+      # deterministic / byte-identical (measured 0.0 max abs diff across the 55
+      # root files), so a non-zero exit is a genuine geometry regression, never
+      # run-to-run noise. exit 1 = a match_ratio drop / hausdorff rise / new error.
+      # --timeout-s 600: a borderline-slow file (pythonocc__11752 ~228s) can
+      # exceed the 300s default watchdog under CI CPU load and false-flag as a
+      # "new error". The generous timeout keeps the deterministic gate from
+      # flaking on runner speed while still catching genuine geometry regressions.
+      - name: preserve_brep root vs baseline (BLOCKING)
+        shell: pwsh
+        env:
+          PHONE_DESIGNER_UI_HEADLESS: "1"
+        run: |
+          venv\Scripts\python.exe -m phone_designer.cli corpus-regress --mode preserve_brep --subset root --timeout-s 600
+
+      # box-mode root is INFORMATIONAL ONLY (continue-on-error) — the box
+      # reconstruction is NON-DETERMINISTIC (it fails against its own baseline:
+      # ~4 match_ratio drops + a multi-1000mm hausdorff swing run-to-run from
+      # feature-ordering / planner non-determinism), so it cannot be a hard gate.
+      # It runs to surface a box-pipeline regression in the logs for review, but
+      # never fails the build. (5 fine-pitch IC files also legitimately time out;
+      # --timeout-s 600 lets borderline-slow files finish so they are not new
+      # errors vs the 300s baseline.) The DETERMINISTIC preserve_brep gate above
+      # is the real corpus guard.
+      - name: box root vs baseline (informational)
+        shell: pwsh
+        continue-on-error: true
+        env:
+          PHONE_DESIGNER_UI_HEADLESS: "1"
+        run: |
+          venv\Scripts\python.exe -m phone_designer.cli corpus-regress --mode box --subset root --timeout-s 600
