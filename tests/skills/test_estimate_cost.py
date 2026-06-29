@@ -295,3 +295,24 @@ def test_reliability_unaffected_by_secondary_op_problems():
              finish="anodize")          # anodize-on-steel mismatch
     assert e["reliability"] == "ok"
     assert "finish_material_mismatch" in e["drivers"]["secondary_warnings"]
+
+
+def test_precomputed_drivers_skip_extraction_and_drive_cost():
+    # a caller pricing the SAME body many times (recommend_process) extracts the
+    # feature catalog ONCE and injects it via `precomputed`, skipping the ~0.16s
+    # per-call ExtractFeatureCatalog. The injected drivers MUST drive the cost.
+    b = _al_housing()
+    base = {"volume_mm3": 20000.0, "bbox": [0.0, 0.0, 0.0, 60.0, 40.0, 12.0],
+            "max_wall_mm": 5.0, "n_holes": 0, "n_pockets": 0, "n_bosses": 0}
+    few = _est(b, process="cnc_3axis", material="aluminum", precomputed=base)
+    many = _est(b, process="cnc_3axis", material="aluminum",
+                precomputed={**base, "n_holes": 20})
+    # the injected feature count drove the per-feature machining time -> proves
+    # the internal extraction was skipped and the injected drivers were used.
+    assert many["breakdown_usd"]["machine"] > few["breakdown_usd"]["machine"]
+    assert few["drivers"]["n_holes"] == 0 and many["drivers"]["n_holes"] == 20
+    # the precomputed path is deterministic: same drivers -> identical cost.
+    assert _est(b, process="cnc_3axis", material="aluminum",
+                precomputed=base)["unit_cost_usd"] == few["unit_cost_usd"]
+    # the volume came from the injection (20000mm³ / 1000 = 20cm³).
+    assert few["drivers"]["volume_cm3"] == pytest.approx(20.0)

@@ -70,6 +70,30 @@ _V_NAME = {0: "viable", 1: "viable_marginal", 2: "unproven",
            3: "not_applicable", 4: "infeasible"}
 
 
+def _extract_drivers(body) -> dict:
+    """Body-fixed geometry drivers (volume + feature catalog), extracted ONCE so
+    estimate_cost can skip its per-call ExtractFeatureCatalog. Mirrors exactly
+    what estimate_cost extracts, so injecting these is byte-identical to letting
+    it re-extract."""
+    from phone_designer.skills.inspect.mass_properties import MassProperties
+    from phone_designer.skills.reverse_engineer.extract_feature_catalog import (
+        ExtractFeatureCatalog,
+    )
+    out: dict = {}
+    try:
+        mp = MassProperties().apply(body, {"density_g_per_cm3": 1.0}).extras
+        out["volume_mm3"] = mp.get("volume_mm3")
+    except Exception:
+        pass
+    cat = ExtractFeatureCatalog().apply(body, {}).extras["feature_catalog"]
+    out["n_holes"] = len(cat.get("holes") or [])
+    out["n_pockets"] = len(cat.get("pockets") or [])
+    out["n_bosses"] = len(cat.get("bosses") or [])
+    out["max_wall_mm"] = cat.get("base_thickness_mm")
+    out["bbox"] = cat.get("initial_bbox_mm")
+    return out
+
+
 def _dfm_state(verdict: str | None) -> int:
     # A dfm 'fail' is generally a conservative THRESHOLD miss (min-wall/radius) —
     # a thin 0.3mm shield is still makeable. So a fail caps the candidate at
@@ -182,12 +206,23 @@ class RecommendProcess(SkillBase):
         input_unreliable = not stages.get("detect_sheet_metal", {}).get("ok", True) \
             or not stages.get("dfm_verdict", {}).get("ok", True)
 
+        # Geometry drivers are body-fixed — extract the feature catalog + volume
+        # ONCE and inject into every estimate_cost call (it would otherwise re-run
+        # ExtractFeatureCatalog ~0.16s per call × ~2 lots × N processes). The
+        # injected result is byte-identical to re-extracting.
+        precomputed = _safe("precompute_drivers", lambda: _extract_drivers(body),
+                            default=None)
+
         def _cost(proc: str, lot: int) -> dict:
             key = (proc, lot)
             if key not in cache:
-                ce = _safe(f"cost:{proc}@{lot}", lambda: EstimateCost().apply(body, {
-                    "process": proc, "material": args.material, "lot_size": lot,
-                    "rates": dict(args.rates)}).extras["cost_estimate"], default={})
+                cost_args = {"process": proc, "material": args.material,
+                             "lot_size": lot, "rates": dict(args.rates)}
+                if precomputed is not None:
+                    cost_args["precomputed"] = precomputed
+                ce = _safe(f"cost:{proc}@{lot}",
+                           lambda: EstimateCost().apply(
+                               body, cost_args).extras["cost_estimate"], default={})
                 cache[key] = ce or {}
             return cache[key]
 

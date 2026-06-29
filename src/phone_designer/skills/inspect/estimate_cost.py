@@ -611,6 +611,18 @@ class EstimateCost(SkillBase):
             description="standard (sampling) | full (100% / CMM, ×4). Scales with "
                         "feature count × tolerance tightness. standard+medium = $0.",
         )
+        precomputed: dict | None = Field(
+            default=None,
+            description="Pre-extracted geometry drivers to SKIP the internal "
+                        "MassProperties + ExtractFeatureCatalog (the dominant "
+                        "per-call cost ~0.16s). Keys: volume_mm3, n_holes, "
+                        "n_pockets, n_bosses, max_wall_mm (base_thickness_mm), "
+                        "bbox (initial_bbox_mm). A caller pricing the SAME body "
+                        "many times (e.g. recommend_process over a volume ladder) "
+                        "computes these ONCE and passes them to every call — the "
+                        "result is byte-identical to re-extracting. None = "
+                        "extract internally (today's behaviour).",
+        )
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
         from phone_designer.skills.inspect.mass_properties import MassProperties
@@ -624,15 +636,20 @@ class EstimateCost(SkillBase):
         proc = (args.process or "cnc_3axis").strip().lower()
         assumptions: list[str] = []
 
-        # ── measured drivers ──────────────────────────────────────────────────
+        # ── measured drivers (re-extracted, OR injected via precomputed) ───────
+        pre = args.precomputed if isinstance(args.precomputed, dict) else None
         volume_cm3 = 0.0
         bbox = None
-        try:
-            # mass_properties extras is FLAT (volume_mm3 at top level), no bbox.
-            mp = MassProperties().apply(body, {"density_g_per_cm3": density}).extras
-            volume_cm3 = float(mp.get("volume_mm3") or 0.0) / 1000.0
-        except Exception as exc:  # noqa: BLE001
-            assumptions.append(f"mass_properties failed ({type(exc).__name__}); volume=0")
+        if pre is not None and pre.get("volume_mm3") is not None:
+            volume_cm3 = float(pre.get("volume_mm3") or 0.0) / 1000.0
+        else:
+            try:
+                # mass_properties extras is FLAT (volume_mm3 top level), no bbox.
+                mp = MassProperties().apply(body, {"density_g_per_cm3": density}).extras
+                volume_cm3 = float(mp.get("volume_mm3") or 0.0) / 1000.0
+            except Exception as exc:  # noqa: BLE001
+                assumptions.append(
+                    f"mass_properties failed ({type(exc).__name__}); volume=0")
         # ── input-scale validation: the cost model only applies to a single
         # machinable/mouldable part of plausible size. Flag (don't silently emit
         # a confident number for) a degenerate, micro, or assembly-scale input.
@@ -657,15 +674,24 @@ class EstimateCost(SkillBase):
 
         n_holes = n_pockets = n_bosses = 0
         max_wall_mm = None
-        try:
-            cat = ExtractFeatureCatalog().apply(body, {}).extras["feature_catalog"]
-            n_holes = len(cat.get("holes") or [])
-            n_pockets = len(cat.get("pockets") or [])
-            n_bosses = len(cat.get("bosses") or [])
-            max_wall_mm = cat.get("base_thickness_mm")
-            bbox = cat.get("initial_bbox_mm")  # 6-tuple world bbox → CNC stock block
-        except Exception as exc:  # noqa: BLE001
-            assumptions.append(f"feature_catalog failed ({type(exc).__name__}); counts=0")
+        if pre is not None and "n_holes" in pre:
+            # injected drivers — skip the ~0.16s ExtractFeatureCatalog re-run.
+            n_holes = int(pre.get("n_holes") or 0)
+            n_pockets = int(pre.get("n_pockets") or 0)
+            n_bosses = int(pre.get("n_bosses") or 0)
+            max_wall_mm = pre.get("max_wall_mm")
+            bbox = pre.get("bbox")
+        else:
+            try:
+                cat = ExtractFeatureCatalog().apply(body, {}).extras["feature_catalog"]
+                n_holes = len(cat.get("holes") or [])
+                n_pockets = len(cat.get("pockets") or [])
+                n_bosses = len(cat.get("bosses") or [])
+                max_wall_mm = cat.get("base_thickness_mm")
+                bbox = cat.get("initial_bbox_mm")  # 6-tuple world bbox → CNC stock
+            except Exception as exc:  # noqa: BLE001
+                assumptions.append(
+                    f"feature_catalog failed ({type(exc).__name__}); counts=0")
 
         # bbox stock volume (CNC starts from a block) — fall back to 1.3× part vol
         stock_cm3 = volume_cm3 * 1.3

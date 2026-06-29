@@ -72,3 +72,22 @@ def test_formed_sheet_high_volume_favours_stamping():
     r = _rec(_l_bracket(), lot_size=1000, material="steel",
              volume_ladder=[1, 1000, 1000000])
     assert r["winner_by_lot"].get("1000000") == "sheet_progressive_die"
+
+
+def test_precomputes_geometry_drivers_once_for_speed():
+    # recommend_process extracts the feature catalog ONCE and injects it into
+    # every estimate_cost call (which would otherwise re-run ExtractFeatureCatalog
+    # ~0.16s per call). The precompute stage must run and succeed; the cost calls
+    # then take ~no extraction time. The recommendation must still be correct.
+    r = _rec(_box(), lot_size=1000)
+    assert "precompute_drivers" in r["_stages"]
+    assert r["_stages"]["precompute_drivers"]["ok"] is True
+    # the per-(proc,lot) cost calls no longer re-extract — each is near-instant.
+    cost_stages = [v["duration_s"] for k, v in r["_stages"].items()
+                   if k.startswith("cost:") and v.get("ok")]
+    assert cost_stages, "expected cost stages"
+    assert max(cost_stages) < 0.1   # extraction skipped → cost math only
+    # recommendation still produced.
+    assert r["overall_flag"] in {
+        "ok", "marginal", "advisory_alternative_exists", "input_unreliable",
+        "no_viable_process"}
