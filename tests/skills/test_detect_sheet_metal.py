@@ -213,3 +213,114 @@ def test_corpus_flat_washer_is_ambiguous_not_overconfident():
     assert r["is_sheet_metal"] is True
     assert r["flat_unformed"] is True
     assert r["confidence"] <= 0.7   # flat → NOT reported at full confidence
+
+
+# ── 2D flat-pattern blank outline (single-axis unfold + honest multi-axis refusal) ──
+# The unfold measures each flange's flat length by projecting its OWN vertices
+# onto its OWN in-plane direction u_i = unit(axis × normal) — POSE-INDEPENDENT.
+
+def test_l_bracket_flat_outline_rectangle_and_flanges():
+    fp = _sm(_l_bracket())["flat_pattern"]
+    assert fp["unfoldable"] is True
+    assert fp["refusal_reason"] is None
+    assert fp["outline_kind"] == "rectangle"
+    assert len(fp["outline_2d"]) == 4
+    L = max(p[0] for p in fp["outline_2d"])
+    W = max(p[1] for p in fp["outline_2d"])
+    assert L == pytest.approx(fp["developed_length_mm"], abs=0.01)
+    assert W == pytest.approx(fp["blank_width_mm"], abs=0.01)
+    # per-flange geometry RECONCILED (the broken global-u/AABB unfold would not).
+    assert fp["flanges_geometric"] is True
+    assert len(fp["flanges"]) == 2
+    flats = sorted(f["developed_length_mm"] for f in fp["flanges"])
+    assert flats[0] == pytest.approx(18.0, abs=1.5)   # real per-flange flats,
+    assert flats[1] == pytest.approx(28.0, abs=1.5)   # not 0.0 / garbage
+    # HEADLINE geometric invariant: Σ flange flats + Σ bend allowance == developed.
+    assert (sum(f["developed_length_mm"] for f in fp["flanges"])
+            + fp["total_bend_allowance_mm"]) == pytest.approx(
+                fp["developed_length_mm"], abs=0.5)
+    # one bend line, at first-flat + BA/2 from one edge (== developed - that from
+    # the other edge — measure-from-which-edge is symmetric, so accept either).
+    assert len(fp["bend_lines_2d"]) == 1
+    bl = fp["bend_lines_2d"][0]
+    ba2 = fp["total_bend_allowance_mm"] / 2.0
+    near = min(abs(bl["position_mm"] - (28.0 + ba2)),
+               abs(bl["position_mm"] - (18.0 + ba2)))
+    assert near < 2.0
+    assert bl["length_mm"] == pytest.approx(fp["blank_width_mm"], abs=0.5)
+
+
+def test_rotated_l_bracket_unfold_is_pose_independent():
+    from build123d import Rotation
+    fp = _sm(Rotation(20, 35, 50) * _l_bracket())["flat_pattern"]
+    assert fp["unfoldable"] is True and fp["flanges_geometric"] is True
+    flats = sorted(f["developed_length_mm"] for f in fp["flanges"])
+    # per-flange u_i projection recovers the SAME flats in a general pose; a
+    # world-AABB / global-u unfold would give 0/47 here and fail.
+    assert flats[0] == pytest.approx(18.0, abs=2.0)
+    assert flats[1] == pytest.approx(28.0, abs=2.0)
+    assert (sum(f["developed_length_mm"] for f in fp["flanges"])
+            + fp["total_bend_allowance_mm"]) == pytest.approx(
+                fp["developed_length_mm"], abs=1.0)
+
+
+def test_u_channel_flat_outline_three_flanges_two_bends():
+    fp = _sm(_u_channel())["flat_pattern"]
+    assert fp["single_bend_axis_canonical"] is True
+    assert fp["unfoldable"] is True and fp["outline_kind"] == "rectangle"
+    assert len(fp["bend_lines_2d"]) == 2 and len(fp["flanges"]) == 3
+    assert fp["flanges_geometric"] is True
+    pos = sorted(b["position_mm"] for b in fp["bend_lines_2d"])
+    assert pos[0] < pos[1]
+    assert all(0 < p < fp["developed_length_mm"] for p in pos)
+    assert (sum(f["developed_length_mm"] for f in fp["flanges"])
+            + fp["total_bend_allowance_mm"]) == pytest.approx(
+                fp["developed_length_mm"], abs=0.6)
+
+
+def test_flat_blank_outline_is_its_own_extent():
+    from build123d import Box, Pos
+    fp = _sm(Pos(0, 0, 1.0) * Box(50, 30, 2.0))["flat_pattern"]
+    assert fp["unfoldable"] is True and fp["outline_kind"] == "rectangle"
+    assert fp["bend_lines_2d"] == [] and fp["flanges"] == []
+    dims = sorted([max(p[0] for p in fp["outline_2d"]),
+                   max(p[1] for p in fp["outline_2d"])])
+    assert dims == pytest.approx([30.0, 50.0], abs=0.5)
+    # a rotated plate reads its OWN 50x30, not the world AABB (~58x53).
+    from build123d import Rotation
+    fp2 = _sm(Rotation(0, 0, 35) * Pos(0, 0, 1.0) * Box(50, 30, 2.0))["flat_pattern"]
+    d2 = sorted([max(p[0] for p in fp2["outline_2d"]),
+                 max(p[1] for p in fp2["outline_2d"])])
+    assert d2 == pytest.approx([30.0, 50.0], abs=1.0)
+
+
+def test_outline_area_reconciles_with_flat_blank_area():
+    from build123d import Box, Pos
+    for body in (_l_bracket(), _u_channel(), Pos(0, 0, 1.0) * Box(50, 30, 2.0)):
+        fp = _sm(body)["flat_pattern"]
+        assert fp["outline_area_reconciles"] is True
+        assert fp["outline_area_mm2"] == pytest.approx(
+            fp["flat_blank_area_mm2"], rel=1e-3)
+
+
+def test_solid_block_outline_refused_not_sheet():
+    from build123d import Box
+    fp = _sm(Box(40, 30, 25))["flat_pattern"]
+    assert fp["unfoldable"] is False
+    assert fp["outline_2d"] is None and fp["outline_kind"] == "refused"
+    assert fp["refusal_reason"] == "not_sheet_metal"
+
+
+@pytest.mark.skipif(not _USB.exists(), reason="corpus USB-A absent")
+def test_multi_axis_shield_refuses_outline_honestly():
+    fp = _sm_file(str(_USB))["flat_pattern"]
+    if fp["single_bend_axis_canonical"] is False:   # genuine multi-axis sheet
+        assert fp["unfoldable"] is False
+        assert fp["outline_2d"] is None
+        assert fp["outline_kind"] == "refused"
+        assert fp["refusal_reason"] == "multi_axis_unfold_unsupported"
+        assert fp["per_axis"] and len(fp["per_axis"]) >= 2
+        # total developed area is STILL reported (never lost on refusal).
+        assert fp["flat_blank_area_mm2"] is not None
+    else:                                            # canonicalised to single-axis
+        assert fp["unfoldable"] is True and fp["outline_kind"] == "rectangle"

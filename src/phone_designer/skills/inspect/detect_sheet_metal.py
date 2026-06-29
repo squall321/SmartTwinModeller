@@ -81,6 +81,364 @@ def _dot(a, b):
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 
 
+def _cross(a, b):
+    return (a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0])
+
+
+def _canon_axis(a):
+    """Sign-normalise a bend axis to a canonical hemisphere (first non-zero
+    component positive). OCCT emits anti-parallel pairs (0,0,1)/(0,0,-1) for
+    cylinders about the SAME physical axis, so a single-axis Z/S-fold would
+    otherwise read as two axes and be wrongly refused. Canonicalising collapses
+    them."""
+    a = _unit(tuple(a))
+    for c in a:
+        if abs(c) > 1e-6:
+            return tuple(-x for x in a) if c < 0 else tuple(a)
+    return a
+
+
+def _flange_flat_len(face, axis, normal):
+    """The flat (developed) length of one flange face along its OWN in-plane
+    unroll direction u = unit(axis × normal). Projecting the flange's OWN
+    vertices onto u (which lies in the flange's plane) is POSE-INDEPENDENT — a
+    world-AABB diagonal or a single global unroll vector collapses post-bend
+    flanges to garbage (0/47mm where the truth is 18/28). Returns (flat_len, u)."""
+    from OCP.BRep import BRep_Tool
+    from OCP.TopAbs import TopAbs_VERTEX
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    u = _unit(_cross(axis, normal))
+    if u == (0.0, 0.0, 0.0):
+        return 0.0, u
+    s = []
+    ve = TopExp_Explorer(face, TopAbs_VERTEX)
+    while ve.More():
+        v = TopoDS.Vertex_s(ve.Current())
+        p = BRep_Tool.Pnt_s(v)
+        s.append(_dot((p.X(), p.Y(), p.Z()), u))
+        ve.Next()
+    return (max(s) - min(s)) if s else 0.0, u
+
+
+def _face_inplane_extents(face, normal):
+    """The two in-plane extents (L, W) of a planar face measured in ITS OWN
+    plane — correct for a plate at any IN-PLANE rotation. Projecting onto fixed
+    world axes would return the AABB (e.g. 58×53 for a 50×30 plate rotated 35°);
+    instead compute the MINIMUM-AREA bounding rectangle by trying each boundary
+    edge's direction as a candidate orientation (a min-area rect always has a
+    side flush with a hull edge), so a rectangular blank reports its true 50×30."""
+    from OCP.BRep import BRep_Tool
+    from OCP.TopAbs import TopAbs_VERTEX
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    n = _unit(normal)
+    pts = []
+    ve = TopExp_Explorer(face, TopAbs_VERTEX)
+    while ve.More():
+        v = TopoDS.Vertex_s(ve.Current())
+        p = BRep_Tool.Pnt_s(v)
+        pts.append((p.X(), p.Y(), p.Z()))
+        ve.Next()
+    if len(pts) < 2:
+        return None, None
+
+    # candidate in-plane directions: each unique edge between consecutive
+    # (deduped) vertices, plus a world-axis fallback.
+    world = min(((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),
+               key=lambda w: abs(_dot(w, n)))
+    fallback = _unit(tuple(world[i] - _dot(world, n) * n[i] for i in range(3)))
+    cands = [fallback]
+    for i in range(len(pts)):
+        for j in range(i + 1, len(pts)):
+            d = tuple(pts[j][k] - pts[i][k] for k in range(3))
+            # project the edge into the plane and normalise.
+            dp = tuple(d[k] - _dot(d, n) * n[k] for k in range(3))
+            u = _unit(dp)
+            if u != (0.0, 0.0, 0.0):
+                cands.append(u)
+
+    best = None
+    for e1 in cands:
+        e2 = _unit(_cross(n, e1))
+        if e2 == (0.0, 0.0, 0.0):
+            continue
+        s1 = [_dot(xyz, e1) for xyz in pts]
+        s2 = [_dot(xyz, e2) for xyz in pts]
+        L = max(s1) - min(s1)
+        W = max(s2) - min(s2)
+        if L < 1e-9 or W < 1e-9:
+            continue
+        area = L * W
+        ext = (max(L, W), min(L, W))
+        if best is None or area < best[0] - 1e-6:
+            best = (area, ext[0], ext[1])
+    if best is None:
+        return None, None
+    return best[1], best[2]
+
+
+def _neighbor_flanges_of_bend(bend_face, axis, efm, flange_faces):
+    """The flange-face indices adjacent to a bend cylinder (sharing an edge),
+    for ordering the flange→bend chain. flange_faces is [(idx, face), ...]."""
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    nbrs = []
+    ee = TopExp_Explorer(bend_face, TopAbs_EDGE)
+    while ee.More():
+        edge = TopoDS.Edge_s(ee.Current())
+        try:
+            faces = efm.FindFromKey(edge)
+            it = faces  # TopTools list
+            from OCP.TopTools import TopTools_ListIteratorOfListOfShape
+            lit = TopTools_ListIteratorOfListOfShape(it)
+            while lit.More():
+                fc = lit.Value()
+                for idx, ff in flange_faces:
+                    if ff.IsSame(fc) and idx not in nbrs:
+                        nbrs.append(idx)
+                lit.Next()
+        except Exception:
+            pass
+        ee.Next()
+    return nbrs
+
+
+def _build_flat_outline(planes, formed, thickness, size, cover_area,
+                        flat_pattern, efm, is_sheet, flat_unformed):
+    """Produce the 2D flat-pattern blank outline + bend-line layout (single-axis
+    only) or an HONEST refusal. Returns ONLY new keys for flat_pattern.update().
+    See the module docstring / tests for the schema."""
+    refused = {
+        "outline_2d": None, "outline_kind": "refused", "outline_area_mm2": None,
+        "outline_area_reconciles": False, "unfoldable": False,
+        "refusal_reason": "not_sheet_metal", "bend_lines_2d": [], "flanges": [],
+        "flanges_geometric": False, "single_bend_axis_canonical": False,
+        "has_varying_width": False, "holes_projected": False, "per_axis": None,
+        "outline_note": "",
+    }
+    if not is_sheet or not thickness:
+        return refused
+
+    # canonical axis routing (sign-normalised — fixes the anti-parallel bug).
+    canon = [_canon_axis(b["axis_dir"]) for b in formed]
+    distinct = {tuple(round(c, 3) for c in a) for a in canon}
+    n_distinct = len(distinct)
+    single_canon = n_distinct <= 1
+    refused["single_bend_axis_canonical"] = single_canon
+
+    dev_len = flat_pattern.get("developed_length_mm")
+    blank_w = flat_pattern.get("blank_width_mm")
+    blank_area = flat_pattern.get("flat_blank_area_mm2")
+
+    # ── CASE 3 — flat unformed: the outline IS the dominant face's own extent ──
+    if flat_unformed or not formed:
+        dom = max((p for p in planes if p.get("face") is not None),
+                  key=lambda p: p["area"], default=None)
+        L = W = None
+        if dom is not None:
+            L, W = _face_inplane_extents(dom["face"], dom["normal"])
+        if L and W:
+            outline = [[0.0, 0.0], [round(L, 3), 0.0],
+                       [round(L, 3), round(W, 3)], [0.0, round(W, 3)]]
+            return {**refused, "outline_2d": outline, "outline_kind": "rectangle",
+                    "outline_area_mm2": round(L * W, 2),
+                    "outline_area_reconciles": True, "unfoldable": True,
+                    "refusal_reason": None,
+                    "single_bend_axis_canonical": single_canon,
+                    "outline_note": ("flat blank: in-plane bbox envelope of the "
+                                     "dominant face (not a traced silhouette; "
+                                     "holes/notches not subtracted).")}
+        return {**refused, "refusal_reason": "developed_length_unavailable",
+                "single_bend_axis_canonical": single_canon}
+
+    # ── CASE 2 — multi-axis formed: HONEST REFUSAL (never fabricate) ──────────
+    if n_distinct >= 2:
+        per_axis = []
+        for a in distinct:
+            grp = [b for b, c in zip(formed, canon)
+                   if tuple(round(x, 3) for x in c) == a]
+            strip = sum(b.get("bend_allowance_mm", 0.0) * b["bend_line_length_mm"]
+                        for b in grp)
+            per_axis.append({"axis_dir": list(a), "n_bends": len(grp),
+                             "developed_strip_area_mm2": round(strip, 2)})
+        return {**refused, "refusal_reason": "multi_axis_unfold_unsupported",
+                "single_bend_axis_canonical": False, "per_axis": per_axis,
+                "outline_note": ("multi-axis bends (a box/tray) — a true 2D "
+                                 "unfold is ambiguous (corner relief/overlap); "
+                                 "refused. Per-axis developed strips + total "
+                                 "developed area are still reported.")}
+
+    # ── CASE 1 — single-axis formed: PRODUCE the outline + bend lines ─────────
+    if dev_len is None or not blank_w:
+        return {**refused, "refusal_reason": "developed_length_unavailable",
+                "single_bend_axis_canonical": single_canon}
+
+    axis = canon[0]
+    # identify flanges: planar faces whose normal ⟂ axis. One PHYSICAL flange is
+    # a pair of parallel faces (inner+outer) separated by the thickness, so merge
+    # faces that share a canonical normal axis AND lie within ~1.5×t of each other
+    # along that axis — this collapses a panel's two faces into one flange while
+    # keeping distinct panels (e.g. a U-channel's two legs, same normal axis but
+    # far apart) separate.
+    cand = [p for p in planes if p.get("face") is not None
+            and abs(_dot(_unit(p["normal"]), axis)) < 0.1
+            and p["area"] >= 0.05 * cover_area]
+    by_axis: dict = {}
+    for p in cand:
+        cn = _canon_axis(p["normal"])
+        by_axis.setdefault(tuple(round(c, 2) for c in cn), []).append(
+            (p, _dot(p["centroid"], cn)))
+    tol = 1.5 * thickness
+    flange_planes = []
+    for cn_key, members in by_axis.items():
+        members.sort(key=lambda m: m[1])
+        cluster = [members[0]]
+        for m in members[1:]:
+            if abs(m[1] - cluster[-1][1]) <= tol:
+                cluster.append(m)
+            else:
+                flange_planes.append(max(cluster, key=lambda x: x[0]["area"])[0])
+                cluster = [m]
+        flange_planes.append(max(cluster, key=lambda x: x[0]["area"])[0])
+
+    flanges_meas = []
+    for p in flange_planes:
+        flat_len, _u = _flange_flat_len(p["face"], axis, _unit(p["normal"]))
+        flanges_meas.append({"plane": p, "flat_len": flat_len,
+                             "normal": _unit(p["normal"])})
+
+    # order the flange→bend chain via adjacency (a single-axis chain is a path).
+    flange_faces = [(i, fm["plane"]["face"]) for i, fm in enumerate(flanges_meas)]
+    chain_ok = False
+    sequence: list = []
+    if efm is not None and len(flanges_meas) == len(formed) + 1:
+        adj: dict = {i: [] for i in range(len(flanges_meas))}
+        bend_edges = []
+        for b in formed:
+            bf = b.get("_face")
+            if bf is None:
+                break
+            nb = _neighbor_flanges_of_bend(bf, axis, efm, flange_faces)
+            if len(nb) >= 2:
+                adj[nb[0]].append((nb[1], b))
+                adj[nb[1]].append((nb[0], b))
+                bend_edges.append((nb[0], nb[1], b))
+        if len(bend_edges) == len(formed):
+            ends = [i for i, e in adj.items() if len(e) == 1]
+            if ends:
+                seen = set()
+                cur = ends[0]
+                seen.add(cur)
+                sequence = [("F", cur)]
+                while True:
+                    nxt = [(j, b) for j, b in adj[cur] if j not in seen]
+                    if not nxt:
+                        break
+                    j, b = nxt[0]
+                    sequence.append(("B", b))
+                    sequence.append(("F", j))
+                    seen.add(j)
+                    cur = j
+                chain_ok = len(seen) == len(flanges_meas)
+
+    if not chain_ok:
+        # fallback: order flanges by projection on the base flange's unroll dir.
+        base = max(flanges_meas, key=lambda fm: fm["plane"]["area"])
+        u0 = _unit(_cross(axis, base["normal"]))
+        order = sorted(range(len(flanges_meas)),
+                       key=lambda i: _dot(flanges_meas[i]["plane"]["centroid"], u0))
+        bsorted = sorted(formed, key=lambda b: _dot(b.get("centroid", (0, 0, 0)), u0))
+        sequence = []
+        for k, i in enumerate(order):
+            sequence.append(("F", i))
+            if k < len(bsorted):
+                sequence.append(("B", bsorted[k]))
+
+    # accumulate developed coordinate.
+    s = 0.0
+    flanges_out: list = []
+    bend_lines: list = []
+    order_index = 0
+    for kind, item in sequence:
+        if kind == "F":
+            fm = flanges_meas[item]
+            flanges_out.append({
+                "developed_length_mm": round(fm["flat_len"], 3),
+                "order_index": order_index, "s_start_mm": round(s, 3),
+                "s_end_mm": round(s + fm["flat_len"], 3),
+                "plane_normal": [round(c, 4) for c in fm["normal"]],
+                "area_mm2": round(fm["plane"]["area"], 2)})
+            s += fm["flat_len"]
+            order_index += 1
+        else:
+            b = item
+            ba = b.get("bend_allowance_mm", 0.0)
+            bend_lines.append({
+                "position_mm": round(s + ba / 2.0, 3),
+                "length_mm": b["bend_line_length_mm"],
+                "bend_index": formed.index(b),
+                "kind": "hem" if b.get("_is_hem") else "bend",
+                "angle_deg": b.get("angle_deg"), "radius_mm": b.get("radius_mm"),
+                "dev_start_mm": round(s, 3), "dev_end_mm": round(s + ba, 3)})
+            s += ba
+
+    # reconcile with the authoritative developed_length (genuine, not cosmetic).
+    s_total = s
+    residual = s_total - dev_len
+    tol = max(0.5, 0.02 * dev_len)
+    flanges_geometric = abs(residual) <= tol
+    note = ""
+    if flanges_geometric and flanges_out and abs(residual) > 1e-9:
+        # distribute the tiny residual proportionally so the chain ends exactly
+        # at the authoritative developed_length.
+        scale = dev_len / s_total if s_total > 1e-9 else 1.0
+        s2 = 0.0
+        for fo in flanges_out:
+            fl = (fo["s_end_mm"] - fo["s_start_mm"]) * scale
+            fo["s_start_mm"] = round(s2, 3)
+            fo["developed_length_mm"] = round(fl, 3)
+            s2 += fl
+            fo["s_end_mm"] = round(s2, 3)
+        # re-place bend lines by recomputed flange ends (already monotone).
+    elif not flanges_geometric:
+        note = (f"per-flange flat lengths did not reconcile with the developed "
+                f"length (residual={round(residual, 3)}mm); bend-line layout is "
+                "the cumulative-allowance fallback, not measured geometry.")
+
+    L = round(dev_len, 3)
+    W = round(blank_w, 3)
+    outline = [[0.0, 0.0], [L, 0.0], [L, W], [0.0, W]]
+    out_area = round(L * W, 2)
+    reconciles = (blank_area is not None
+                  and abs(out_area - blank_area) <= max(1.0, 1e-4 * blank_area))
+    # centre each bend line across the width.
+    for bl in bend_lines:
+        half = bl["length_mm"] / 2.0
+        bl["segment_2d"] = [[bl["position_mm"], round(W / 2.0 - half, 3)],
+                            [bl["position_mm"], round(W / 2.0 + half, 3)]]
+
+    # varying-width detection (stepped flanges → bounding rectangle).
+    widths = [b["bend_line_length_mm"] for b in formed]
+    has_varying = bool(widths and (max(widths) - min(widths)) > 0.02 * max(widths))
+
+    return {
+        "outline_2d": outline, "outline_kind": "rectangle",
+        "outline_area_mm2": out_area, "outline_area_reconciles": reconciles,
+        "unfoldable": True, "refusal_reason": None,
+        "bend_lines_2d": sorted(bend_lines, key=lambda x: x["position_mm"]),
+        "flanges": flanges_out, "flanges_geometric": flanges_geometric,
+        "single_bend_axis_canonical": True, "has_varying_width": has_varying,
+        "holes_projected": False, "per_axis": None, "outline_note": note,
+    }
+
+
 def _face_geometry(face):
     """(kind, area, centroid, payload) — kind in {'plane','cylinder','other'}.
 
@@ -212,6 +570,8 @@ def _collect_bends(cyls, thickness):
             "axis_dir": [round(v, 4) for v in inner["axis"]],
             "surfaces": len(group),  # 2 = concentric inner+outer recovered
             "_arc_rad": arc_rad,
+            "_face": inner.get("face"),       # for the flat-pattern chain walk
+            "centroid": inner.get("centroid"),
         })
     return bends
 
@@ -319,6 +679,9 @@ def _collect_wraps(cyls, thickness, efm):
             "bend_line_length_mm": round(line_len, 3),
             "axis_dir": [round(v, 4) for v in inner["axis"]],
             "_arc_rad": arc_rad,
+            "_face": inner.get("face"),
+            "centroid": inner.get("centroid"),
+            "_is_hem": True,
         })
     return hems, rounded
 
@@ -381,7 +744,11 @@ class DetectSheetMetal(SkillBase):
         for f in faces:
             kind, area, centroid, payload = _face_geometry(f)
             if kind == "plane":
-                planes.append({"normal": payload, "centroid": centroid, "area": area})
+                # ``face`` handle added for the flat-pattern flange unfold
+                # (per-flange vertex projection). _thickness reads only
+                # normal/centroid/area, so this is a no-op for it.
+                planes.append({"normal": payload, "centroid": centroid,
+                               "area": area, "face": f})
             elif kind == "cylinder":
                 r, axis, loc, arc = payload
                 cyls.append({"radius": r, "axis": axis, "loc": loc, "arc": arc,
@@ -512,6 +879,30 @@ class DetectSheetMetal(SkillBase):
                 "blank_width_mm": None,
                 "note": "no constant thickness → not a sheet blank.",
             })
+
+        # ── 2D flat-pattern blank OUTLINE + bend-line layout (single-axis only;
+        # honest refusal for multi-axis). Reuses the developed numbers above so
+        # the rectangle is consistent with flat_blank_area_mm2.
+        try:
+            efm = _edge_face_map(shape) if is_sheet else None
+            flat_pattern.update(_build_flat_outline(
+                planes, formed, thickness, size, cover_area, flat_pattern,
+                efm, is_sheet, flat_unformed))
+            if flat_pattern.get("outline_note"):
+                assumptions.append(flat_pattern["outline_note"])
+        except Exception as exc:  # never crash the detector on an unfold edge case
+            flat_pattern.setdefault("outline_2d", None)
+            flat_pattern.setdefault("outline_kind", "refused")
+            flat_pattern.setdefault("unfoldable", False)
+            flat_pattern["refusal_reason"] = f"outline_error:{type(exc).__name__}"
+        flat_pattern.pop("outline_note", None)
+
+        # strip internal-only keys (OCCT face handles, raw centroids) from the
+        # public bend/hem records before serialising.
+        for _f in bends + hems:
+            _f.pop("_face", None)
+            _f.pop("centroid", None)
+            _f.pop("_is_hem", None)
 
         out = {
             "is_sheet_metal": is_sheet,
