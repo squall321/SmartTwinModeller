@@ -169,6 +169,13 @@ class CostMinVariantSearch(SkillBase):
         def _known_processes(cls, v):
             if v is None:
                 return v
+            # an EMPTY list is a usage error, not "evaluate nothing" — None means
+            # "all". (With repair_dfm=True an empty list also has no DFM-process
+            # mapping, which would raise deep in the sweep instead of up front.)
+            if not v:
+                raise ValueError(
+                    "processes must be a non-empty subset of the costable keys, "
+                    f"or None for all: {_ALL_KEYS}")
             bad = [p for p in v if p not in _ALL_KEYS]
             if bad:
                 raise ValueError(

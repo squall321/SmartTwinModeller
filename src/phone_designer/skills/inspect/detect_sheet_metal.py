@@ -314,6 +314,15 @@ def _build_flat_outline(planes, formed, thickness, size, cover_area,
         flanges_meas.append({"plane": p, "flat_len": flat_len,
                              "normal": _unit(p["normal"])})
 
+    # No qualifying flange faces (e.g. a pulley/nozzle whose 'bends' are grooves,
+    # not a folded sheet, or a part whose flanges fell below the area gate): the
+    # chain walk and the max()-based fallback below both assume ≥1 flange, so
+    # refuse cleanly here rather than letting max() raise (an outline_error: crash
+    # that the outer try/except would otherwise surface as the refusal reason).
+    if not flanges_meas:
+        return {**refused, "refusal_reason": "no_flange_faces",
+                "single_bend_axis_canonical": single_canon}
+
     # order the flange→bend chain via adjacency (a single-axis chain is a path).
     flange_faces = [(i, fm["plane"]["face"]) for i, fm in enumerate(flanges_meas)]
     chain_ok = False
@@ -844,7 +853,11 @@ class DetectSheetMetal(SkillBase):
         # each bend adds its neutral-strip developed area = bend_allowance × line.
         # For an L-bracket this reproduces the hand calc (Σ flange flats + Σ BA).
         formed = bends + hems  # hems add a fold strip to the flat pattern too
-        axes = {tuple(b["axis_dir"]) for b in formed}
+        # canonicalise so an OCCT-emitted anti-parallel axis pair (0,0,1)/(0,0,-1)
+        # for cylinders about the SAME physical axis (a Z/S-fold) is ONE axis — not
+        # two. Without this the developed_length below is wrongly None and the flat
+        # outline is refused as developed_length_unavailable (see _canon_axis).
+        axes = {tuple(round(c, 3) for c in _canon_axis(b["axis_dir"])) for b in formed}
         single_axis = len(axes) <= 1
         flat_pattern: dict[str, Any] = {
             "k_factor": args.k_factor,

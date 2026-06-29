@@ -324,3 +324,39 @@ def test_multi_axis_shield_refuses_outline_honestly():
         assert fp["flat_blank_area_mm2"] is not None
     else:                                            # canonicalised to single-axis
         assert fp["unfoldable"] is True and fp["outline_kind"] == "rectangle"
+
+
+# ── regressions from the adversarial review of the flat-pattern code ──────────
+
+_DIP14 = Path("corpus/oem/kicad__DIP-14_W7.62mm.step")
+_PULLEY = next(
+    (p for p in (Path("corpus/oem/industrial/freecad__GT2_Pulley_V2.step"),
+                 Path("corpus/oem/revolved/freecad__GT2_Pulley_V2.step"),
+                 Path("corpus/oem/freecad__GT2_Pulley_V2.step")) if p.exists()),
+    Path("corpus/oem/industrial/freecad__GT2_Pulley_V2.step"))
+
+
+@pytest.mark.skipif(not _DIP14.exists(), reason="corpus DIP-14 absent")
+def test_antiparallel_single_axis_not_wrongly_refused():
+    # OCCT emits an anti-parallel axis pair (0,1,0)/(0,-1,0) for cylinders about
+    # ONE physical axis (a Z/S-fold / a 2-bend DIP body). The upstream single-axis
+    # gate must canonicalise (like _build_flat_outline) so developed_length_mm is
+    # NOT wrongly None and the outline is NOT refused as developed_length_unavailable.
+    fp = _sm_file(str(_DIP14))["flat_pattern"]
+    if fp["single_bend_axis_canonical"] is True:
+        assert fp["unfoldable"] is True
+        assert fp["outline_kind"] == "rectangle"
+        assert fp["refusal_reason"] is None
+        assert fp["developed_length_mm"] is not None
+
+
+@pytest.mark.skipif(not _PULLEY.exists(), reason="corpus pulley absent")
+def test_no_flange_faces_refuses_cleanly_not_crash():
+    # a single-axis part whose 'bends' are grooves (a pulley/nozzle) has no
+    # qualifying flange faces — refuse with a CLEAN semantic reason, never the
+    # outline_error:ValueError the bare max() of an empty list would surface.
+    fp = _sm_file(str(_PULLEY))["flat_pattern"]
+    assert fp["unfoldable"] is False
+    assert fp["outline_2d"] is None and fp["outline_kind"] == "refused"
+    assert fp["refusal_reason"] == "no_flange_faces"
+    assert not str(fp["refusal_reason"]).startswith("outline_error")

@@ -453,6 +453,21 @@ class RepairDfm(SkillBase):
             for cand in candidates:
                 pre_shape = _copy_shape(_occt_shape(working))  # pre-fix snapshot
                 pre_faces = _face_count(pre_shape)
+                # Recompute the baseline verdict against the CURRENT working body
+                # (a prior candidate this round may already have changed it), so
+                # the GATE-1 owning + cross-process checks compare against the
+                # real pre-fix state, not the stale start-of-round verdict.
+                base_verdict = _run_verdict(working, args.processes,
+                                            args.pull_direction)
+                if cand["kind"] == "fillet":
+                    # re-measure the violation count on the current working body.
+                    cur_viol, _ = _enforce_radius_violations(working, cand["r_req"])
+                    cand["viol_before"] = len(cur_viol)
+                    if cand["viol_before"] == 0:
+                        fixes_rejected.append(_reject(
+                            cand, "verdict_not_improved", None, None,
+                            detail="no remaining radius violations"))
+                        continue
 
                 # GATE 0 — op did not raise.
                 try:
@@ -483,17 +498,18 @@ class RepairDfm(SkillBase):
                         detail=f"face count {_face_count(new_shape)} < {pre_faces}"))
                     continue
 
-                # GATE 1 — verdict moved + no cross-process regression.
+                # GATE 1 — verdict moved + no cross-process regression (compared
+                # against the per-candidate base_verdict, not the round start).
                 after_verdict = _run_verdict(new_body, args.processes,
                                              args.pull_direction)
                 owning_ok, dfm_before, dfm_after = self._owning_improved(
-                    cand, cur_verdict, after_verdict, working, new_body, args)
+                    cand, base_verdict, after_verdict, working, new_body, args)
                 if not owning_ok:
                     fixes_rejected.append(_reject(
                         cand, "verdict_not_improved", None, None,
                         dfm_before=dfm_before, dfm_after=dfm_after))
                     continue
-                regr = _cross_process_regressed(cur_verdict, after_verdict,
+                regr = _cross_process_regressed(base_verdict, after_verdict,
                                                 args.processes)
                 if regr is not None:
                     fixes_rejected.append(_reject(

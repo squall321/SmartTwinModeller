@@ -55,6 +55,13 @@ def test_unknown_process_key_rejected():
         CostMinVariantSearch.Args(driver="x", values=[1.0], processes=["cnc4axis"])
 
 
+def test_empty_process_list_rejected():
+    # [] is a usage error (None means "all"), caught up front rather than raising
+    # deep in the sweep (e.g. an empty DFM-process mapping under repair_dfm=True).
+    with pytest.raises(Exception, match="non-empty"):
+        CostMinVariantSearch.Args(driver="x", values=[1.0], processes=[])
+
+
 def test_must_supply_values_or_sweep_is_enforced_downstream():
     # Args construct fine; the one-of rule is enforced at apply via
     # resolve_sweep_values — pin that the field defaults are both-None.
