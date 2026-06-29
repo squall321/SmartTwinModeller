@@ -18,6 +18,25 @@ rate via ``rates``. Two process families for the domain:
     rate) + amortised tooling / lot; cycle time grows with the max wall
     thickness (cooling-dominated).
 
+SECONDARY OPERATIONS + TOLERANCE (2026-06 completeness): the primary cost above
+systematically UNDER-estimates real parts, so optional args add transparent
+breakdown lines — surface finish (anodize/bead_blast/paint/passivate, per dm²,
+material-gated), tapping (per threaded hole, clamped to detected holes), deburr
+(feature-count proxy, off-by-default rate), heat treat (hardenable metals),
+plating (per dm², metal-only), inspection (feature count × tolerance), and a
+tolerance_class that scales CNC machine time + adds inspection + a yield-loss
+``tolerance_scrap`` line. Each line is emitted ONLY when its arg is non-default
+AND the op is grounded (material/process-compatible, area-derivable) — a
+mis-requested op is flagged in ``drivers['secondary_warnings']``, never
+fabricated or silently zeroed. The DEFAULT call (tolerance medium, finish/plating
+none, no threading, no heat treat, standard inspection) reproduces the prior
+unit_cost BYTE-IDENTICALLY; secondary-op rates are first-cut heuristics (tune via
+``rates``), not validated to the depth of the sheet-metal rates. SCOPE: these
+factors influence a DIRECT estimate_cost call only — recommend_process /
+cost_min_variant_search forward just process/material/lot_size/rates, so they see
+the no-op defaults (which is what keeps them byte-identical); extend those apex
+callers' pass-through to let tolerance/finish influence a recommendation.
+
 extras["cost_estimate"] = {
     "process", "material", "lot_size",
     "unit_cost_usd", "cycle_time_s",
@@ -91,7 +110,225 @@ _DEFAULT_RATES: dict[str, float] = {
     "sm_stamp_tooling_usd_per_station": 4000.0,
     "sm_min_cut_s": 2.0,                    # per-part cut floor
     "sm_perimeter_complexity_factor": 1.2,  # outline est is a lower bound
+    # ── secondary operations + tolerance→cost (2026-06, completeness) ─────────
+    # HONEST PROVENANCE: these are documented first-cut US-job-shop heuristics,
+    # NOT design-panel/adversarial-validated like the sheet-metal rates above —
+    # tune via Args.rates. Defaults are chosen so the DEFAULT call (tolerance
+    # medium, finish/plating none, n_threaded_holes 0, heat_treat off,
+    # inspection standard) reproduces the prior unit_cost BYTE-IDENTICALLY.
+    # -- tolerance → cost (CNC machine multiplier + inspection adder + scrap) --
+    "tol_machine_mult_coarse": 0.9, "tol_machine_mult_medium": 1.0,   # 1.0 = today
+    "tol_machine_mult_fine": 1.4,   "tol_machine_mult_precision": 2.0,
+    "tol_inspect_min_coarse": 0.0,  "tol_inspect_min_medium": 0.0,    # 0 = today
+    "tol_inspect_min_fine": 2.0,    "tol_inspect_min_precision": 6.0,  # +CMM min/part
+    "tol_scrap_frac_coarse": 0.0,   "tol_scrap_frac_medium": 0.0,     # 0 = today
+    "tol_scrap_frac_fine": 0.03,    "tol_scrap_frac_precision": 0.08,
+    "tol_inj_cycle_damp": 0.3,      # injection cycle tolerance sensitivity (tooling-dominated)
+    # -- surface finish ($/dm² + per-lot setup $); area-driven --
+    "finish_anodize_usd_per_dm2": 0.35,   "finish_anodize_setup_usd": 75.0,    # Al only
+    "finish_passivate_usd_per_dm2": 0.20, "finish_passivate_setup_usd": 50.0,  # stainless only
+    "finish_bead_blast_usd_per_dm2": 0.15, "finish_bead_blast_setup_usd": 40.0,
+    "finish_paint_usd_per_dm2": 0.30,     "finish_paint_setup_usd": 90.0,
+    # -- tapping / deburr (CNC + sheet only) --
+    "cnc_tap_min_per_hole": 0.4,        # tap one threaded hole
+    "deburr_min_per_feature": 0.0,      # OFF by default → byte-identical; ~0.15 realistic
+    "deburr_machine_usd_per_hr": 40.0,  # bench labour
+    # -- heat treat (per-kg + per-lot batch); through-hardenable metals only --
+    "heat_treat_usd_per_kg": 2.5, "heat_treat_setup_usd": 150.0,
+    # -- plating ($/dm² + per-lot; area-driven, NOT mass) --
+    "plating_zinc_usd_per_dm2": 0.25,   "plating_nickel_usd_per_dm2": 0.60,
+    "plating_chrome_usd_per_dm2": 0.90, "plating_setup_usd": 80.0,
+    # -- inspection / QC --
+    "inspect_min_per_feature": 0.0,     # OFF by default → byte-identical; ~0.15 realistic
+    "inspect_full_mult": 4.0,           # 100% vs sampling
+    "inspect_machine_usd_per_hr": 60.0,  # CMM / metrology
 }
+
+# tolerance classes (drawing callout — not measurable from the solid).
+_TOL_CLASSES = ("coarse", "medium", "fine", "precision")
+#: materials that take through-hardening heat treat.
+_HARDENABLE = frozenset({"steel", "stainless", "titanium"})
+#: thermoplastic material keys (no metal finishes / plating / heat treat).
+_PLASTICS = frozenset({"abs", "pa", "pc", "pom"})
+#: recognised surface finishes (metal-only; paint also allowed on plastic).
+_FINISHES = ("anodize", "bead_blast", "paint", "passivate")
+_PLATINGS = ("zinc", "nickel", "chrome")
+
+
+def _surface_area_mm2(body: Any) -> float | None:
+    """Total surface area via GProp — the price base for finish/plating.
+
+    Computed LAZILY (only when a finish/plating is requested) so an area-less
+    estimate pays no meshing tax. Must run on the OCCT shape (body.wrapped),
+    never the wrapped Part. Returns None on failure / non-positive area."""
+    try:
+        from OCP.BRepGProp import BRepGProp
+        from OCP.GProp import GProp_GProps
+        shape = body.wrapped if hasattr(body, "wrapped") else body
+        props = GProp_GProps()
+        BRepGProp.SurfaceProperties_s(shape, props)
+        area = float(props.Mass())
+        return area if area > 0.0 else None
+    except Exception:
+        return None
+
+
+def _secondary_ops(
+    proc: str, breakdown: dict, drivers: dict, *, body, mass_g: float,
+    n_holes: int, n_pockets: int, n_bosses: int, args, R: dict, lot: int,
+    mat_key: str, mat_is_fallback: bool, assumptions: list, warnings: list,
+) -> None:
+    """Append secondary-operation breakdown lines (in place), each ONLY when its
+    arg is non-default AND the op is grounded (material/process-compatible,
+    area-derivable). A default call adds nothing → byte-identical. Also appends
+    the ``tolerance_scrap`` line (yield loss on material+machine+per-part
+    secondary, NOT amortised tooling). The machine tolerance multiplier is
+    applied to the primary line in _apply, before this runs."""
+    is_cnc = _is_cnc(proc) or not (_is_injection(proc) or _is_sheet(proc))
+    is_inj = _is_injection(proc)
+    is_sheet = _is_sheet(proc)
+    is_plastic = mat_key in _PLASTICS
+
+    finish = (args.finish or "none").strip().lower()
+    plating = (args.plating or "none").strip().lower()
+    tol = (args.tolerance_class or "medium").strip().lower()
+    inspect_level = (args.inspection_level or "standard").strip().lower()
+
+    # surface area — lazy, only when a finish/plating is requested.
+    area_dm2 = None
+    if finish != "none" or plating != "none":
+        area_mm2 = _surface_area_mm2(body)
+        if area_mm2 is not None:
+            area_dm2 = area_mm2 / 10000.0
+            drivers["surface_area_dm2"] = round(area_dm2, 4)
+        else:
+            drivers["surface_area_dm2"] = None
+            warnings.append("surface_area_unavailable")
+            assumptions.append("surface area underivable — finish/plating NOT priced.")
+
+    # ── FINISH (cosmetic coating; per-dm² + per-lot setup) ───────────────────
+    if finish != "none":
+        if finish not in _FINISHES:
+            warnings.append("finish_unrecognised")
+            assumptions.append(
+                f"finish '{finish}' UNRECOGNISED → NOT PRICED "
+                f"(expected {'|'.join(_FINISHES)}).")
+        elif area_dm2 is None:
+            pass  # already warned (surface_area_unavailable)
+        else:
+            ok = True
+            if finish == "anodize" and not (mat_key == "aluminum" and not mat_is_fallback):
+                ok = False
+            elif finish == "passivate" and not (mat_key == "stainless" and not mat_is_fallback):
+                ok = False
+            elif finish in ("anodize", "passivate", "bead_blast") and is_plastic:
+                ok = False
+            if not ok:
+                warnings.append("finish_material_mismatch")
+                assumptions.append(
+                    f"finish '{finish}' not applicable to {mat_key} → NOT PRICED.")
+            else:
+                rate = R[f"finish_{finish}_usd_per_dm2"]
+                setup = R[f"finish_{finish}_setup_usd"] / max(lot, 1)
+                breakdown["finish"] = round(area_dm2 * rate + setup, 4)
+                assumptions.append(
+                    f"finish {finish}: {round(area_dm2,3)}dm² × ${rate}/dm² + "
+                    f"${R[f'finish_{finish}_setup_usd']:.0f}/{lot} = ${breakdown['finish']}.")
+
+    # ── TAPPING (per threaded hole; CNC + sheet only) ────────────────────────
+    if args.n_threaded_holes > 0:
+        if is_inj:
+            warnings.append("secondary_ops_skipped_for_injection")
+            assumptions.append("tapping N/A for injection (threads are moulded).")
+        else:
+            n_tap = min(int(args.n_threaded_holes), n_holes)
+            if n_tap < int(args.n_threaded_holes):
+                warnings.append("tapping_clamped")
+                assumptions.append(
+                    f"tapping clamped to {n_tap} detected hole(s) "
+                    f"(requested {int(args.n_threaded_holes)}; threads never fabricated).")
+            if n_tap > 0:
+                tap_usd = round(
+                    n_tap * R["cnc_tap_min_per_hole"] / 60.0 * R["cnc_machine_usd_per_hr"], 4)
+                breakdown["tapping"] = tap_usd
+                assumptions.append(
+                    f"tapping: {n_tap} hole(s) × {R['cnc_tap_min_per_hole']}min "
+                    f"@ ${R['cnc_machine_usd_per_hr']}/hr = ${tap_usd}.")
+    drivers["n_threaded_holes"] = min(int(args.n_threaded_holes), n_holes)
+
+    # ── DEBURR (feature-count proxy; CNC + sheet; off by default rate) ────────
+    deburr_rate = R["deburr_min_per_feature"]
+    if deburr_rate > 0.0 and (is_cnc or is_sheet):
+        deburr_min = (n_holes + n_pockets + n_bosses) * deburr_rate
+        if deburr_min > 0.0:
+            deburr_usd = round(deburr_min / 60.0 * R["deburr_machine_usd_per_hr"], 4)
+            breakdown["deburr"] = deburr_usd
+            assumptions.append(
+                f"deburr: {n_holes + n_pockets + n_bosses} feature(s) × {deburr_rate}min "
+                f"@ ${R['deburr_machine_usd_per_hr']}/hr = ${deburr_usd}.")
+
+    # ── HEAT TREAT (through-hardenable metals only; per-kg + per-lot) ─────────
+    if args.heat_treat:
+        if mat_key in _HARDENABLE and not mat_is_fallback:
+            ht = round(mass_g / 1000.0 * R["heat_treat_usd_per_kg"]
+                       + R["heat_treat_setup_usd"] / max(lot, 1), 4)
+            breakdown["heat_treat"] = ht
+            assumptions.append(
+                f"heat_treat: {round(mass_g/1000.0,4)}kg × ${R['heat_treat_usd_per_kg']}/kg "
+                f"+ ${R['heat_treat_setup_usd']:.0f}/{lot} = ${ht}.")
+        else:
+            warnings.append("heat_treat_material_na")
+            assumptions.append(
+                f"heat_treat N/A for {mat_key} (through-hardenable: "
+                f"{'|'.join(sorted(_HARDENABLE))}) → NOT PRICED.")
+
+    # ── PLATING (area-driven; metal only; per-dm² + per-lot) ─────────────────
+    if plating != "none":
+        if plating not in _PLATINGS:
+            warnings.append("plating_unrecognised")
+            assumptions.append(
+                f"plating '{plating}' UNRECOGNISED → NOT PRICED "
+                f"(expected {'|'.join(_PLATINGS)}).")
+        elif is_plastic or mat_is_fallback:
+            warnings.append("plating_material_na")
+            assumptions.append(f"plating N/A for {mat_key} (metal only) → NOT PRICED.")
+        elif area_dm2 is None:
+            pass  # already warned
+        else:
+            rate = R[f"plating_{plating}_usd_per_dm2"]
+            setup = R["plating_setup_usd"] / max(lot, 1)
+            breakdown["plating"] = round(area_dm2 * rate + setup, 4)
+            assumptions.append(
+                f"plating {plating}: {round(area_dm2,3)}dm² × ${rate}/dm² + "
+                f"${R['plating_setup_usd']:.0f}/{lot} = ${breakdown['plating']}.")
+
+    # ── INSPECTION (feature count × tolerance tightness; off by default) ──────
+    insp_min = ((n_holes + n_pockets + n_bosses) * R["inspect_min_per_feature"]
+                + R[f"tol_inspect_min_{tol}"])
+    if inspect_level == "full":
+        insp_min *= R["inspect_full_mult"]
+    if insp_min > 0.0:
+        insp_usd = round(insp_min / 60.0 * R["inspect_machine_usd_per_hr"], 4)
+        breakdown["inspection"] = insp_usd
+        assumptions.append(
+            f"inspection ({inspect_level}, tol {tol}): {round(insp_min,2)}min "
+            f"@ ${R['inspect_machine_usd_per_hr']}/hr = ${insp_usd}.")
+
+    # ── TOLERANCE SCRAP (yield loss; material+machine+per-part secondary) ─────
+    frac = R[f"tol_scrap_frac_{tol}"]
+    if frac > 0.0:
+        # scrap applies to remade material+labour, NOT the one-time amortised
+        # tooling/setup (a scrapped part does not re-cut the mould).
+        scrap_base = sum(
+            v for k, v in breakdown.items()
+            if k not in ("setup_amortised", "tooling_amortised")
+            and not k.endswith("_setup"))
+        scrap = round(scrap_base * frac / (1.0 - frac), 4)
+        if scrap > 0.0:
+            breakdown["tolerance_scrap"] = scrap
+            assumptions.append(
+                f"tolerance_scrap ({tol}): {round(frac*100,1)}% yield loss on "
+                f"${round(scrap_base,4)} remade material+labour = ${scrap}.")
 
 
 def _density_and_price(material: str) -> tuple[float, float, str]:
@@ -338,6 +575,42 @@ class EstimateCost(SkillBase):
             default_factory=dict,
             description="Override any default rate (see _DEFAULT_RATES keys).",
         )
+        # ── secondary operations + tolerance (defaults reproduce today exactly) ──
+        tolerance_class: str = Field(
+            default="medium",
+            description="coarse | medium | fine | precision — CNC machine-time "
+                        "multiplier + inspection adder + scrap fraction. "
+                        "medium = 1.0× (byte-identical to the prior model).",
+        )
+        finish: str = Field(
+            default="none",
+            description="none | anodize | bead_blast | paint | passivate — per "
+                        "surface-dm² + per-lot setup. anodize=aluminum-only, "
+                        "passivate=stainless-only (else flagged, NOT charged). "
+                        "Geometry cannot infer finish intent → an arg.",
+        )
+        n_threaded_holes: int = Field(
+            default=0, ge=0,
+            description="How many detected holes are TAPPED. The feature catalog "
+                        "has no thread flag, so 0 by default; clamped to n_holes — "
+                        "threads are never fabricated from a plain hole.",
+        )
+        heat_treat: bool = Field(
+            default=False,
+            description="Per-kg + per-lot heat-treat/harden adder. "
+                        "Through-hardenable metals (steel/stainless/titanium) only "
+                        "— Al/brass/plastic flagged, not charged.",
+        )
+        plating: str = Field(
+            default="none",
+            description="none | zinc | nickel | chrome — per surface-dm² + per-lot "
+                        "(area-driven, metal only). Distinct from cosmetic finish.",
+        )
+        inspection_level: str = Field(
+            default="standard",
+            description="standard (sampling) | full (100% / CMM, ×4). Scales with "
+                        "feature count × tolerance tightness. standard+medium = $0.",
+        )
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
         from phone_designer.skills.inspect.mass_properties import MassProperties
@@ -410,6 +683,15 @@ class EstimateCost(SkillBase):
         cycle_time_s = None
         sheet_extra: dict = {}
 
+        # tolerance machine multiplier (medium = 1.0 → byte-identical to today).
+        tol = (args.tolerance_class or "medium").strip().lower()
+        if tol not in _TOL_CLASSES:
+            assumptions.append(
+                f"tolerance_class '{tol}' unrecognised → medium (1.0×).")
+            tol = "medium"
+        tol_mult = R[f"tol_machine_mult_{tol}"]
+        secondary_warnings: list[str] = []
+
         if _is_sheet(proc):
             from phone_designer.skills.inspect.detect_sheet_metal import (
                 DetectSheetMetal,
@@ -428,7 +710,15 @@ class EstimateCost(SkillBase):
             if not max_wall_mm:
                 assumptions.append("wall thickness unknown → assumed 2.0mm")
             cycle_time_s = R["im_cycle_base_s"] + wall * R["im_cycle_s_per_mm_wall"]
+            # tolerance: IM is tooling-dominated, so only a DAMPED cycle bump.
+            inj_tol = 1.0 + (tol_mult - 1.0) * R["tol_inj_cycle_damp"]
+            cycle_time_s = round(cycle_time_s * inj_tol, 4)
             cycle_usd = round(cycle_time_s / 3600.0 * R["im_machine_usd_per_hr"], 4)
+            if tol_mult != 1.0:
+                assumptions.append(
+                    f"tolerance {tol}: injection cycle ×{round(inj_tol,3)} "
+                    f"(damped {R['tol_inj_cycle_damp']}× — IM tolerance is "
+                    "tooling-dominated, not cycle).")
             tooling_amortised = round(R["im_tooling_usd"] / max(args.lot_size, 1), 4)
             breakdown["cycle"] = cycle_usd
             breakdown["tooling_amortised"] = tooling_amortised
@@ -452,17 +742,43 @@ class EstimateCost(SkillBase):
             if "5" in proc:
                 factor = 2.5  # catalog cnc_5axis cost_factor_vs_3axis
                 assumptions.append("5-axis: ×2.5 machine-cost factor (catalog)")
-            machine_usd = round(machine_min / 60.0 * R["cnc_machine_usd_per_hr"] * factor, 4)
+            machine_usd = round(
+                machine_min / 60.0 * R["cnc_machine_usd_per_hr"] * factor * tol_mult, 4)
+            cycle_time_s = round(cycle_time_s * tol_mult, 1)
             setup_usd = round(setup_min_per_part / 60.0 * R["cnc_machine_usd_per_hr"], 4)
             breakdown["machine"] = machine_usd
             breakdown["setup_amortised"] = setup_usd
+            if tol_mult != 1.0:
+                assumptions.append(
+                    f"tolerance {tol}: machine ×{tol_mult} (finishing passes; "
+                    "applied to the whole machine line incl. MRR roughing — a "
+                    "coarse over-estimate on roughing-dominated parts).")
             assumptions.append(
                 f"CNC: rough {round(rough_min,1)}min ({round(removed_cm3,1)}cm³ "
                 f"removed / {R['cnc_mrr_cm3_per_min']} MRR) + feat {round(feat_min,1)}min "
                 f"({n_holes}h+{n_pockets}p+{n_bosses}b); ${R['cnc_machine_usd_per_hr']}/hr; "
                 f"setup {R['cnc_setup_min']}min/{args.lot_size}")
 
+        # ── secondary operations + tolerance scrap (additive, grounded only) ──
+        # mat_label is the clean key for a known material, else a "…(default)"
+        # fallback label — gate metal ops on the EXACT resolved key, never a
+        # substring (an unknown material that fell back to aluminum must NOT pass
+        # the anodize/heat_treat/plating guards).
+        mat_is_fallback = mat_label.endswith("(default)")
+        mat_key = mat_label if not mat_is_fallback else mat_label.split("→")[0].strip()
+        primary_keys = list(breakdown.keys())  # before secondary ops
+        drivers_extra: dict = {}
+        _secondary_ops(
+            proc, breakdown, drivers_extra, body=body, mass_g=mass_g,
+            n_holes=n_holes, n_pockets=n_pockets, n_bosses=n_bosses, args=args,
+            R=R, lot=args.lot_size, mat_key=mat_key,
+            mat_is_fallback=mat_is_fallback, assumptions=assumptions,
+            warnings=secondary_warnings)
+
         unit_cost = round(sum(breakdown.values()), 4)
+        primary_usd = round(sum(breakdown[k] for k in primary_keys), 4)
+        secondary_ops_usd = round(
+            sum(v for k, v in breakdown.items() if k not in primary_keys), 4)
         assumptions.append(f"material {mat_label}: {density}g/cm³ × ${price_per_kg}/kg")
 
         out = {
@@ -471,6 +787,8 @@ class EstimateCost(SkillBase):
             "lot_size": args.lot_size,
             "reliability": reliability,
             "unit_cost_usd": unit_cost,
+            "primary_usd": primary_usd,
+            "secondary_ops_usd": secondary_ops_usd,
             "cycle_time_s": cycle_time_s,
             "breakdown_usd": breakdown,
             "drivers": {
@@ -481,6 +799,12 @@ class EstimateCost(SkillBase):
                 "n_pockets": n_pockets,
                 "n_bosses": n_bosses,
                 "max_wall_mm": max_wall_mm,
+                "tolerance_class": tol,
+                "tol_machine_mult": tol_mult,
+                "finish": (args.finish or "none").strip().lower(),
+                "surface_area_dm2": drivers_extra.get("surface_area_dm2"),
+                "n_threaded_holes": drivers_extra.get("n_threaded_holes", 0),
+                "secondary_warnings": secondary_warnings,
                 **sheet_extra,
             },
             "assumptions": assumptions,

@@ -156,3 +156,142 @@ def test_corpus_formed_shield_laser_brake_vs_stamping():
     assert s100["reliability"] == "below_scale"
     assert s100k["reliability"] == "ok"
     assert s100["drivers"]["stamping_crossover_lot"] > 1000
+
+
+# ── cost completeness: secondary operations + tolerance → cost (2026-06) ──────
+# Defaults reproduce the prior model BYTE-IDENTICALLY; secondary ops/tolerance
+# only ever ADD cost when explicitly requested AND grounded.
+
+def _holed_plate():
+    """A plate with 3 catalog-detected through-holes (for tapping tests)."""
+    b = Box().apply(None, {"length_mm": 60.0, "width_mm": 40.0, "height_mm": 12.0}).body
+    for x in (-15.0, 0.0, 15.0):
+        b = Hole().apply(b, {"position": (x, 0.0, 12.0), "diameter_mm": 6.0,
+                             "depth_mm": 12.0, "direction": "-Z"}).body
+    return b
+
+
+def test_default_args_reproduce_old_unit_cost_byte_identical():
+    b = _al_housing()
+    e = _est(b, process="cnc_3axis", material="aluminum", lot_size=1000)
+    assert e["unit_cost_usd"] == 6.5321
+    assert e["breakdown_usd"] == {"material": 0.4568, "machine": 6.0628,
+                                  "setup_amortised": 0.0125}
+    assert _est(b, process="injection_mold_pa", material="abs",
+                lot_size=10000)["unit_cost_usd"] == 1.3444
+    assert _est(b, process="sheet_laser_brake", material="aluminum",
+                lot_size=1000)["unit_cost_usd"] == 0.6425
+    # the secondary machinery is present but inert on the default path.
+    assert e["secondary_ops_usd"] == 0.0 and e["primary_usd"] == e["unit_cost_usd"]
+    for k in ("finish", "tapping", "deburr", "heat_treat", "plating",
+              "inspection", "tolerance_scrap"):
+        assert k not in e["breakdown_usd"]
+    assert e["drivers"]["tolerance_class"] == "medium"
+    assert e["drivers"]["tol_machine_mult"] == 1.0
+    assert e["drivers"]["surface_area_dm2"] is None      # area computed lazily
+    assert e["drivers"]["n_threaded_holes"] == 0
+    assert e["drivers"]["secondary_warnings"] == []
+
+
+def test_anodize_adds_area_scaled_finish_line():
+    big = Box().apply(None, {"length_mm": 120.0, "width_mm": 80.0,
+                             "height_mm": 24.0}).body
+    small = _al_housing()
+    eb = _est(big, finish="anodize", material="aluminum")
+    es = _est(small, finish="anodize", material="aluminum")
+    assert eb["breakdown_usd"]["finish"] > es["breakdown_usd"]["finish"] > 0
+    assert eb["drivers"]["surface_area_dm2"] > es["drivers"]["surface_area_dm2"] > 0
+    # anodize requires aluminum — on steel it is flagged, NOT charged.
+    mis = _est(small, finish="anodize", material="steel")
+    assert "finish" not in mis["breakdown_usd"]
+    assert "finish_material_mismatch" in mis["drivers"]["secondary_warnings"]
+    # an unrecognised finish (typo / British spelling) is NOT priced, loudly.
+    typo = _est(small, finish="anodise", material="aluminum")
+    assert "finish" not in typo["breakdown_usd"]
+    assert "finish_unrecognised" in typo["drivers"]["secondary_warnings"]
+
+
+def test_fine_tolerance_raises_machine_cost():
+    b = _al_housing()
+    med = _est(b, tolerance_class="medium")
+    fine = _est(b, tolerance_class="fine")
+    prec = _est(b, tolerance_class="precision")
+    assert fine["breakdown_usd"]["machine"] > med["breakdown_usd"]["machine"]
+    assert prec["breakdown_usd"]["machine"] > fine["breakdown_usd"]["machine"]
+    assert fine["drivers"]["tol_machine_mult"] == 1.4
+    assert fine["unit_cost_usd"] > med["unit_cost_usd"]
+    # fine tolerance also adds a transparent scrap line (a real breakdown key).
+    assert "tolerance_scrap" in fine["breakdown_usd"]
+    # coarse is cheaper than medium (0.9×).
+    assert (_est(b, tolerance_class="coarse")["breakdown_usd"]["machine"]
+            < med["breakdown_usd"]["machine"])
+
+
+def test_threading_adds_per_hole_cost_and_clamps():
+    plate = _holed_plate()             # 3 catalog holes
+    assert "tapping" not in _est(plate)["breakdown_usd"]
+    t1 = _est(plate, n_threaded_holes=1)
+    t3 = _est(plate, n_threaded_holes=3)
+    assert t3["breakdown_usd"]["tapping"] > t1["breakdown_usd"]["tapping"] > 0
+    # cannot tap more holes than exist — clamp + warn, never fabricate threads.
+    clamp = _est(plate, n_threaded_holes=999)
+    assert clamp["drivers"]["n_threaded_holes"] == 3
+    assert "tapping_clamped" in clamp["drivers"]["secondary_warnings"]
+
+
+def test_secondary_subtotal_sums_into_unit_cost():
+    e = _est(_holed_plate(), process="cnc_3axis", material="aluminum",
+             finish="anodize", n_threaded_holes=2, tolerance_class="fine",
+             plating="nickel", inspection_level="full",
+             rates={"deburr_min_per_feature": 0.15, "inspect_min_per_feature": 0.15})
+    sec = {"finish", "tapping", "deburr", "heat_treat", "plating",
+           "inspection", "tolerance_scrap"}
+    sub = round(sum(v for k, v in e["breakdown_usd"].items() if k in sec), 4)
+    assert abs(e["secondary_ops_usd"] - sub) < 1e-6
+    # invariant via a TOLERANCE, not exact == (per-line rounding ulps).
+    assert abs(e["primary_usd"] + e["secondary_ops_usd"] - e["unit_cost_usd"]) < 1e-6
+    assert e["secondary_ops_usd"] > 0 and e["grade"] == "estimate"
+    assert "tolerance_scrap" in e["breakdown_usd"]   # scrap is a real line
+
+
+def test_base_plus_T_over_L_preserved_with_secondary_ops():
+    # recommend_process fits unit(L)=base+T/L from exactly 2 calls — secondary
+    # ops must not introduce a new 1/L power.
+    kw = dict(process="cnc_3axis", material="aluminum", finish="anodize",
+              n_threaded_holes=0, tolerance_class="fine")
+    b = _al_housing()
+    u1 = _est(b, lot_size=1, **kw)["unit_cost_usd"]
+    u100 = _est(b, lot_size=100, **kw)["unit_cost_usd"]
+    T = (u1 - u100) / (1 - 1 / 100)
+    base = u1 - T
+    assert abs((base + T / 10) - _est(b, lot_size=10, **kw)["unit_cost_usd"]) < 1e-3
+
+
+def test_injection_skips_tapping_deburr_and_metal_finishes():
+    e = _est(_holed_plate(), process="injection_mold_pa", material="abs",
+             n_threaded_holes=2, finish="anodize", tolerance_class="fine",
+             rates={"deburr_min_per_feature": 0.15})
+    for k in ("tapping", "deburr", "finish"):
+        assert k not in e["breakdown_usd"]
+    assert e["drivers"]["secondary_warnings"]      # the skips are surfaced
+
+
+def test_sheet_tolerance_has_no_machine_multiplier():
+    b = _flat_sheet()
+    med = _est(b, process="sheet_laser_brake", material="steel",
+               tolerance_class="medium")
+    fine = _est(b, process="sheet_laser_brake", material="steel",
+                tolerance_class="fine")
+    # forming tolerance is fixture/tooling-driven — NO feed-rate multiplier.
+    assert med["breakdown_usd"]["laser_cut"] == fine["breakdown_usd"]["laser_cut"]
+    # but scrap (and inspection if enabled) still reflect tolerance.
+    assert fine["unit_cost_usd"] >= med["unit_cost_usd"]
+
+
+def test_reliability_unaffected_by_secondary_op_problems():
+    # a mis-requested secondary op must NOT downgrade the authoritative primary
+    # reliability (recommend_process gates viability on it).
+    e = _est(_al_housing(), process="cnc_3axis", material="steel",
+             finish="anodize")          # anodize-on-steel mismatch
+    assert e["reliability"] == "ok"
+    assert "finish_material_mismatch" in e["drivers"]["secondary_warnings"]
