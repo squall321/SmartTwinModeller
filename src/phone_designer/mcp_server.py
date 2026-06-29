@@ -330,6 +330,126 @@ def cad_export(body_id: str = "", part_path: str = "",
         return _err(exc)
 
 
+@mcp.tool()
+def cad_repair_dfm(body_id: str = "", part_path: str = "",
+                   processes: list[str] | None = None,
+                   pull_direction: list[float] | None = None,
+                   apply: bool = True, max_hausdorff_mm: float | None = None) -> dict:
+    """AUTO-FIX the manufacturability (DFM) of a cad_generate body_id OR a STEP
+    part_path (exactly one): fillet failing internal corners to the tool radius
+    and add draft to sub-min-draft walls, each kept ONLY if the DFM verdict
+    strictly improves within a bounded (Hausdorff-guarded) geometry change — else
+    reverted (worst-case == input). Thin wall / undercut / sink are SUGGEST-only.
+    When the body changes AND apply=True, a NEW body_id is minted for the repaired
+    part (the input body is never mutated) + its STEP is written. Returns the
+    per-process before/after verdict, the fixes applied, the suggestions, and the
+    repaired body_id. grade='estimate' — a heuristic repair, not a guarantee."""
+    try:
+        _ensure_skills()
+        from phone_designer.skills.repair.repair_dfm import RepairDfm
+        body, _ = _resolve(part_path or None, body_id or None)
+        args: dict = {
+            "processes": processes or ["cnc_milling", "injection_molding"],
+            "pull_direction": pull_direction or [0.0, 0.0, 1.0],
+            "apply": apply,
+        }
+        if max_hausdorff_mm is not None:
+            args["max_hausdorff_mm"] = max_hausdorff_mm
+        res = RepairDfm().apply(body, args)
+        rep = res.extras["dfm_repair"]
+        repaired_id = None
+        files: dict[str, str] = {}
+        if rep.get("body_changed") and res.body is not None:
+            repaired_id = _mint_body_id()
+            name = _safe_name((_BODIES.get(body_id, {}).get("name")
+                               if body_id else None) or "repaired")
+            step = str(_WORKSPACE / f"{name}_{repaired_id}.step")
+            if _write_step(res.body, step):
+                files["step"] = step
+            _BODIES[repaired_id] = {"body": res.body,
+                                    "step_path": files.get("step"), "name": name}
+        return {"ok": True, "repaired_body_id": repaired_id,
+                "body_changed": rep.get("body_changed"), "grade": rep.get("grade"),
+                "before": rep.get("before"), "after": rep.get("after"),
+                "fixes_applied": rep.get("fixes_applied"),
+                "fixes_rejected": rep.get("fixes_rejected"),
+                "suggestions": rep.get("suggestions"),
+                "total_hausdorff_mm": rep.get("total_hausdorff_mm"),
+                "summary": rep.get("summary"),
+                "files": files,
+                "resource_uris": [_uri(p) for p in files.values()]}
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+def cad_dfm_workflow(body_id: str = "", part_path: str = "",
+                     processes: list[str] | None = None,
+                     pull_direction: list[float] | None = None,
+                     material: str = "aluminum", lot_size: int = 1000,
+                     repair: bool = True) -> dict:
+    """ORCHESTRATE the full make-it-manufacturable-and-quote-it pipeline in ONE
+    call on a cad_generate body_id OR a STEP part_path (exactly one):
+      1. DFM-repair the part (auto-fix fillets/draft, Hausdorff-guarded; skip with
+         repair=False to only analyse + quote the input);
+      2. recommend the cheapest VIABLE process + unit cost on the RESULTING body.
+    Returns the before/after DFM verdict, the repair applied (+ a repaired body_id
+    + STEP when the geometry changed), and the process recommendation/cost for the
+    final part. Chains repair_dfm + recommend_process so the cost reflects the
+    repaired geometry. grade='estimate' throughout."""
+    try:
+        _ensure_skills()
+        from phone_designer.skills.inspect.recommend_process import RecommendProcess
+        body, _ = _resolve(part_path or None, body_id or None)
+
+        repair_out: dict | None = None
+        final_body = body
+        repaired_id = None
+        files: dict[str, str] = {}
+        if repair:
+            from phone_designer.skills.repair.repair_dfm import RepairDfm
+            rres = RepairDfm().apply(body, {
+                "processes": processes or ["cnc_milling", "injection_molding"],
+                "pull_direction": pull_direction or [0.0, 0.0, 1.0],
+                "apply": True,
+            })
+            rep = rres.extras["dfm_repair"]
+            repair_out = {
+                "grade": rep.get("grade"), "body_changed": rep.get("body_changed"),
+                "before": rep.get("before"), "after": rep.get("after"),
+                "fixes_applied": rep.get("fixes_applied"),
+                "suggestions": rep.get("suggestions"),
+                "total_hausdorff_mm": rep.get("total_hausdorff_mm"),
+                "summary": rep.get("summary")}
+            if rep.get("body_changed") and rres.body is not None:
+                final_body = rres.body
+                repaired_id = _mint_body_id()
+                name = _safe_name((_BODIES.get(body_id, {}).get("name")
+                                   if body_id else None) or "repaired")
+                step = str(_WORKSPACE / f"{name}_{repaired_id}.step")
+                if _write_step(final_body, step):
+                    files["step"] = step
+                _BODIES[repaired_id] = {"body": final_body,
+                                        "step_path": files.get("step"), "name": name}
+
+        pr = RecommendProcess().apply(final_body, {
+            "material": material, "lot_size": lot_size,
+            "pull_direction": pull_direction or [0.0, 0.0, 1.0],
+        }).extras["process_recommendation"]
+        quote = {"recommendation": pr.get("recommendation"),
+                 "ranking": pr.get("ranking"), "crossovers": pr.get("crossovers"),
+                 "overall_flag": pr.get("overall_flag"),
+                 "confidence_note": pr.get("confidence_note")}
+
+        return {"ok": True, "repaired_body_id": repaired_id,
+                "priced_body": "repaired" if repaired_id else "input",
+                "repair": repair_out, "quote": quote, "grade": "estimate",
+                "files": files,
+                "resource_uris": [_uri(p) for p in files.values()]}
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
 def main() -> None:
     mcp.run()
 

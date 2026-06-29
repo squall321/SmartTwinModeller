@@ -27,12 +27,19 @@ def main() -> int:
                             material="aluminum")
     assert c.get("ok") and c.get("unit_cost_usd", 0) > 0, f"cost failed: {c}"
 
+    # the DFM-repair + orchestration surface must also load headless (no UI stack).
+    w = M.cad_dfm_workflow(body_id=g["body_id"], processes=["cnc_milling"],
+                           material="aluminum", lot_size=1000)
+    assert w.get("ok") and w.get("quote", {}).get("recommendation"), \
+        f"dfm_workflow failed: {w}"
+
     ui = [m for m in ("vtk", "PySide6", "pyvista", "pyvistaqt", "PyQt5", "PyQt6")
           if m in sys.modules]
     assert not ui, f"UI stack unexpectedly loaded headless: {ui}"
 
     print(f"HEADLESS SMOKE OK — STEP={step}  vol={g['volume_mm3']}mm3  "
-          f"cost=${c['unit_cost_usd']}/unit  ui_loaded={ui or 'none'}")
+          f"cost=${c['unit_cost_usd']}/unit  "
+          f"quote={w['quote']['recommendation']['process']}  ui_loaded={ui or 'none'}")
     return 0
 
 

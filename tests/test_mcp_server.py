@@ -86,3 +86,78 @@ def test_resolve_guards_one_of_body_id_or_path():
                                         body_id="body_1")["ok"] is False  # both
     r = mcp_server.cad_estimate_cost(body_id="body_does_not_exist")
     assert r["ok"] is False and "unknown body_id" in r["error"]
+
+
+# ── DFM repair + orchestration tools (A1 exposed; analyze→repair→quote chain) ──
+
+def _sharp_pocket_step(tmp_path):
+    """A block with a square pocket (sharp internal corners) → STEP, the DFM
+    issue cad_repair_dfm fixes (filleting the concave edges to the tool radius)."""
+    from build123d import (
+        Axis, Box, BuildPart, BuildSketch, Mode, Rectangle, extrude,
+    )
+    with BuildPart() as bp:
+        Box(40, 30, 12)
+        with BuildSketch(bp.faces().sort_by(Axis.Z)[-1]):
+            Rectangle(16, 10)
+        extrude(amount=-8, mode=Mode.SUBTRACT)
+    path = str(tmp_path / "sharp_pocket.step")
+    assert mcp_server._write_step(bp.part, path)
+    return path
+
+
+def test_repair_and_workflow_tools_registered():
+    import asyncio
+    tools = asyncio.new_event_loop().run_until_complete(mcp_server.mcp.list_tools())
+    names = {t.name for t in tools}
+    assert {"cad_repair_dfm", "cad_dfm_workflow"} <= names
+
+
+def test_cad_repair_dfm_fixes_and_mints_a_new_body(tmp_path):
+    path = _sharp_pocket_step(tmp_path)
+    r = mcp_server.cad_repair_dfm(part_path=path, processes=["cnc_milling"])
+    assert r["ok"] and r["body_changed"] is True and r["grade"] == "repaired"
+    # a NEW body_id is minted for the repaired part + its STEP is written.
+    rid = r["repaired_body_id"]
+    assert rid and "step" in r["files"] and os.path.exists(r["files"]["step"])
+    assert r["resource_uris"]
+    assert r["fixes_applied"] and r["fixes_applied"][0]["op"] == "enforce_min_tool_radius"
+    assert r["total_hausdorff_mm"] >= 0.0
+    # before/after verdicts are present per process.
+    assert "cnc_milling" in r["before"] and "cnc_milling" in r["after"]
+    # the repaired body_id resolves for a follow-up analysis call (session cache).
+    c = mcp_server.cad_estimate_cost(body_id=rid, process="cnc_3axis")
+    assert c["ok"] and c["unit_cost_usd"] > 0
+
+
+def test_cad_repair_dfm_clean_part_no_change_no_new_body():
+    g = mcp_server.cad_generate(
+        [{"op": "box", "args": {"length_mm": 30, "width_mm": 20,
+                                "height_mm": 10}}], name="clean")
+    r = mcp_server.cad_repair_dfm(body_id=g["body_id"], processes=["cnc_milling"])
+    assert r["ok"] and r["body_changed"] is False
+    assert r["repaired_body_id"] is None
+    assert r["grade"] in ("no_change", "suggest_only")
+    assert r["total_hausdorff_mm"] == 0.0
+
+
+def test_cad_dfm_workflow_chains_repair_and_quote(tmp_path):
+    path = _sharp_pocket_step(tmp_path)
+    w = mcp_server.cad_dfm_workflow(part_path=path, processes=["cnc_milling"],
+                                    material="aluminum", lot_size=1000)
+    assert w["ok"] and w["grade"] == "estimate"
+    # the part was repaired and the QUOTE is on the repaired geometry.
+    assert w["repair"]["body_changed"] is True
+    assert w["repaired_body_id"] and w["priced_body"] == "repaired"
+    assert w["quote"]["recommendation"] is not None
+    assert w["quote"]["overall_flag"] in {
+        "ok", "marginal", "advisory_alternative_exists", "no_viable_process",
+        "input_unreliable"}
+
+
+def test_cad_dfm_workflow_repair_false_prices_the_input(tmp_path):
+    path = _sharp_pocket_step(tmp_path)
+    w = mcp_server.cad_dfm_workflow(part_path=path, repair=False)
+    assert w["ok"] and w["repair"] is None
+    assert w["priced_body"] == "input" and w["repaired_body_id"] is None
+    assert w["quote"]["recommendation"] is not None

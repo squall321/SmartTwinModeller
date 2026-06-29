@@ -6,8 +6,9 @@ client (Claude Desktop, an agent, …) can model + analyse parts.
 
 ## Why this works headless
 The full MCP surface — `cad_generate`, `cad_analyze`, `cad_estimate_cost`,
-`cad_recommend_process`, `cad_export`, `cad_list_skills`, `cad_get_skill_schema` —
-is verified to load **no UI/GL stack** (vtk / PySide6 / pyvista). So the headless
+`cad_recommend_process`, `cad_repair_dfm`, `cad_dfm_workflow`, `cad_export`,
+`cad_list_skills`, `cad_get_skill_schema` — is verified to load **no UI/GL stack**
+(vtk / PySide6 / pyvista). So the headless
 build omits those heavy GL/Qt packages (`requirements-headless.txt`). The geometry
 kernel (OCCT, via the `cadquery-ocp` wheel) + `build123d` + `mcp` are all
 cross-platform with Linux/macOS/Windows wheels — there is **no Windows-specific
