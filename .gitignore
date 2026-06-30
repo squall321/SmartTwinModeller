@@ -11,6 +11,10 @@ dist/
 .mypy_cache/
 .ruff_cache/
 
+# uv lockfile — the build uses pip (pyproject + requirements-headless.txt);
+# uv.lock is a local stray (already excluded from the Docker context).
+uv.lock
+
 # Virtual environments
 venv/
 .venv/
