@@ -28,16 +28,12 @@ jobs:
     name: full pytest suite (windows, headless)
     runs-on: windows-latest
     timeout-minutes: 75
-    # INFORMATIONAL (continue-on-error): the full ~2000-test suite is a broad net,
-    # more exposed to environment/dependency-version differences than the curated
-    # gates. CONFIRMED env-specific, not a regression: the identical commit that
-    # fails this job passes the full suite 1964/0 locally on the same OS — the CI
-    # delta is a fresh UNPINNED `pip install` (a different cadquery-ocp/build123d
-    # wheel can shift a strict exact-value assertion). The REQUIRED correctness
-    # gates are the DETERMINISTIC ones: `fidelity` (fidelity.yml, tolerance-based),
-    # plus the corpus-regress and headless-linux jobs below. This job RUNS and
-    # surfaces any failure in the log for review, but does not red-X a commit.
-    continue-on-error: true
+    # BLOCKING again as of the cadquery-ocp<7.9 pin: the broad-suite CI failure was
+    # CONFIRMED env-specific — the identical commit passes the full suite 1964/0
+    # locally on OCCT 7.8, and CI's unpinned install had drifted to OCCT 7.9 (a
+    # different kernel shifts the suite's exact-value geometry assertions). With the
+    # kernel pinned to the validated 7.8 line, CI reproduces the local environment,
+    # so this job is deterministic and a real blocking gate once more.
 
     steps:
       - name: Checkout

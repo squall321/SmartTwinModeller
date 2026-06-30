@@ -11,9 +11,15 @@ readme = "README.md"
 license = {text = "Proprietary"}
 
 dependencies = [
-    # CAD kernel
+    # CAD kernel. PIN the OCCT line: cadquery-ocp wraps OCCT, whose EXACT geometry
+    # outputs (volumes, bboxes, tessellation) are baked into the test suite's
+    # exact-value assertions, the corpus baselines and the fidelity fixtures — all
+    # calibrated to OCCT 7.8. An unpinned `>=7.7` silently pulls OCCT 7.9 in CI
+    # (a fresh install), which shifts those exact assertions and fails the broad
+    # suite even though the identical code passes 1964/0 locally on 7.8. Pin to the
+    # validated 7.8 line for reproducible builds.
     "build123d>=0.9.0,<1.0",
-    "cadquery-ocp>=7.7",
+    "cadquery-ocp>=7.7,<7.9",
     # Mesh (Phase 9 + reference glb)
     "trimesh>=4.4",
     "pygltflib>=1.16",
