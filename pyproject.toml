@@ -18,7 +18,13 @@ dependencies = [
     # (a fresh install), which shifts those exact assertions and fails the broad
     # suite even though the identical code passes 1964/0 locally on 7.8. Pin to the
     # validated 7.8 line for reproducible builds.
-    "build123d>=0.9.0,<1.0",
+    # build123d ALSO pinned <0.11: 0.11 changes feature/vertex extraction enough to
+    # BREAK register_bodies' feature-based disambiguation on a symmetric part — it
+    # falls back to ICP and returns a low-RMSD-but-WRONG transform (holes off by
+    # ~31mm). Verified: the full suite passes 1964/0 on build123d 0.10 and fails
+    # exactly that one test on 0.11. Pin to the validated 0.10 line until
+    # register_bodies is made 0.11-robust.
+    "build123d>=0.9.0,<0.11",
     "cadquery-ocp>=7.7,<7.9",
     # Mesh (Phase 9 + reference glb)
     "trimesh>=4.4",
