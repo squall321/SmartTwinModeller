@@ -428,6 +428,19 @@ def build_views(
                 face_count,
             )
 
+    # ── headless short-circuit BEFORE the GL probe ──────────────────────────────
+    # probe_gl() below creates a VTK/pyvista context, which can ACCESS-VIOLATION
+    # (a NATIVE segfault — NOT a Python exception, so uncatchable) on a runner with
+    # no GL, e.g. a headless CI box. Honour the project's explicit headless signal
+    # and skip rendering here, so the report degrades to a clean skipped_no_gl
+    # instead of crashing the whole pytest process. (Set PHONE_DESIGNER_UI_HEADLESS=1
+    # in CI / any display-less environment.) Placed AFTER the empty / too-big guards
+    # so those statuses are preserved.
+    if os.environ.get("PHONE_DESIGNER_UI_HEADLESS"):
+        return _skip("skipped_no_gl",
+                     "PHONE_DESIGNER_UI_HEADLESS set — render skipped (no GL)",
+                     face_count)
+
     # ── GL probe — degrade to a skip-marker, never crash the report ─────────────
     gl_ok, gl_note = probe_gl()
     if not gl_ok:

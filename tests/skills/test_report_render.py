@@ -157,6 +157,9 @@ def test_face_count_guard_skips_before_render():
 
 
 def test_no_gl_path_simulated(monkeypatch):
+    # This exercises the GL-PROBE-failure degradation, which lives AFTER the
+    # headless short-circuit — so unset the headless env to actually reach it.
+    monkeypatch.delenv("PHONE_DESIGNER_UI_HEADLESS", raising=False)
     # Force the GL probe to report no context — the renderer must degrade.
     monkeypatch.setattr(
         R, "probe_gl", lambda: (False, "simulated: no GL context"),
@@ -184,6 +187,23 @@ def test_no_gl_path_simulated(monkeypatch):
     assert "<img" not in html
     assert html.lstrip().lower().startswith("<!doctype html")
     assert "skipped_no_gl" in html  # skip note surfaced in the exec summary
+
+
+def test_headless_env_skips_render_before_gl_probe(monkeypatch):
+    # The headless env flag MUST skip rendering BEFORE the GL probe — probe_gl()
+    # can ACCESS-VIOLATION (native segfault) on a no-GL CI runner, which a
+    # try/except cannot catch, crashing the whole pytest process. Pin that the
+    # guard short-circuits without ever calling probe_gl.
+    monkeypatch.setenv("PHONE_DESIGNER_UI_HEADLESS", "1")
+
+    def _boom():
+        raise AssertionError("probe_gl must NOT be called when headless")
+
+    monkeypatch.setattr(R, "probe_gl", _boom)
+    out = R.build_views(_housing())
+    assert out["render_status"] == "skipped_no_gl"
+    assert out["images"] == {}
+    assert "HEADLESS" in out["note"]
 
 
 def test_build_views_never_raises_on_none():
