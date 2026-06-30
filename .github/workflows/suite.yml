@@ -59,6 +59,18 @@ jobs:
         run: |
           venv\Scripts\python.exe -m pip install -e ".[dev]"
 
+      # Echo the resolved CAD-stack versions to the job summary so the pins can be
+      # confirmed via `gh run view` even when the per-job LOG download is unavailable.
+      - name: Record CAD-stack versions
+        shell: pwsh
+        run: |
+          $v = venv\Scripts\python.exe -m pip show cadquery-ocp build123d numpy scipy `
+               | Select-String -Pattern "^Name:|^Version:"
+          "## CAD-stack versions" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          '```' | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          $v | ForEach-Object { $_.Line } | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          '```' | Out-File $env:GITHUB_STEP_SUMMARY -Append
+
       - name: Full suite (headless — UI tests self-skip without a display)
         shell: pwsh
         env:
@@ -66,7 +78,18 @@ jobs:
           QT_QPA_PLATFORM: offscreen
           PYTHONUTF8: "1"
         run: |
-          venv\Scripts\python.exe -m pytest tests/ -q --tb=short --strict-markers
+          # capture pytest output, write the short summary (FAILED/ERROR + counts) to
+          # the job summary (readable via `gh run view` when the log download is 401'd).
+          $out = venv\Scripts\python.exe -m pytest tests/ -q -rfE --tb=line --strict-markers 2>&1
+          $code = $LASTEXITCODE
+          "## pytest short summary" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          '```' | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          $out | Select-String -Pattern "FAILED|ERROR |[0-9]+ passed|[0-9]+ failed|short test summary" `
+               | ForEach-Object { $_.Line } | Select-Object -Last 60 `
+               | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          '```' | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          $out | Select-Object -Last 5
+          exit $code
 
   headless-linux:
     name: headless smoke (ubuntu — cross-platform proof)
