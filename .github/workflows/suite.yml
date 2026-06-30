@@ -84,11 +84,13 @@ jobs:
           $code = $LASTEXITCODE
           "## pytest short summary" | Out-File $env:GITHUB_STEP_SUMMARY -Append
           '```' | Out-File $env:GITHUB_STEP_SUMMARY -Append
-          $out | Select-String -Pattern "FAILED|ERROR |[0-9]+ passed|[0-9]+ failed|short test summary" `
-               | ForEach-Object { $_.Line } | Select-Object -Last 60 `
-               | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          $fails = $out | Select-String -Pattern "FAILED|ERROR |[0-9]+ passed|[0-9]+ failed" `
+                 | ForEach-Object { $_.Line }
+          $fails | Out-File $env:GITHUB_STEP_SUMMARY -Append
           '```' | Out-File $env:GITHUB_STEP_SUMMARY -Append
-          $out | Select-Object -Last 5
+          # ALSO print every FAILED/ERROR line to stdout so the full list is in the
+          # readable run log (gh run view --log), not just the step summary.
+          $fails
           exit $code
 
   headless-linux:
