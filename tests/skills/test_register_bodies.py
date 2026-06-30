@@ -50,6 +50,12 @@ _PRISMATIC = [
 
 
 def _load_step(path: Path):
+    # The OEM corpus is confidential + gitignored (.gitignore: corpus/oem/**/*.step,
+    # only _sample/ whitelisted), so it is absent in CI. Skip — never let a missing
+    # corpus file surface as an opaque STEP-reader IFSelect_RetError. Central guard
+    # for every corpus-loading test.
+    if not Path(path).exists():
+        pytest.skip(f"confidential OEM corpus absent (gitignored): {path}")
     from OCP.IFSelect import IFSelect_RetDone
     from OCP.STEPControl import STEPControl_Reader
 
