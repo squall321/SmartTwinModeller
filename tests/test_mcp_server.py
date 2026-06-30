@@ -88,6 +88,54 @@ def test_resolve_guards_one_of_body_id_or_path():
     assert r["ok"] is False and "unknown body_id" in r["error"]
 
 
+# ── base-shape primitives are fully covered by the MCP surface ────────────────
+# A client builds a primitive the same way it builds anything: cad_list_skills /
+# cad_get_skill_schema to discover the op + its args, then cad_generate. These
+# pin that EVERY core base shape round-trips through that flow to a valid solid +
+# a resolvable body_id (so "MCP covers base shapes" is guaranteed, not incidental).
+
+# op -> a known-good arg set (the args each create skill actually declares).
+_BASE_SHAPES = {
+    "box": {"length_mm": 40, "width_mm": 30, "height_mm": 12},
+    "cylinder": {"radius_mm": 15, "height_mm": 30},
+    "cone": {"radius_lower_mm": 20, "radius_upper_mm": 5, "height_mm": 30},
+    "sphere": {"radius_mm": 20},
+    "torus": {"major_radius_mm": 20, "minor_radius_mm": 5},
+    "wedge": {"dx": 40, "dy": 20, "dz": 15, "ltx_mm": 10},
+    "prism_n_sided": {"n_sides": 6, "circumscribed_radius_mm": 15, "height_mm": 20},
+}
+
+
+@pytest.mark.parametrize("op,args", list(_BASE_SHAPES.items()))
+def test_base_shape_generates_via_mcp(op, args):
+    # 1) discovery: the op + its args are self-describable (a client reads this
+    #    to compose the spec — every arg we pass is a declared property).
+    gs = mcp_server.cad_get_skill_schema(op)
+    assert gs["ok"], f"{op} not discoverable"
+    props = set((gs["args_schema"] or {}).get("properties", {}))
+    assert set(args) <= props, f"{op}: {set(args) - props} not in schema"
+
+    # 2) generation: cad_generate builds the primitive to a valid solid + body_id.
+    g = mcp_server.cad_generate([{"op": op, "args": args}], name=f"prim_{op}")
+    assert g["ok"] and g["is_solid"], f"{op} did not build: {g.get('steps')}"
+    assert g["volume_mm3"] > 0
+    bid = g["body_id"]
+    assert bid and g["resource_uris"]
+    assert os.path.exists(g["files"]["step"])
+
+    # 3) the primitive flows into the analysis surface by body_id.
+    c = mcp_server.cad_estimate_cost(body_id=bid, process="cnc_3axis")
+    assert c["ok"] and c["unit_cost_usd"] > 0
+
+
+def test_create_category_lists_the_base_shapes():
+    # a client enumerates the buildable base shapes via the create category.
+    ls = mcp_server.cad_list_skills(category="create", limit=60)
+    assert ls["ok"] and ls["n"] >= len(_BASE_SHAPES)
+    names = {s["name"] for s in ls["skills"]}
+    assert set(_BASE_SHAPES) <= names, f"missing from create listing: {set(_BASE_SHAPES) - names}"
+
+
 # ── DFM repair + orchestration tools (A1 exposed; analyze→repair→quote chain) ──
 
 def _sharp_pocket_step(tmp_path):

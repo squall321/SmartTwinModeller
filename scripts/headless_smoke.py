@@ -23,6 +23,14 @@ def main() -> int:
     step = g["files"]["step"]
     assert step.endswith(".step"), g
 
+    # base-shape coverage — the primitives must build headless too (not just box).
+    for op, a in (("cylinder", {"radius_mm": 12, "height_mm": 24}),
+                  ("sphere", {"radius_mm": 15}),
+                  ("cone", {"radius_lower_mm": 14, "radius_upper_mm": 4,
+                            "height_mm": 20})):
+        p = M.cad_generate([{"op": op, "args": a}], name=f"smoke_{op}")
+        assert p.get("ok") and p.get("is_solid"), f"{op} failed headless: {p}"
+
     c = M.cad_estimate_cost(body_id=g["body_id"], process="cnc_3axis",
                             material="aluminum")
     assert c.get("ok") and c.get("unit_cost_usd", 0) > 0, f"cost failed: {c}"
