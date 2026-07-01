@@ -120,6 +120,7 @@ import phone_designer.skills.inspect.hole_alignment_check  # noqa: F401
 import phone_designer.skills.inspect.detect_sheet_metal  # noqa: F401
 import phone_designer.skills.inspect.estimate_cost  # noqa: F401
 import phone_designer.skills.inspect.mass_properties  # noqa: F401
+import phone_designer.skills.inspect.oriented_bounding_box  # noqa: F401
 import phone_designer.skills.inspect.measure_assembly_fit  # noqa: F401
 import phone_designer.skills.inspect.recommend_process  # noqa: F401
 import phone_designer.skills.inspect.mesh_quality  # noqa: F401
@@ -148,6 +149,7 @@ import phone_designer.skills.modify_curvature.chamfer_conic  # noqa: F401
 import phone_designer.skills.modify_curvature.chamfer_distance_angle  # noqa: F401
 import phone_designer.skills.modify_curvature.chamfer_two_distance  # noqa: F401
 import phone_designer.skills.modify_curvature.shell_variable_thickness  # noqa: F401
+import phone_designer.skills.modify_curvature.fill_surface_patch  # noqa: F401
 import phone_designer.skills.modify_curvature.surface_blend_g1  # noqa: F401
 import phone_designer.skills.modify_curvature.surface_blend_g2  # noqa: F401
 import phone_designer.skills.modify_curvature.surface_extend_tangent  # noqa: F401
@@ -256,6 +258,7 @@ from phone_designer.skills.create.worm_thread import WormThread
 
 # Reverse-engineering boost — repair / inspect / reverse_engineer / io
 import phone_designer.skills.repair.fill_small_holes  # noqa: F401
+import phone_designer.skills.repair.delete_face_defeature  # noqa: F401
 import phone_designer.skills.repair.shape_heal  # noqa: F401
 import phone_designer.skills.repair.repair_dfm  # noqa: F401
 import phone_designer.skills.reverse_engineer.cost_min_variant_search  # noqa: F401
