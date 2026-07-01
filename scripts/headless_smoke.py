@@ -31,6 +31,24 @@ def main() -> int:
         p = M.cad_generate([{"op": op, "args": a}], name=f"smoke_{op}")
         assert p.get("ok") and p.get("is_solid"), f"{op} failed headless: {p}"
 
+    # from-scratch profile→solid ops (arc-profile extrude/revolve + sweep/loft) —
+    # these use OCCT builders (ThruSections/MakePipeShell) that HANG headless if a
+    # bare shape is fed instead of a wire, so a clean pass gates that class of bug.
+    for op, a in (
+        ("sketch_extrude", {"sketch": {"kind": "composite", "segments": [
+            {"kind": "line", "start": [-10, 0], "end": [10, 0]},
+            {"kind": "arc", "start": [10, 0], "end": [-10, 0], "radius": 10, "ccw": True}]},
+            "height_mm": 5}),
+        ("sketch_sweep", {"section": {"kind": "rectangle", "length_mm": 6, "width_mm": 4},
+            "path": {"kind": "path", "plane": "XY", "segments": [
+                {"kind": "line", "start": [0, 0], "end": [20, 0]}]}}),
+        ("sketch_loft", {"sections": [{"kind": "rectangle", "length_mm": 10, "width_mm": 10},
+                                      {"kind": "rectangle", "length_mm": 4, "width_mm": 4}],
+            "heights_mm": [0, 10], "ruled": True}),
+    ):
+        p = M.cad_generate([{"op": op, "args": a}], name=f"smoke_{op}")
+        assert p.get("ok") and p.get("is_solid"), f"{op} failed headless: {p}"
+
     c = M.cad_estimate_cost(body_id=g["body_id"], process="cnc_3axis",
                             material="aluminum")
     assert c.get("ok") and c.get("unit_cost_usd", 0) > 0, f"cost failed: {c}"

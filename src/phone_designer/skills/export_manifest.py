@@ -20,6 +20,8 @@ import phone_designer.skills.create.box  # noqa: F401
 import phone_designer.skills.create.extrude_profile_world  # noqa: F401
 import phone_designer.skills.create.sketch_extrude  # noqa: F401
 import phone_designer.skills.create.sketch_revolve  # noqa: F401
+import phone_designer.skills.create.sketch_sweep  # noqa: F401
+import phone_designer.skills.create.sketch_loft  # noqa: F401
 import phone_designer.skills.create.generate_from_spec  # noqa: F401
 import phone_designer.skills.create.place_freeform_solid  # noqa: F401
 import phone_designer.skills.create.place_generating_op_solid  # noqa: F401
