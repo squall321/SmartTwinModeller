@@ -22,6 +22,7 @@ import phone_designer.skills.transform.mirror_body  # noqa: F401
 import phone_designer.skills.transform.scale_body  # noqa: F401
 import phone_designer.skills.transform.split_body  # noqa: F401
 import phone_designer.skills.transform.pattern_seed_body  # noqa: F401
+import phone_designer.skills.transform.path_array_orientation  # noqa: F401
 import phone_designer.skills.create.box  # noqa: F401
 import phone_designer.skills.create.extrude_profile_world  # noqa: F401
 import phone_designer.skills.create.sketch_extrude  # noqa: F401
@@ -161,6 +162,8 @@ import phone_designer.skills.modify_curvature.chamfer_two_distance  # noqa: F401
 import phone_designer.skills.modify_curvature.shell_variable_thickness  # noqa: F401
 import phone_designer.skills.modify_curvature.fill_surface_patch  # noqa: F401
 import phone_designer.skills.modify_curvature.trim_surface  # noqa: F401
+import phone_designer.skills.modify_curvature.move_face  # noqa: F401
+import phone_designer.skills.modify_curvature.replace_face  # noqa: F401
 import phone_designer.skills.modify_curvature.surface_blend_g1  # noqa: F401
 import phone_designer.skills.modify_curvature.surface_blend_g2  # noqa: F401
 import phone_designer.skills.modify_curvature.surface_extend_tangent  # noqa: F401
