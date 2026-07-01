@@ -126,6 +126,8 @@ import phone_designer.skills.inspect.estimate_cost  # noqa: F401
 import phone_designer.skills.inspect.mass_properties  # noqa: F401
 import phone_designer.skills.inspect.oriented_bounding_box  # noqa: F401
 import phone_designer.skills.inspect.section_to_sketch  # noqa: F401
+import phone_designer.skills.inspect.curvature_comb  # noqa: F401
+import phone_designer.skills.inspect.cosmetic_thread  # noqa: F401
 import phone_designer.skills.inspect.measure_assembly_fit  # noqa: F401
 import phone_designer.skills.inspect.recommend_process  # noqa: F401
 import phone_designer.skills.inspect.mesh_quality  # noqa: F401
@@ -141,6 +143,8 @@ import phone_designer.skills.io.brep_to_mesh  # noqa: F401
 import phone_designer.skills.io.mesh_simplify  # noqa: F401
 import phone_designer.skills.io.mesh_to_brep  # noqa: F401
 import phone_designer.skills.io.dxf_export  # noqa: F401
+import phone_designer.skills.io.mesh_export  # noqa: F401
+import phone_designer.skills.io.gltf_export  # noqa: F401
 import phone_designer.skills.io.stl_export  # noqa: F401
 import phone_designer.skills.io.stl_import  # noqa: F401
 import phone_designer.skills.modify_boss.battery_dock_pad  # noqa: F401
