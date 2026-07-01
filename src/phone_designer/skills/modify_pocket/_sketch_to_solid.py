@@ -36,6 +36,7 @@ from phone_designer.skills.modify_pocket._sketch import (
     LissajousCurveSketch,
     ParametricCurveSketch,
     PolarCurveSketch,
+    PolesSplineSketch,
     PolygonSketch,
     RectangleSketch,
     RoundedRectSketch,
@@ -349,6 +350,53 @@ def _wire_bspline_closed(s: BSplineSketch):
     return _wire_from_edges([me.Edge()])
 
 
+def _wire_poles_closed(s):
+    """Closed B-spline / Bézier from a CONTROL POLYGON (poles), periodic.
+
+    Uniform periodic knot vector: for n poles at degree p, a periodic B-spline
+    uses n distinct knots (mult 1 each) and n control points, so the curve closes
+    smoothly by wrapping the polygon. Rational when `weights` is given.
+    """
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
+    from OCP.Geom import Geom_BSplineCurve
+    from OCP.TColgp import TColgp_Array1OfPnt
+    from OCP.TColStd import TColStd_Array1OfInteger, TColStd_Array1OfReal
+
+    cx, cy = s.center_x_mm, s.center_y_mm
+    poles = list(s.poles)
+    n = len(poles)
+    deg = min(s.degree, n - 1)
+
+    parr = TColgp_Array1OfPnt(1, n)
+    for i, (x, y) in enumerate(poles, start=1):
+        parr.SetValue(i, _gp_pnt(x + cx, y + cy))
+
+    # Periodic uniform knots: for n poles, a periodic B-spline needs n+1 knots
+    # (mult 1 each). OCCT's periodic rule is nPoles == sum(mults) over the
+    # non-wrapping knots == nKnots - 1, so an (n+1)-knot uniform vector fits.
+    nk = n + 1
+    knots = TColStd_Array1OfReal(1, nk)
+    mults = TColStd_Array1OfInteger(1, nk)
+    for i in range(1, nk + 1):
+        knots.SetValue(i, float(i - 1))
+        mults.SetValue(i, 1)
+
+    if s.weights is not None:
+        if len(s.weights) != n or any(w <= 0 for w in s.weights):
+            raise ValueError("poles_spline: weights len must == poles and all > 0")
+        warr = TColStd_Array1OfReal(1, n)
+        for i, w in enumerate(s.weights, start=1):
+            warr.SetValue(i, float(w))
+        curve = Geom_BSplineCurve(parr, warr, knots, mults, deg, True)
+    else:
+        curve = Geom_BSplineCurve(parr, knots, mults, deg, True)
+
+    me = BRepBuilderAPI_MakeEdge(curve)
+    if not me.IsDone():
+        raise RuntimeError("MakeEdge(poles_spline_closed) failed")
+    return _wire_from_edges([me.Edge()])
+
+
 def _wire_bspline_open(points: list[tuple[float, float]]):
     """Open interpolating B-spline through `points` (no periodic flag)."""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
@@ -577,6 +625,9 @@ def _build_planar_face(sketch):
     if isinstance(sketch, BSplineSketch):
         return _face_from_wire(_wire_bspline_closed(sketch))
 
+    if isinstance(sketch, PolesSplineSketch):
+        return _face_from_wire(_wire_poles_closed(sketch))
+
     if isinstance(sketch, EllipseSketch):
         return _face_from_wire(_wire_ellipse(sketch))
 
@@ -614,6 +665,8 @@ def _build_planar_wire(sketch):
         return _wire_slot(sketch)
     if isinstance(sketch, BSplineSketch):
         return _wire_bspline_closed(sketch)
+    if isinstance(sketch, PolesSplineSketch):
+        return _wire_poles_closed(sketch)
     if isinstance(sketch, EllipseSketch):
         return _wire_ellipse(sketch)
     if isinstance(sketch, CompositeSketch):

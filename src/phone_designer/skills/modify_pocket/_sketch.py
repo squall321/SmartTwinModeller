@@ -111,6 +111,25 @@ class BSplineSketch(BaseModel):
     center_y_mm: float = 0.0
 
 
+class PolesSplineSketch(BaseModel):
+    """Closed B-spline / Bézier defined BY ITS CONTROL POLYGON (poles), not by
+    interpolation. The Class-A "by control vertices" curve — low-oscillation,
+    pole-driven tangency. Built via ``Geom_BSplineCurve(poles, weights, knots,
+    mults, degree, periodic=True)`` (a uniform periodic knot vector), or a
+    rational (weighted) curve when ``weights`` is given. ``degree`` < len(poles).
+    """
+
+    kind: Literal["poles_spline_closed"] = "poles_spline_closed"
+    poles: list[tuple[float, float]] = Field(min_length=3)
+    weights: list[float] | None = Field(
+        default=None,
+        description="Optional per-pole weights (rational / NURBS). len must == "
+                    "len(poles); all > 0. None = a non-rational B-spline.")
+    degree: int = Field(default=3, ge=1, le=8)
+    center_x_mm: float = 0.0
+    center_y_mm: float = 0.0
+
+
 class EllipseSketch(BaseModel):
     kind: Literal["ellipse"] = "ellipse"
     radius_x_mm: float = Field(gt=0)
@@ -294,6 +313,7 @@ SketchSpec = Annotated[
         PolygonSketch,
         SlotSketch,
         BSplineSketch,
+        PolesSplineSketch,
         EllipseSketch,
         CompositeSketch,
         ParametricCurveSketch,
