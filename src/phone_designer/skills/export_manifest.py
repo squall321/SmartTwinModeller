@@ -23,6 +23,7 @@ import phone_designer.skills.transform.scale_body  # noqa: F401
 import phone_designer.skills.transform.split_body  # noqa: F401
 import phone_designer.skills.transform.pattern_seed_body  # noqa: F401
 import phone_designer.skills.transform.path_array_orientation  # noqa: F401
+import phone_designer.skills.transform.deform_body  # noqa: F401
 import phone_designer.skills.create.box  # noqa: F401
 import phone_designer.skills.create.extrude_profile_world  # noqa: F401
 import phone_designer.skills.create.sketch_extrude  # noqa: F401
