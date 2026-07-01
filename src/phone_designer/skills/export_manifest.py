@@ -32,6 +32,7 @@ import phone_designer.skills.create.place_freeform_solid  # noqa: F401
 import phone_designer.skills.create.place_generating_op_solid  # noqa: F401
 import phone_designer.skills.create.disc_with_dome  # noqa: F401
 import phone_designer.skills.create.import_step  # noqa: F401
+import phone_designer.skills.create.offset_sketch  # noqa: F401
 import phone_designer.skills.create.rounded_slab  # noqa: F401
 import phone_designer.skills.modify_boss.boss_with_hole  # noqa: F401
 import phone_designer.skills.modify_boss.crown_shaft_hole  # noqa: F401
@@ -121,6 +122,7 @@ import phone_designer.skills.inspect.detect_sheet_metal  # noqa: F401
 import phone_designer.skills.inspect.estimate_cost  # noqa: F401
 import phone_designer.skills.inspect.mass_properties  # noqa: F401
 import phone_designer.skills.inspect.oriented_bounding_box  # noqa: F401
+import phone_designer.skills.inspect.section_to_sketch  # noqa: F401
 import phone_designer.skills.inspect.measure_assembly_fit  # noqa: F401
 import phone_designer.skills.inspect.recommend_process  # noqa: F401
 import phone_designer.skills.inspect.mesh_quality  # noqa: F401
@@ -135,6 +137,7 @@ from phone_designer.skills.inspect import tolerance_stack as _i_tolerance_stack 
 import phone_designer.skills.io.brep_to_mesh  # noqa: F401
 import phone_designer.skills.io.mesh_simplify  # noqa: F401
 import phone_designer.skills.io.mesh_to_brep  # noqa: F401
+import phone_designer.skills.io.dxf_export  # noqa: F401
 import phone_designer.skills.io.stl_export  # noqa: F401
 import phone_designer.skills.io.stl_import  # noqa: F401
 import phone_designer.skills.modify_boss.battery_dock_pad  # noqa: F401
