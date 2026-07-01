@@ -49,6 +49,22 @@ def main() -> int:
         p = M.cad_generate([{"op": op, "args": a}], name=f"smoke_{op}")
         assert p.get("ok") and p.get("is_solid"), f"{op} failed headless: {p}"
 
+    # Tier-1 general-CAD verbs (the third boolean + body transforms) — multi-step
+    # specs: a base box, then the transform/boolean op on it.
+    for label, spec in (
+        ("intersect", [{"op": "box", "args": {"length_mm": 20, "width_mm": 20, "height_mm": 20}},
+                       {"op": "intersect", "args": {"other": {"kind": "primitive_box",
+                        "length_mm": 20, "width_mm": 20, "height_mm": 20, "position": [10, 0, 0]}}}]),
+        ("move_body", [{"op": "box", "args": {"length_mm": 20, "width_mm": 20, "height_mm": 20}},
+                       {"op": "move_body", "args": {"translate_mm": [30, 0, 0], "rotate_axis": [0, 0, 1], "rotate_deg": 30}}]),
+        ("scale_body", [{"op": "box", "args": {"length_mm": 20, "width_mm": 20, "height_mm": 20}},
+                        {"op": "scale_body", "args": {"factor": 1.5}}]),
+        ("split_body", [{"op": "box", "args": {"length_mm": 20, "width_mm": 20, "height_mm": 20}},
+                        {"op": "split_body", "args": {"plane_origin_mm": [0, 0, 10], "plane_normal": [0, 0, 1], "keep": "positive"}}]),
+    ):
+        p = M.cad_generate(spec, name=f"smoke_{label}")
+        assert p.get("ok") and p.get("is_solid"), f"{label} failed headless: {p}"
+
     c = M.cad_estimate_cost(body_id=g["body_id"], process="cnc_3axis",
                             material="aluminum")
     assert c.get("ok") and c.get("unit_cost_usd", 0) > 0, f"cost failed: {c}"

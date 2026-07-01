@@ -13,9 +13,14 @@ import sys
 from pathlib import Path
 
 # Side-effect imports — 각 모듈이 @skill 데코레이터로 자동 등록
+import phone_designer.skills.compose.intersect  # noqa: F401
 import phone_designer.skills.compose.subtract  # noqa: F401
 import phone_designer.skills.compose.tag_face  # noqa: F401
 import phone_designer.skills.compose.union  # noqa: F401
+import phone_designer.skills.transform.move_body  # noqa: F401
+import phone_designer.skills.transform.mirror_body  # noqa: F401
+import phone_designer.skills.transform.scale_body  # noqa: F401
+import phone_designer.skills.transform.split_body  # noqa: F401
 import phone_designer.skills.create.box  # noqa: F401
 import phone_designer.skills.create.extrude_profile_world  # noqa: F401
 import phone_designer.skills.create.sketch_extrude  # noqa: F401
