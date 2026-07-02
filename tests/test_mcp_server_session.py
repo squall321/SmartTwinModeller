@@ -20,7 +20,12 @@ import pytest
 os.environ.setdefault("PHONE_DESIGNER_UI_HEADLESS", "1")
 os.environ["PHONE_DESIGNER_SKILL_TIMEOUT_S"] = "0"  # inline lane for CI speed
 
-import phone_designer.mcp_server as M  # noqa: E402
+# the `mcp` package (FastMCP) is not installed in every CI lane — skip the whole
+# module cleanly instead of interrupting collection (same guard as
+# test_mcp_server.py).
+M = pytest.importorskip(
+    "phone_designer.mcp_server",
+    reason="mcp (FastMCP) not installed in this environment")
 
 
 @pytest.fixture(scope="module")
@@ -77,7 +82,7 @@ def test_preview_headless_returns_honest_skip_not_blank_images(box_id):
     json.dumps(pv, allow_nan=False)  # strict-JSON-safe payload
 
 
-def test_import_roundtrip(box_id, tmp_path):
+def test_import_roundtrip(box_id):
     exp = M.cad_export(body_id=box_id, formats=["step"], name="sess_reimp")
     imp = M.cad_import(exp["files"]["step"])
     assert imp["ok"] and imp["body_id"]
