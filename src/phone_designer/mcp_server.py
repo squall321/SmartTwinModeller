@@ -46,16 +46,27 @@ def _safe_name(name: str) -> str:
     return base[:64]
 
 
-# ── session body cache: cad_generate mints a body_id; later tools can pass the
-# body_id (resolved to its cached body + STEP) instead of re-passing a file path.
-# The server is one stdio process, so the cache lives for the session.
-_BODIES: dict[str, dict] = {}
-_BODY_SEQ = [0]
+# ── session body store: cad_generate/cad_import mint a body_id; later tools pass
+# the body_id (resolved to its cached body + STEP). Backed by BodyStore: LRU of
+# live bodies (max 32) with STEP-snapshot durability — an evicted body is
+# transparently re-imported from its snapshot (geometry-only; in-session face
+# tags are lost on re-import, documented). Lineage (parent links) powers cad_undo.
+from phone_designer.mcp_support._body_store import BodyStore
+
+_STORE = BodyStore(max_live=int(os.environ.get("PHONE_DESIGNER_MCP_MAX_LIVE", "32")))
+_NAMES: dict[str, str] = {}  # body_id -> artifact basename (display only)
 
 
-def _mint_body_id() -> str:
-    _BODY_SEQ[0] += 1
-    return f"body_{_BODY_SEQ[0]}"
+def _put_body(body, step_path: str | None, name: str,
+              parent_id: str | None = None, op_note: str = "") -> str:
+    bid = _STORE.put(body, step_path=step_path, parent_id=parent_id,
+                     op_note=op_note or name)
+    _NAMES[bid] = name
+    return bid
+
+
+def _body_name(body_id: str | None) -> str | None:
+    return _NAMES.get(body_id or "")
 
 
 def _uri(path: str) -> str:
@@ -67,9 +78,7 @@ def _resolve(part_path: str | None, body_id: str | None):
     if bool(part_path) == bool(body_id):
         raise ValueError("provide exactly one of part_path | body_id")
     if body_id:
-        rec = _BODIES.get(body_id)
-        if rec is None:
-            raise ValueError(f"unknown body_id '{body_id}' (generate one first)")
+        rec = _STORE.get(body_id)  # fm.unknown_body_id if absent
         return rec["body"], rec.get("step_path")
     return _import_step(part_path), part_path
 
@@ -155,17 +164,29 @@ def cad_generate(spec: list[dict], name: str = "part",
     try:
         _ensure_skills()
         from build123d import export_stl
-        from phone_designer.skills.create.generate_from_spec import GenerateFromSpec
+
+        from phone_designer.mcp_support._failure_enrich import enrich_failures
+        from phone_designer.mcp_support._guarded_exec import run_guarded_plan
         name = _safe_name(name)
-        res = GenerateFromSpec().apply(None, {"spec": spec, "plan_name": name})
-        gen = res.extras["generated"]
-        body = res.body
+        # HANG-PROOF: the plan runs in a warm worker subprocess with a hard
+        # timeout (PHONE_DESIGNER_SKILL_TIMEOUT_S, default 120; 0 = inline) — one
+        # stuck OCCT builder cannot block the stdio server. Only the STEP crosses
+        # the pipe; the cached body is re-imported from it.
+        guarded = run_guarded_plan(spec, out_dir=str(_WORKSPACE), name=name)
+        if not guarded.get("ok"):
+            return {"ok": False, "status": "error",
+                    "error": guarded.get("error"), "body_id": None}
+        gen = guarded["generated"]
+        step_path = guarded.get("step_path")
+        body = None
+        if step_path and gen.get("is_solid"):
+            body = _import_step(step_path)
         files: dict[str, str] = {}
         fmts = [f.lower() for f in (formats or ["step"])]
         if body is not None and gen.get("is_solid"):
             stem = str(_WORKSPACE / name)
-            if "step" in fmts and _write_step(body, stem + ".step"):
-                files["step"] = stem + ".step"
+            if "step" in fmts and step_path:
+                files["step"] = step_path
             if "stl" in fmts:
                 try:
                     export_stl(body, stem + ".stl")
@@ -194,14 +215,21 @@ def cad_generate(spec: list[dict], name: str = "part",
             status = "partial"
         body_id = None
         if body is not None and gen.get("is_solid"):
-            body_id = _mint_body_id()
-            _BODIES[body_id] = {"body": body, "step_path": files.get("step"),
-                                "name": name}
+            body_id = _put_body(body, files.get("step") or step_path, name,
+                                op_note=f"generate:{name}")
+        # machine-actionable failures: merge each step's ORIGINAL args back in
+        # (the executor report only carries op/status/error) so enrichment can
+        # dry-run selectors; enrichment ADDS keys, never touches 'error'.
+        steps = list(gen.get("steps") or [])
+        for i, st in enumerate(steps):
+            if i < len(spec) and isinstance(spec[i], dict) and "args" not in st:
+                st["args"] = spec[i].get("args")
+        steps = enrich_failures(steps, body=body)
         return {"ok": gen.get("ok", False), "status": status,
                 "body_id": body_id, "is_solid": gen.get("is_solid"),
                 "volume_mm3": gen.get("volume_mm3"), "bbox_mm": gen.get("bbox_mm"),
                 "n_steps": gen.get("n_steps"), "n_ok": gen.get("n_ok"),
-                "steps": gen.get("steps"), "spec_errors": gen.get("spec_errors"),
+                "steps": steps, "spec_errors": gen.get("spec_errors"),
                 "files": files,
                 "resource_uris": [_uri(p) for p in files.values()]}
     except Exception as exc:  # noqa: BLE001
@@ -306,8 +334,7 @@ def cad_export(body_id: str = "", part_path: str = "",
         from build123d import export_stl
         body, src_step = _resolve(part_path or None, body_id or None)
         stem = str(_WORKSPACE / _safe_name(
-            name or (_BODIES.get(body_id, {}).get("name") if body_id else None)
-            or "export"))
+            name or _body_name(body_id) or "export"))
         files: dict[str, str] = {}
         for f in [x.lower() for x in (formats or ["step"])]:
             if f == "step" and _write_step(body, stem + ".step"):
@@ -360,14 +387,13 @@ def cad_repair_dfm(body_id: str = "", part_path: str = "",
         repaired_id = None
         files: dict[str, str] = {}
         if rep.get("body_changed") and res.body is not None:
-            repaired_id = _mint_body_id()
-            name = _safe_name((_BODIES.get(body_id, {}).get("name")
-                               if body_id else None) or "repaired")
-            step = str(_WORKSPACE / f"{name}_{repaired_id}.step")
+            name = _safe_name(_body_name(body_id) or "repaired")
+            step = str(_WORKSPACE / f"{name}_repaired_{len(_NAMES) + 1}.step")
             if _write_step(res.body, step):
                 files["step"] = step
-            _BODIES[repaired_id] = {"body": res.body,
-                                    "step_path": files.get("step"), "name": name}
+            repaired_id = _put_body(res.body, files.get("step"), name,
+                                    parent_id=body_id or None,
+                                    op_note="repair_dfm")
         return {"ok": True, "repaired_body_id": repaired_id,
                 "body_changed": rep.get("body_changed"), "grade": rep.get("grade"),
                 "before": rep.get("before"), "after": rep.get("after"),
@@ -423,14 +449,13 @@ def cad_dfm_workflow(body_id: str = "", part_path: str = "",
                 "summary": rep.get("summary")}
             if rep.get("body_changed") and rres.body is not None:
                 final_body = rres.body
-                repaired_id = _mint_body_id()
-                name = _safe_name((_BODIES.get(body_id, {}).get("name")
-                                   if body_id else None) or "repaired")
-                step = str(_WORKSPACE / f"{name}_{repaired_id}.step")
+                name = _safe_name(_body_name(body_id) or "repaired")
+                step = str(_WORKSPACE / f"{name}_repaired_{len(_NAMES) + 1}.step")
                 if _write_step(final_body, step):
                     files["step"] = step
-                _BODIES[repaired_id] = {"body": final_body,
-                                        "step_path": files.get("step"), "name": name}
+                repaired_id = _put_body(final_body, files.get("step"), name,
+                                        parent_id=body_id or None,
+                                        op_note="dfm_workflow:repair")
 
         pr = RecommendProcess().apply(final_body, {
             "material": material, "lot_size": lot_size,
@@ -446,6 +471,230 @@ def cad_dfm_workflow(body_id: str = "", part_path: str = "",
                 "repair": repair_out, "quote": quote, "grade": "estimate",
                 "files": files,
                 "resource_uris": [_uri(p) for p in files.values()]}
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+# ── Phase-1 session tools: stateful, self-correcting, hang-proof modelling ────
+@mcp.tool()
+def cad_import(path: str, max_faces: int = 4000) -> dict:
+    """IMPORT an existing STEP file into the session as a body_id, so every other
+    tool (cad_modify / cad_analyze / cad_measure / cad_quote_package …) can work on
+    it without re-parsing the file. Refuses oversize parts (> max_faces faces) with
+    a redirect to cad_analyze(part_path=…) / assembly_reverse_engineer."""
+    try:
+        _ensure_skills()
+        from phone_designer.mcp_support._session_tools import import_body
+        rec = import_body(path, max_faces=max_faces)
+        body = rec.pop("body")
+        name = _safe_name(Path(path).stem)
+        body_id = _put_body(body, rec.get("step_path"), name,
+                            op_note=f"import:{name}")
+        return {"ok": True, "body_id": body_id, **rec}
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+def cad_modify(body_id: str, spec: list[dict], name: str = "") -> dict:
+    """MODIFY an existing session body with more build steps (same spec shape as
+    cad_generate: [{"op": …, "args": {…}}, …]) WITHOUT resending the original
+    spec. Runs hang-proofed (worker + timeout); on success mints a NEW body_id
+    (the input body is never mutated — cad_undo returns to the parent). NOTE:
+    geometry round-trips through STEP, so in-session face tags do not survive."""
+    try:
+        _ensure_skills()
+        from phone_designer.mcp_support._failure_enrich import enrich_failures
+        from phone_designer.mcp_support._guarded_exec import run_guarded_plan
+        rec = _STORE.get(body_id)
+        if not rec.get("step_path"):
+            return {"ok": False, "error": f"body_id '{body_id}' has no STEP "
+                    "snapshot to modify from"}
+        new_name = _safe_name(name or f"{_body_name(body_id) or 'part'}_m{len(_NAMES) + 1}")
+        guarded = run_guarded_plan(spec, initial_step_path=rec["step_path"],
+                                   out_dir=str(_WORKSPACE), name=new_name)
+        if not guarded.get("ok"):
+            return {"ok": False, "error": guarded.get("error"), "body_id": None}
+        gen = guarded["generated"]
+        step_path = guarded.get("step_path")
+        new_id = None
+        new_body = None
+        if step_path and gen.get("is_solid"):
+            new_body = _import_step(step_path)
+            ops = ",".join(s.get("op", "?") for s in spec[:3])
+            new_id = _put_body(new_body, step_path, new_name,
+                               parent_id=body_id, op_note=f"modify:{ops}")
+        steps = list(gen.get("steps") or [])
+        for i, st in enumerate(steps):
+            if i < len(spec) and isinstance(spec[i], dict) and "args" not in st:
+                st["args"] = spec[i].get("args")
+        steps = enrich_failures(steps, body=new_body)
+        return {"ok": bool(gen.get("ok")), "body_id": new_id,
+                "parent_body_id": body_id, "is_solid": gen.get("is_solid"),
+                "volume_mm3": gen.get("volume_mm3"), "bbox_mm": gen.get("bbox_mm"),
+                "n_steps": gen.get("n_steps"), "n_ok": gen.get("n_ok"),
+                "steps": steps,
+                "files": {"step": step_path} if step_path else {},
+                "resource_uris": [_uri(step_path)] if step_path else []}
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+def cad_undo(body_id: str) -> dict:
+    """UNDO one modelling step: return the PARENT body_id of a cad_modify /
+    cad_repair_dfm result (bodies are immutable — undo is just moving back up the
+    lineage). Includes the restored body's volume so the client can verify."""
+    try:
+        _ensure_skills()
+        parent = _STORE.undo(body_id)
+        if parent is None:
+            return {"ok": False,
+                    "error": f"fm.at_root: body_id '{body_id}' has no parent "
+                             "(it was generated/imported directly)"}
+        rec = _STORE.get(parent)
+        from phone_designer.skills.inspect.mass_properties import MassProperties
+        mp = MassProperties().apply(rec["body"], {}).extras
+        return {"ok": True, "body_id": parent,
+                "volume_mm3": mp.get("volume_mm3"),
+                "op_note": rec.get("op_note"),
+                "lineage": _STORE.lineage(parent)}
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+def cad_measure(body_id: str = "", part_path: str = "",
+                what: str = "mass") -> dict:
+    """MEASURE a body (body_id or part_path, exactly one): what='mass' (volume,
+    centroid, inertia), 'obb' (minimal oriented bounding box — true stock size),
+    or 'dimensions' (auto-extracted key dimensions). Read-only."""
+    try:
+        _ensure_skills()
+        from phone_designer.mcp_support._session_tools import measure_body
+        body, _ = _resolve(part_path or None, body_id or None)
+        return {"ok": True, "what": what, **measure_body(body, what=what)}
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+def cad_preview(body_id: str = "", part_path: str = "",
+                views: list[str] | None = None) -> dict:
+    """RENDER preview images (PNG) of a body from standard views (iso/front/top/…)
+    into the workspace, so the client can SEE what it modelled. In a no-GL
+    (headless) environment this returns an honest skip marker instead of blank
+    images."""
+    try:
+        _ensure_skills()
+        from phone_designer.mcp_support._session_tools import preview_body
+        body, _ = _resolve(part_path or None, body_id or None)
+        out_dir = _WORKSPACE / "previews"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        pv = preview_body(body, str(out_dir), views=tuple(views or ("iso", "front", "top")))
+        uris = [_uri(p) for p in (pv.get("images") or {}).values() if p]
+        return {"ok": True, **pv, "resource_uris": uris}
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+def cad_preflight(spec: list[dict], body_id: str = "") -> dict:
+    """PREFLIGHT a cad_generate/cad_modify spec WITHOUT executing it: per step —
+    is the op known, do the args validate, and (when a body_id is given and the op
+    targets faces/edges) how many entities does the selector match. Catch mistakes
+    BEFORE paying for geometry. Fast (validation only)."""
+    try:
+        _ensure_skills()
+        from phone_designer.mcp_support._failure_enrich import preflight
+        body = _STORE.get(body_id)["body"] if body_id else None
+        pf = preflight(spec, body=body)
+        # ok = the TOOL ran; spec_ok = the SPEC verdict (all ops known + valid).
+        return {"ok": True, "spec_ok": pf.pop("ok", None), **pf}
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+# ── Phase-1 pillar tools: compare / variants / cheapest-variant / RFQ bundle ──
+@mcp.tool()
+def cad_compare(part_a: str = "", body_a: str = "",
+                part_b: str = "", body_b: str = "") -> dict:
+    """COMPARE two parts (rev-A vs rev-B; each side a STEP part path OR a session
+    body_id): classification (identical / scaled / feature-changed / different),
+    similarity score, scale factor, Hausdorff distance, per-feature diff.
+    grade='estimate'."""
+    try:
+        _ensure_skills()
+        from phone_designer.mcp_support._pillar_tools import compare_parts_tool
+        _, a_path = _resolve(part_a or None, body_a or None)
+        _, b_path = _resolve(part_b or None, body_b or None)
+        if not a_path or not b_path:
+            return {"ok": False, "error": "both sides need a STEP file"}
+        return compare_parts_tool(a_path, b_path, str(_WORKSPACE))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+def cad_variants(part_path: str = "", body_id: str = "",
+                 n_variants: int = 4) -> dict:
+    """GENERATE a parametric VARIANT FAMILY of a part (body_id or part_path):
+    identifies the key driving dimensions, then produces n scaled/varied family
+    members with their parameter tables. grade='estimate'."""
+    try:
+        _ensure_skills()
+        from phone_designer.mcp_support._pillar_tools import variants_tool
+        _, step_path = _resolve(part_path or None, body_id or None)
+        if not step_path:
+            return {"ok": False, "error": "no STEP file for this body_id"}
+        return variants_tool(step_path, n_variants=n_variants,
+                             out_dir=str(_WORKSPACE))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+def cad_cheapest_variant(part_path: str = "", body_id: str = "",
+                         process: str = "cnc_3axis", material: str = "aluminum",
+                         lot_size: int = 1000) -> dict:
+    """SEARCH the variant space for the CHEAPEST genuinely-viable variant of a part
+    (body_id or part_path) in a process/material/lot. STRICT viability gate — a
+    marginal candidate is never crowned. Slow (multiple cost evaluations).
+    grade='estimate'."""
+    try:
+        _ensure_skills()
+        from phone_designer.mcp_support._pillar_tools import cheapest_variant_tool
+        _, step_path = _resolve(part_path or None, body_id or None)
+        if not step_path:
+            return {"ok": False, "error": "no STEP file for this body_id"}
+        return cheapest_variant_tool(step_path, process=process,
+                                     material=material, lot_size=lot_size,
+                                     out_dir=str(_WORKSPACE))
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+def cad_quote_package(body_id: str = "", part_path: str = "",
+                      material: str = "aluminum",
+                      lot_sizes: list[int] | None = None) -> dict:
+    """ONE-CALL RFQ PACKAGE: bundle everything a supplier quote needs into a single
+    zip — the STEP, per-lot cost estimates (grade='estimate', labeled inside the
+    manifest), the process recommendation with exclusion reasons, a quality
+    summary, and a DXF cross-section. Returns the zip path + manifest."""
+    try:
+        _ensure_skills()
+        from phone_designer.skills.inspect.quote_package import QuotePackage
+        body, _ = _resolve(part_path or None, body_id or None)
+        out_dir = _WORKSPACE / f"quote_{_safe_name(_body_name(body_id) or 'part')}"
+        qp = QuotePackage().apply(body, {
+            "out_dir": str(out_dir), "material": material,
+            "lot_sizes": lot_sizes or [1, 100, 1000],
+        }).extras
+        zip_path = qp.get("zip_path")
+        return {"ok": True, "zip_path": zip_path,
+                "manifest": qp.get("manifest"),
+                "resource_uris": [_uri(zip_path)] if zip_path else []}
     except Exception as exc:  # noqa: BLE001
         return _err(exc)
 

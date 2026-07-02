@@ -85,7 +85,9 @@ def test_resolve_guards_one_of_body_id_or_path():
     assert mcp_server.cad_estimate_cost(part_path="x.step",
                                         body_id="body_1")["ok"] is False  # both
     r = mcp_server.cad_estimate_cost(body_id="body_does_not_exist")
-    assert r["ok"] is False and "unknown body_id" in r["error"]
+    # BodyStore raises the structured fm.unknown_body_id token (was the older
+    # free-text "unknown body_id" message before Phase-1 sessionization).
+    assert r["ok"] is False and "unknown_body_id" in r["error"]
 
 
 # ── base-shape primitives are fully covered by the MCP surface ────────────────
