@@ -16,6 +16,15 @@ The cross-section is a circular wire of radius `wire_radius_mm` placed at the
 helix start point and oriented perpendicular to the helix tangent at that
 point (this is what `BRepOffsetAPI_MakePipe` expects for a smooth sweep).
 
+SOLIDITY (2026-07 fix): the profile wire is capped into a FACE before the
+sweep. Per OCCT sweep semantics MakePipe maps wire→SHELL but face→SOLID —
+sweeping the bare wire produced a single-face OPEN tube (zero TopAbs_SOLID;
+its VolumeProperties "volume" was only a divergence-theorem pseudo-mass), so
+`generate_from_spec`'s honest is_solid gate failed it. The result is now
+lifted/gated by `_lift_swept_shape_to_solid`: require a TopAbs_SOLID (falling
+back to BRepBuilderAPI_MakeSolid over closed shells), flip an inside-out
+result (negative signed volume → `Complemented()`), and refuse volume ≈ 0.
+
 The entire helix + cross-section is built in the local frame, the pipe is
 swept locally, and the resulting solid is then transformed so that the helix
 axis (local +Z) maps to `axis_direction` at `axis_origin`.
@@ -113,6 +122,64 @@ def _build_circular_profile_wire_local(
     return mw.Wire()
 
 
+def _lift_swept_shape_to_solid(shape):
+    """MakePipe result → a genuine TopAbs_SOLID, honestly gated.
+
+    Sweeping a FACE profile makes MakePipe emit a capped SOLID directly
+    (OCCT sweep semantics: wire→shell, face→solid). This helper is the gate
+    plus a defensive fallback:
+
+      * result already contains a TopAbs_SOLID → pass through;
+      * result is only shell(s) → lift with BRepBuilderAPI_MakeSolid;
+      * signed volume negative → the solid is INSIDE-OUT (point classification
+        inverted, downstream booleans get the complement) → ``Complemented()``
+        (the deform_body-proven trap);
+      * final refusal if no solid or volume ≤ 1e-6 (volume>0 alone LIES for an
+        open shell — VolumeProperties returns a divergence-theorem pseudo-mass).
+    """
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+    from OCP.TopAbs import TopAbs_SHELL, TopAbs_SOLID
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    def _signed_volume(s) -> float:
+        p = GProp_GProps()
+        BRepGProp.VolumeProperties_s(s, p)
+        return p.Mass()
+
+    if TopExp_Explorer(shape, TopAbs_SOLID).More():
+        solid = shape
+    else:
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeSolid
+
+        ms = BRepBuilderAPI_MakeSolid()
+        n_shells = 0
+        it = TopExp_Explorer(shape, TopAbs_SHELL)
+        while it.More():
+            ms.Add(TopoDS.Shell_s(it.Current()))
+            n_shells += 1
+            it.Next()
+        if n_shells == 0:
+            raise RuntimeError(
+                "helical_spring: sweep produced neither a solid nor a shell")
+        ms.Build()
+        if not ms.IsDone():
+            raise RuntimeError(
+                "helical_spring: could not lift swept shell(s) to a solid")
+        solid = ms.Solid()
+
+    vol = _signed_volume(solid)
+    if vol < 0.0:
+        solid = solid.Complemented()
+        vol = _signed_volume(solid)
+    if vol <= 1e-6:
+        raise RuntimeError(
+            f"helical_spring: swept solid volume {vol:.6g} mm³ ≈ 0 — sweep "
+            f"degenerated (no true enclosed volume)")
+    return solid
+
+
 def _transform_shape_to_axis(
     shape,
     axis_origin: tuple[float, float, float],
@@ -194,11 +261,19 @@ class HelicalSpring(SkillBase):
             args.coil_radius_mm, args.wire_radius_mm, args.pitch_mm,
         )
 
-        pipe = BRepOffsetAPI_MakePipe(helix, profile)
+        # Cap the profile wire into a FACE: MakePipe sweeps wire→SHELL (an
+        # OPEN one-face tube, zero TopAbs_SOLID) but face→SOLID with end caps.
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+        mf = BRepBuilderAPI_MakeFace(profile, True)
+        mf.Build()
+        if not mf.IsDone():
+            raise RuntimeError("helical_spring: profile face failed")
+
+        pipe = BRepOffsetAPI_MakePipe(helix, mf.Face())
         pipe.Build()
         if not pipe.IsDone():
             raise RuntimeError("helical_spring: pipe sweep failed")
-        swept_local = pipe.Shape()
+        swept_local = _lift_swept_shape_to_solid(pipe.Shape())
 
         shape = _transform_shape_to_axis(
             swept_local, args.axis_origin, args.axis_direction,

@@ -1378,6 +1378,46 @@ def compare_regress(
     raise typer.Exit(code=1 if cmp["regressions"] else 0)
 
 
+@app.command("nl2spec-eval")
+def nl2spec_eval(
+    tasks_dir: Path = typer.Option(
+        None, "--tasks-dir", help="태스크 카드 디렉토리 (기본 evals/nl2spec/tasks)."),
+    baseline: Path = typer.Option(
+        None, "--baseline", help="비교/기록할 baseline JSON 경로."),
+    update_baseline: bool = typer.Option(
+        False, "--update-baseline", help="현재 결과로 baseline 을 갱신."),
+    json_out: Path = typer.Option(
+        None, "--json-out", help="전체 결과 JSON 출력 경로."),
+):
+    """NL→spec REPLAY 평가: evals/nl2spec 태스크 카드의 reference spec 을
+    실제 실행(GenerateFromSpec)하고 invariant 를 채점, baseline 과 비교.
+    (deterministic — LIVE LLM 레인은 별도/야간 전용.) runner 는 파일 기반이라
+    evals/nl2spec/runner.py 를 그대로 구동한다."""
+    import runpy
+    repo = Path(__file__).resolve().parents[2]
+    runner = repo / "evals" / "nl2spec" / "runner.py"
+    if not runner.exists():
+        typer.echo(f"runner not found: {runner}", err=True)
+        raise typer.Exit(code=2)
+    argv = []
+    if tasks_dir:
+        argv += ["--tasks-dir", str(tasks_dir)]
+    if baseline:
+        argv += ["--baseline", str(baseline)]
+    if update_baseline:
+        argv += ["--update-baseline"]
+    if json_out:
+        argv += ["--json-out", str(json_out)]
+    old = sys.argv
+    try:
+        sys.argv = [str(runner)] + argv
+        mod = runpy.run_path(str(runner), run_name="__not_main__")
+        rc = int(mod["main"](argv))
+    finally:
+        sys.argv = old
+    raise typer.Exit(code=rc)
+
+
 @app.command()
 def version():
     """버전 출력."""

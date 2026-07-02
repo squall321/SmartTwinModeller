@@ -239,6 +239,41 @@ def test_helical_spring_volume_and_bbox():
     assert height + 2 * wire_r - 0.2 <= axial <= height + 5.0 * wire_r
 
 
+def test_helical_spring_is_true_solid_with_pappus_volume():
+    """Regression pin for the 2026-07 non-solid fix. The old wire-profile
+    MakePipe produced a single-face OPEN shell: ZERO TopAbs_SOLID sub-shapes
+    with a positive divergence-theorem pseudo-mass — generate_from_spec's
+    honest is_solid gate (volume>0 AND has TopAbs_SOLID) failed it. The face-
+    profile sweep must yield >=1 genuine solid whose TRUE enclosed volume
+    matches Pappus (A_wire x helix length) within 6%."""
+    from OCP.TopAbs import TopAbs_SOLID
+    from OCP.TopExp import TopExp_Explorer
+
+    coil_r, wire_r, pitch, turns = 10.0, 1.0, 4.0, 5.0
+    r = HelicalSpring().apply(None, {
+        "coil_radius_mm": coil_r,
+        "wire_radius_mm": wire_r,
+        "pitch_mm": pitch,
+        "turns": turns,
+    })
+    shp = r.body.wrapped
+
+    n_solids = 0
+    it = TopExp_Explorer(shp, TopAbs_SOLID)
+    while it.More():
+        n_solids += 1
+        it.Next()
+    assert n_solids >= 1, (
+        f"helical_spring must return a genuine TopAbs_SOLID, got {n_solids} "
+        f"solids (open-shell regression)")
+
+    L = turns * math.sqrt((2.0 * math.pi * coil_r) ** 2 + pitch ** 2)
+    pappus = L * math.pi * wire_r * wire_r
+    v = _volume(r.body)
+    assert v == pytest.approx(pappus, rel=0.06), (
+        f"true swept volume {v:.2f} vs Pappus {pappus:.2f} — beyond 6%")
+
+
 def test_helical_spring_axis_oriented_x():
     """When axis_direction = +X, the spring should extend along X, not Z."""
     r = HelicalSpring().apply(None, {

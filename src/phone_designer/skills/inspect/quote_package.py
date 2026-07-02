@@ -5,6 +5,8 @@ ONE call turns the working body into the zip a buyer attaches to an RFQ:
     out_dir/quote_package.zip
       ├─ part.step        # the body, exported (STEPControl, AP242)
       ├─ section.dxf      # cross-section at the body centroid plane
+      ├─ drawing/…        # Phase-2 drawing sheet (include_drawing=True):
+      │                   #   part_drawing.html + per-view DXFs, grade='draft'
       └─ manifest.json    # the machine-readable contract (below)
 
 manifest.json sections (completeness IS the contract):
@@ -21,6 +23,16 @@ manifest.json sections (completeness IS the contract):
                             mass + key dims are headless, milliseconds, and
                             'measured'-grade. The manifest SAYS this.)
   dxf                     — the cross-section artifact entry
+  drawing                 — (include_drawing=True, the default) the promoted
+                            Phase-2 drawing_sheet: {html, dxf_views:[...],
+                            grade='draft', label='DRAFT FOR REVIEW'}. FAILURE
+                            ISOLATION: if the drawing fails the quote still
+                            ships — the section becomes {'status':'failed',
+                            'error':...} and every other artifact (costs /
+                            step / dxf) is untouched. include_drawing=False
+                            omits the section AND the zip entries entirely
+                            (byte-compatible file set with the pre-drawing
+                            contract).
 
 PERFORMANCE (the 5.8x lever recommend_process pinned): the geometry drivers
 (volume via mass_properties + feature catalog) are extracted ONCE here and
@@ -71,6 +83,8 @@ _STEP_NAME = "part.step"
 _DXF_NAME = "section.dxf"
 _MANIFEST_NAME = "manifest.json"
 _ZIP_NAME = "quote_package.zip"
+_DRAWING_DIR = "drawing"
+_DRAWING_PART_NAME = "part"
 
 
 def _occt_shape(body: Any):
@@ -134,14 +148,19 @@ def _solid_stats(body: Any) -> tuple[int, float]:
             "extracted ONCE, the 5.8x fast path), recommend a process (with "
             "excluded-process reasons), attach a headless quality summary "
             "(mass_properties + key dimensions) and a DXF cross-section at "
-            "the body centroid, and zip everything with a manifest.json in "
-            "which EVERY cost artifact is labeled grade='estimate'. Refuses "
-            "a non-solid body (fm.no_solid_body). Read-only.",
+            "the body centroid, plus (include_drawing=True, default) the "
+            "Phase-2 drawing_sheet (third-angle HTML sheet + per-view DXFs, "
+            "grade='draft', DRAFT FOR REVIEW label) under drawing/ — a "
+            "drawing failure NEVER kills the quote, it is recorded honestly "
+            "in manifest['drawing'] — and zip everything with a "
+            "manifest.json in which EVERY cost artifact is labeled "
+            "grade='estimate'. Refuses a non-solid body (fm.no_solid_body). "
+            "Read-only.",
     selector_kinds=[],
     history_rules={},
     produces_features=["quote_package"],
     expansion=["mass_properties", "estimate_cost", "recommend_process",
-               "dxf_export"],
+               "dxf_export", "drawing_sheet"],
     preserves=["body_topology"],
     manufacturing={},
     failure_modes=["fm.no_solid_body", "fm.invalid_args"],
@@ -172,6 +191,16 @@ class QuotePackage(SkillBase):
                         "recommend_process sees all candidates and the cost "
                         "table prices the RECOMMENDED process (fallback "
                         "cnc_3axis). Unknown keys RAISE (a typo is a bug).")
+        include_drawing: bool = Field(
+            default=True,
+            description="Attach the Phase-2 drawing_sheet (third-angle HTML "
+                        "sheet + per-view layered DXFs, grade='draft', "
+                        "'DRAFT FOR REVIEW' label) under drawing/ in the zip "
+                        "and as manifest['drawing']. A drawing failure NEVER "
+                        "kills the quote: it is recorded honestly as "
+                        "{'status':'failed','error':...} and the rest of the "
+                        "package still ships. False -> the pre-drawing file "
+                        "set exactly (no drawing/ entries, no manifest key).")
 
         @field_validator("lot_sizes")
         @classmethod
@@ -338,10 +367,56 @@ class QuotePackage(SkillBase):
             except Exception as exc:  # noqa: BLE001 — try the next normal
                 dxf_entry["error"] = f"{type(exc).__name__}: {str(exc)[:200]}"
 
+        # ── Phase-2 drawing sheet (promoted: plan 2-1 → 1-5) ───────────────
+        # FAILURE ISOLATION: a drawing failure must NOT kill the quote — the
+        # zip still ships costs + step + dxf, and the failure is recorded
+        # honestly in manifest['drawing'] (status='failed' + raw error).
+        drawing_entry: dict[str, Any] | None = None
+        drawing_files: list[tuple[Path, str]] = []  # (disk_path, zip arcname)
+        if args.include_drawing:
+            from phone_designer.skills.inspect.drawing_sheet import (
+                DRAFT_LABEL,
+                DrawingSheet,
+            )
+            drawing_dir = out_dir / _DRAWING_DIR
+            try:
+                ds = DrawingSheet().apply(body, {
+                    "out_dir": str(drawing_dir),
+                    "part_name": _DRAWING_PART_NAME,
+                    "include_section": False,  # the zip already ships
+                                               # section.dxf at the centroid
+                }).extras["drawing_sheet"]
+                written = ds.get("written") or {}
+                html_disk = Path(written["html"])
+                html_arc = f"{_DRAWING_DIR}/{html_disk.name}"
+                drawing_files.append((html_disk, html_arc))
+                dxf_views: list[str] = []
+                for view_path in (written.get("dxf") or {}).values():
+                    dxf_disk = Path(view_path)
+                    dxf_arc = f"{_DRAWING_DIR}/{dxf_disk.name}"
+                    drawing_files.append((dxf_disk, dxf_arc))
+                    dxf_views.append(dxf_arc)
+                drawing_entry = {
+                    "status": "ok",
+                    "html": html_arc,
+                    "dxf_views": dxf_views,
+                    "grade": ds.get("grade", "draft"),   # 'draft' — a DRAFT
+                    "label": DRAFT_LABEL,                # sheet, not released
+                }
+            except Exception as exc:  # noqa: BLE001 — isolation, by contract
+                drawing_files = []
+                drawing_entry = {
+                    "status": "failed",
+                    "error": f"{type(exc).__name__}: {str(exc)[:300]}",
+                    "html": None,
+                    "dxf_views": [],
+                }
+
         # ── manifest ────────────────────────────────────────────────────────
         artifacts = [_STEP_NAME]
         if dxf_entry["path"] is not None:
             artifacts.append(_DXF_NAME)
+        artifacts.extend(arc for _, arc in drawing_files)
         artifacts.append(_MANIFEST_NAME)
         manifest = _json_safe({
             "schema_version": SCHEMA_VERSION,
@@ -368,6 +443,9 @@ class QuotePackage(SkillBase):
             "process_recommendation": rec_manifest,
             "quality_summary": quality_summary,
             "dxf": dxf_entry,
+            # include_drawing=False omits the key entirely — the pre-drawing
+            # manifest schema, byte-for-byte key set.
+            **({"drawing": drawing_entry} if drawing_entry is not None else {}),
             "artifacts": artifacts,
         })
         manifest_path = out_dir / _MANIFEST_NAME
@@ -380,6 +458,8 @@ class QuotePackage(SkillBase):
             zf.write(step_path, arcname=_STEP_NAME)
             if dxf_entry["path"] is not None:
                 zf.write(dxf_path, arcname=_DXF_NAME)
+            for disk_path, arcname in drawing_files:
+                zf.write(disk_path, arcname=arcname)
             zf.write(manifest_path, arcname=_MANIFEST_NAME)
 
         extras = {"zip_path": str(zip_path), "manifest": manifest}

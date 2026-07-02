@@ -1,0 +1,34 @@
+name: helical_spring_coil
+intent_en: 'Create a solid helical coil spring: coil radius 10, wire radius 1, pitch
+  4, 5 turns'
+intent_kr: 코일 반지름 10 와이어 반지름 1 피치 4 5회전 나선형 코일 스프링을 만들어줘
+tags:
+- spring
+- helical
+- coil
+- helix
+- wire
+- spiral
+spec:
+- op: helical_spring
+  args:
+    coil_radius_mm: 10
+    wire_radius_mm: 1
+    pitch_mm: 4
+    turns: 5
+expected:
+  is_solid: true
+  volume_mm3:
+  - 970.476
+  - 1010.088
+  bbox_mm:
+  - - 25.163
+    - 25.141
+    - 24.614
+  - - 25.773
+    - 25.749
+    - 25.212
+  notes: wire_radius_mm must be < coil_radius_mm (self-intersection refusal) and
+    pitch_mm must be >= 2*wire_radius_mm (adjacent-coil overlap refusal). Volume
+    matches Pappus (pi*wire_r^2 x helix length) within ~0.2%; the swept result is
+    a genuine capped TopAbs_SOLID (face-profile MakePipe), not an open shell.

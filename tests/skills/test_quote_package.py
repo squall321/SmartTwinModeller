@@ -16,6 +16,15 @@ assertion reads the same result). Verified contract:
     (mass_properties + key_dimensions, not emit_quality_report) and its
     volume matches the box;
   * the DXF entry exists (centroid section, >=1 polyline);
+  * PROMOTED Phase-2 drawing (include_drawing=True, the default): the zip
+    carries drawing/part_drawing.html + >=4 per-view DXFs and
+    manifest['drawing'] = {html, dxf_views, grade='draft',
+    label='DRAFT FOR REVIEW', status='ok'};
+  * include_drawing=False -> the OLD contract exactly (same zip file set,
+    no 'drawing' manifest key, no drawing/ dir on disk);
+  * FAILURE ISOLATION: DrawingSheet.apply raising (monkeypatched) does NOT
+    kill the quote — manifest['drawing']={'status':'failed','error':...} and
+    costs/step/dxf still ship;
   * a body with no volume (an open face) is REFUSED with fm.no_solid_body;
   * Args typos are refused with fm.invalid_args;
   * extras is strict-JSON-safe (json.dumps allow_nan=False).
@@ -63,9 +72,11 @@ def test_zip_and_manifest_sections_exist(quote):
     assert zip_path == out_dir / "quote_package.zip"
 
     manifest = res.extras["manifest"]
-    # manifest completeness IS the contract.
+    # manifest completeness IS the contract ('drawing' since the 2-1 → 1-5
+    # promotion — include_drawing defaults to True).
     for section in ("part", "costs", "process_recommendation",
-                    "quality_summary", "dxf", "artifacts", "cost_model"):
+                    "quality_summary", "dxf", "drawing", "artifacts",
+                    "cost_model"):
         assert section in manifest, f"manifest missing section '{section}'"
     assert manifest["kind"] == "quote_package"
     assert manifest["part"]["step_path"] == "part.step"
@@ -151,12 +162,19 @@ def test_dxf_entry_exists_and_zip_contents(quote):
     assert dxf["plane_origin"] == pytest.approx(
         res.extras["manifest"]["quality_summary"]["mass_properties"]["centroid"])
 
+    # exact file set: the classic three PLUS the promoted drawing artifacts
+    # (include_drawing defaults to True).
+    drawing = manifest["drawing"]
+    expected = ({"part.step", "section.dxf", "manifest.json",
+                 drawing["html"]} | set(drawing["dxf_views"]))
     with zipfile.ZipFile(out_dir / "quote_package.zip") as zf:
         names = set(zf.namelist())
-        assert names == {"part.step", "section.dxf", "manifest.json"}
+        assert names == expected
         inner = json.loads(zf.read("manifest.json").decode("utf-8"))
         assert inner == manifest  # the zip carries the SAME manifest
-    assert manifest["artifacts"] == ["part.step", "section.dxf", "manifest.json"]
+    assert manifest["artifacts"] == (
+        ["part.step", "section.dxf", drawing["html"]]
+        + drawing["dxf_views"] + ["manifest.json"])
 
 
 @pytest.mark.slow
@@ -168,6 +186,87 @@ def test_extras_strict_json_safe_and_body_unchanged(quote, box_body):
                 "manifest": res.extras["manifest"]}, allow_nan=False)
     # read-only: the returned body IS the input.
     assert res.body is box_body
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Phase-2 drawing promotion (plan 2-1 → 1-5)
+
+
+@pytest.mark.slow
+def test_drawing_promoted_into_zip_and_manifest(quote):
+    """Default include_drawing=True: sheet HTML + >=4 view DXFs in the zip,
+    manifest['drawing'] labeled grade='draft' / DRAFT FOR REVIEW."""
+    res, out_dir = quote
+    drawing = res.extras["manifest"]["drawing"]
+    assert drawing["status"] == "ok"
+    assert drawing["grade"] == "draft"
+    assert drawing["label"] == "DRAFT FOR REVIEW"
+    assert drawing["html"] == "drawing/part_drawing.html"
+    # third-angle FRONT/TOP/RIGHT + ISO -> at least 4 per-view DXFs.
+    assert len(drawing["dxf_views"]) >= 4
+    assert all(v.startswith("drawing/") and v.endswith(".dxf")
+               for v in drawing["dxf_views"])
+
+    with zipfile.ZipFile(out_dir / "quote_package.zip") as zf:
+        names = set(zf.namelist())
+        assert drawing["html"] in names
+        assert set(drawing["dxf_views"]) <= names
+        # the sheet itself carries the DRAFT label (baked into the artifact).
+        html = zf.read(drawing["html"]).decode("utf-8")
+        assert "DRAFT FOR REVIEW" in html
+        for view_arc in drawing["dxf_views"]:
+            assert len(zf.read(view_arc)) > 0
+
+
+@pytest.mark.slow
+def test_include_drawing_false_is_the_old_contract(box_body, tmp_path):
+    """include_drawing=False -> the pre-promotion zip file set exactly, no
+    'drawing' manifest key, no drawing/ dir on disk."""
+    from phone_designer.skills.inspect.quote_package import QuotePackage
+
+    res = QuotePackage().apply(box_body, {"out_dir": str(tmp_path),
+                                          "include_drawing": False})
+    manifest = res.extras["manifest"]
+    assert "drawing" not in manifest
+    assert manifest["artifacts"] == ["part.step", "section.dxf",
+                                     "manifest.json"]
+    with zipfile.ZipFile(tmp_path / "quote_package.zip") as zf:
+        assert set(zf.namelist()) == {"part.step", "section.dxf",
+                                      "manifest.json"}
+    assert not (tmp_path / "drawing").exists()
+
+
+@pytest.mark.slow
+def test_drawing_failure_never_kills_the_quote(box_body, tmp_path, monkeypatch):
+    """FAILURE ISOLATION: DrawingSheet.apply raising is recorded honestly as
+    manifest['drawing']={'status':'failed','error':...} — the quote still
+    returns ok and the zip still ships costs + step + dxf."""
+    from phone_designer.skills.inspect import drawing_sheet as ds_mod
+    from phone_designer.skills.inspect.quote_package import QuotePackage
+
+    def _boom(self, body, args):  # noqa: ANN001, ARG002
+        raise RuntimeError("forced drawing failure (test)")
+
+    monkeypatch.setattr(ds_mod.DrawingSheet, "apply", _boom)
+    res = QuotePackage().apply(box_body, {"out_dir": str(tmp_path)})
+
+    manifest = res.extras["manifest"]
+    drawing = manifest["drawing"]
+    assert drawing["status"] == "failed"
+    assert "RuntimeError" in drawing["error"]
+    assert "forced drawing failure" in drawing["error"]
+    assert drawing["html"] is None
+    assert drawing["dxf_views"] == []
+    # the rest of the package still shipped, grade labels intact.
+    assert manifest["costs"]
+    assert all(c["grade"] == "estimate" for c in manifest["costs"])
+    assert manifest["cost_model"]["grade"] == "estimate"
+    assert manifest["artifacts"] == ["part.step", "section.dxf",
+                                     "manifest.json"]
+    with zipfile.ZipFile(tmp_path / "quote_package.zip") as zf:
+        assert set(zf.namelist()) == {"part.step", "section.dxf",
+                                      "manifest.json"}
+    json.dumps(res.extras, allow_nan=False)  # still strict-JSON-safe
 
 
 # ──────────────────────────────────────────────────────────────────────────────

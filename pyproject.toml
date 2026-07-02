@@ -42,6 +42,11 @@ dependencies = [
     "PySide6>=6.7",
     # LLM
     "anthropic>=0.40",
+    # MCP server (FastMCP). Was only in requirements-headless — the Windows CI
+    # lane installs from pyproject, so all 31 MCP-surface tests silently SKIPPED
+    # there (importorskip). Declaring it here gives the Phase-1/2 session loop
+    # real CI coverage on the full-suite lane.
+    "mcp>=1.0",
     # IO / validation
     "pydantic>=2.7",
     "pyyaml>=6.0",
