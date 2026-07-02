@@ -1,0 +1,34 @@
+name: neg_revolve_axis_not_z_refused
+intent_en: 'NEGATIVE example — sketch_revolve is LOCKED to the world Z axis; axis_direction
+  (1,0,0) is REFUSED (fm.unsupported_revolve_axis): revolve about Z then move_body-rotate
+  the result instead'
+intent_kr: 부정 예제 — sketch_revolve 는 Z축 전용이다. X축 회전은 fm.unsupported_revolve_axis
+  로 거절되며, Z축으로 회전 후 move_body 로 돌려야 한다
+tags:
+- negative
+- revolve
+- axis
+- z-lock
+- refusal
+spec:
+- op: box
+  args:
+    length_mm: 5
+    width_mm: 5
+    height_mm: 2
+- op: sketch_revolve
+  args:
+    sketch:
+      kind: circle
+      diameter_mm: 6
+      center_x_mm: 15
+    axis_direction:
+    - 1
+    - 0
+    - 0
+expected:
+  ok: false
+  failing_op: sketch_revolve
+  error_contains: fm.unsupported_revolve_axis
+  notes: 'The Z-lock is structural (profile orientation convention). Workflow: revolve
+    about Z, then move_body rotate_axis/rotate_deg.'

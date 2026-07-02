@@ -1,0 +1,44 @@
+task_id: t03_bent_pipe
+nl_request_en: Bend a round 6 mm tube along a straight run, a 90-degree elbow and
+  a riser — a bent pipe
+nl_request_kr: 둥근 관을 구부려 직선-엘보-수직 구간으로 이어지는 파이프를 만들어줘
+reference_spec:
+- op: sketch_sweep
+  args:
+    section:
+      kind: circle
+      diameter_mm: 6
+    path:
+      kind: path
+      plane: XY
+      segments:
+      - kind: line
+        start:
+        - 0
+        - 0
+        end:
+        - 20
+        - 0
+      - kind: arc
+        start:
+        - 20
+        - 0
+        end:
+        - 28
+        - 8
+        radius: 8
+        ccw: true
+      - kind: line
+        start:
+        - 28
+        - 8
+        end:
+        - 28
+        - 28
+invariants:
+  is_solid: true
+  volume_mm3:
+  - 1456.553
+  - 1516.005
+  feature_counts:
+    sketch_sweep: 1

@@ -1,0 +1,30 @@
+name: rounded_slab_case
+intent_en: Create a phone-case style rounded slab 150 x 72 x 8 with 8 mm corner
+  radius
+intent_kr: 모서리 반경 8mm 의 둥근 판(폰 케이스 형태) 150 x 72 x 8 을 만들어줘
+tags:
+- rounded
+- slab
+- case
+- plate
+- corner
+- radius
+spec:
+- op: rounded_slab
+  args:
+    length_mm: 150
+    width_mm: 72
+    height_mm: 8
+    corner_r_mm: 8
+expected:
+  is_solid: true
+  volume_mm3:
+  - 84241.285
+  - 87679.705
+  bbox_mm:
+  - - 148.45
+    - 71.23
+    - 7.87
+  - - 151.55
+    - 72.77
+    - 8.13

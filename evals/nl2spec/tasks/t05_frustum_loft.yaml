@@ -1,0 +1,24 @@
+task_id: t05_frustum_loft
+nl_request_en: Loft from a 10x10 square down to a 4x4 square over 10 mm (ruled)
+nl_request_kr: 10x10 에서 4x4 로 줄어드는 높이 10 사각뿔대를 로프트로 만들어줘
+reference_spec:
+- op: sketch_loft
+  args:
+    sections:
+    - kind: rectangle
+      length_mm: 10
+      width_mm: 10
+    - kind: rectangle
+      length_mm: 4
+      width_mm: 4
+    heights_mm:
+    - 0
+    - 10
+    ruled: true
+invariants:
+  is_solid: true
+  volume_mm3:
+  - 509.6
+  - 530.4
+  feature_counts:
+    sketch_loft: 1

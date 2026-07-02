@@ -1,0 +1,29 @@
+name: prism_hex_standoff
+intent_en: 'Create a hexagonal prism blank (nut / standoff stock): 6 sides, circumscribed
+  radius 8, height 10'
+intent_kr: 육각기둥(육각 너트 소재)을 만들어줘 — 외접 반지름 8 높이 10
+tags:
+- prism
+- hexagon
+- hex
+- nut
+- standoff
+- polygon
+spec:
+- op: prism_n_sided
+  args:
+    n_sides: 6
+    circumscribed_radius_mm: 8
+    height_mm: 10
+expected:
+  is_solid: true
+  volume_mm3:
+  - 1629.514
+  - 1696.024
+  bbox_mm:
+  - - 15.79
+    - 13.667
+    - 9.85
+  - - 16.21
+    - 14.045
+    - 10.15

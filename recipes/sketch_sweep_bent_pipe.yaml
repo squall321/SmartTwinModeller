@@ -1,0 +1,62 @@
+name: sketch_sweep_bent_pipe
+intent_en: 'Sweep a round section along a bent path — straight run, tangent 90-degree
+  elbow arc, straight riser: a bent pipe / bent round tube'
+intent_kr: 둥근 관을 구부려 만든 파이프 — 직선 구간, 접선 연속 90도 엘보 원호, 수직 구간으로 이어지는 구부러진 둥근 튜브를 만들어줘
+tags:
+- sweep
+- pipe
+- tube
+- bent
+- elbow
+- path
+- arc
+- g1
+- round
+spec:
+- op: sketch_sweep
+  args:
+    section:
+      kind: circle
+      diameter_mm: 6
+    path:
+      kind: path
+      plane: XY
+      segments:
+      - kind: line
+        start:
+        - 0
+        - 0
+        end:
+        - 20
+        - 0
+      - kind: arc
+        start:
+        - 20
+        - 0
+        end:
+        - 28
+        - 8
+        radius: 8
+        ccw: true
+      - kind: line
+        start:
+        - 28
+        - 8
+        end:
+        - 28
+        - 28
+expected:
+  is_solid: true
+  volume_mm3:
+  - 1456.553
+  - 1516.005
+  bbox_mm:
+  - - 31.537
+    - 31.537
+    - 5.89
+  - - 32.275
+    - 32.275
+    - 6.11
+  notes: 'THE G1 LAW: the path must be tangent-continuous — a line->arc joint is
+    legal only when the arc entry tangent matches the line direction. Volume follows
+    Pappus: V = A * path_length.'

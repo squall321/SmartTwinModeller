@@ -1,0 +1,47 @@
+name: mirror_merge_symmetric_block
+intent_en: 'Model one half then mirror-merge: shift a block fully into +X and fuse
+  it with its YZ-plane mirror into one symmetric solid'
+intent_kr: 반쪽만 모델링한 뒤 YZ 평면 기준 mirror_body(merge)로 대칭 솔리드 하나로 합쳐줘
+tags:
+- mirror
+- merge
+- symmetric
+- half
+- reflection
+spec:
+- op: box
+  args:
+    length_mm: 20
+    width_mm: 20
+    height_mm: 10
+- op: move_body
+  args:
+    translate_mm:
+    - 10
+    - 0
+    - 0
+- op: mirror_body
+  args:
+    plane_origin_mm:
+    - 0
+    - 0
+    - 0
+    plane_normal:
+    - 1
+    - 0
+    - 0
+    merge: true
+expected:
+  is_solid: true
+  volume_mm3:
+  - 7840.0
+  - 8160.0
+  bbox_mm:
+  - - 39.55
+    - 19.75
+    - 9.85
+  - - 40.45
+    - 20.25
+    - 10.15
+  notes: The model-half -> mirror-merge idiom. The half must not straddle the mirror
+    plane or the fuse double-counts the overlap.

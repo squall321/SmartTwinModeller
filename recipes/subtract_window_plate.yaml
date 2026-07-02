@@ -1,0 +1,40 @@
+name: subtract_window_plate
+intent_en: Cut a rectangular through-window out of a plate with a boolean subtract
+intent_kr: 판재에 직사각형 관통 창을 subtract(빼기)로 뚫어줘
+tags:
+- subtract
+- boolean
+- cut
+- window
+- cutout
+spec:
+- op: box
+  args:
+    length_mm: 60
+    width_mm: 40
+    height_mm: 6
+- op: subtract
+  args:
+    other:
+      kind: primitive_box
+      length_mm: 20
+      width_mm: 10
+      height_mm: 20
+      position:
+      - 10
+      - 5
+      - 3
+expected:
+  is_solid: true
+  volume_mm3:
+  - 12936.0
+  - 13464.0
+  bbox_mm:
+  - - 59.35
+    - 39.55
+    - 5.89
+  - - 60.65
+    - 40.45
+    - 6.11
+  notes: Make the tool OVERTALL (h20 vs plate 6) so the cut is a clean through-window
+    regardless of z placement.

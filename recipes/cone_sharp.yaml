@@ -1,0 +1,28 @@
+name: cone_sharp
+intent_en: 'Create a full sharp cone: base radius 8, apex at height 20 mm (upper
+  radius 0)'
+intent_kr: 밑면 반지름 8 높이 20mm 꼭짓점까지 뾰족한 원뿔을 만들어줘
+tags:
+- cone
+- sharp
+- apex
+- primitive
+spec:
+- op: cone
+  args:
+    radius_lower_mm: 8
+    radius_upper_mm: 0
+    height_mm: 20
+expected:
+  is_solid: true
+  volume_mm3:
+  - 1313.605
+  - 1367.221
+  bbox_mm:
+  - - 15.79
+    - 15.79
+    - 19.75
+  - - 16.21
+    - 16.21
+    - 20.25
+  notes: radius_upper_mm=0 is allowed (at least one radius must be > 0).

@@ -1,0 +1,39 @@
+name: split_both_pieces_compound
+intent_en: Split a block with a vertical plane and keep BOTH pieces (a 2-body compound)
+intent_kr: 블록을 수직 평면으로 잘라 두 조각 모두(컴파운드로) 유지해줘
+tags:
+- split
+- both
+- compound
+- pieces
+- plane
+spec:
+- op: box
+  args:
+    length_mm: 30
+    width_mm: 20
+    height_mm: 10
+- op: split_body
+  args:
+    plane_origin_mm:
+    - 0
+    - 0
+    - 0
+    plane_normal:
+    - 1
+    - 0
+    - 0
+    keep: both
+expected:
+  is_solid: true
+  volume_mm3:
+  - 5880.0
+  - 6120.0
+  bbox_mm:
+  - - 29.65
+    - 19.75
+    - 9.85
+  - - 30.35
+    - 20.25
+    - 10.15
+  notes: keep='both' returns a COMPOUND of the pieces; total volume is unchanged.

@@ -1,0 +1,49 @@
+task_id: t02_bracket_four_holes
+nl_request_en: A 60x40x5 bracket plate with a 5 mm bolt hole near each corner
+nl_request_kr: 네 모서리에 지름 5mm 볼트 구멍이 있는 60x40x5 브래킷 판
+reference_spec:
+- op: box
+  args:
+    length_mm: 60
+    width_mm: 40
+    height_mm: 5
+- op: hole
+  args:
+    position:
+    - -25
+    - -15
+    - 5
+    diameter_mm: 5
+    direction: -Z
+- op: hole
+  args:
+    position:
+    - 25
+    - -15
+    - 5
+    diameter_mm: 5
+    direction: -Z
+- op: hole
+  args:
+    position:
+    - -25
+    - 15
+    - 5
+    diameter_mm: 5
+    direction: -Z
+- op: hole
+  args:
+    position:
+    - 25
+    - 15
+    - 5
+    diameter_mm: 5
+    direction: -Z
+invariants:
+  is_solid: true
+  volume_mm3:
+  - 11375.155
+  - 11839.447
+  feature_counts:
+    box: 1
+    hole: 4

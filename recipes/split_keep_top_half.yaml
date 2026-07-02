@@ -1,0 +1,41 @@
+name: split_keep_top_half
+intent_en: Split a 20 mm cube with the Z=10 plane and keep only the piece above
+  it
+intent_kr: 정육면체를 Z=10 평면으로 잘라 위쪽 절반만 남겨줘
+tags:
+- split
+- plane
+- cut
+- half
+- keep
+- positive
+spec:
+- op: box
+  args:
+    length_mm: 20
+    width_mm: 20
+    height_mm: 20
+- op: split_body
+  args:
+    plane_origin_mm:
+    - 0
+    - 0
+    - 10
+    plane_normal:
+    - 0
+    - 0
+    - 1
+    keep: positive
+expected:
+  is_solid: true
+  volume_mm3:
+  - 3920.0
+  - 4080.0
+  bbox_mm:
+  - - 19.75
+    - 19.75
+    - 9.85
+  - - 20.25
+    - 20.25
+    - 10.15
+  notes: keep='positive' keeps pieces whose centroid lies on the +normal side.

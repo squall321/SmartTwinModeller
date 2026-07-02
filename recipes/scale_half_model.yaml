@@ -1,0 +1,32 @@
+name: scale_half_model
+intent_en: Uniformly scale a part to 50% (volume shrinks by 8x)
+intent_kr: 부품을 절반 크기로 균일 축소해줘 (부피는 1/8)
+tags:
+- scale
+- uniform
+- shrink
+- resize
+- factor
+spec:
+- op: box
+  args:
+    length_mm: 40
+    width_mm: 20
+    height_mm: 10
+- op: scale_body
+  args:
+    factor: 0.5
+expected:
+  is_solid: true
+  volume_mm3:
+  - 980.0
+  - 1020.0
+  bbox_mm:
+  - - 19.75
+    - 9.85
+    - 4.9
+  - - 20.25
+    - 10.15
+    - 5.1
+  notes: Set EXACTLY one of factor (uniform) or factors_xyz (anisotropic) — both/neither
+    is refused.

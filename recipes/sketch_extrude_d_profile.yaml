@@ -1,0 +1,48 @@
+name: sketch_extrude_d_profile
+intent_en: Extrude a D-shaped profile (straight chord + semicircular arc) 5 mm thick
+  — the classic composite line+arc closed loop
+intent_kr: 직선과 반원 호로 이루어진 D자 단면을 5mm 두께로 돌출시켜줘
+tags:
+- sketch
+- extrude
+- composite
+- arc
+- d-shape
+- profile
+spec:
+- op: sketch_extrude
+  args:
+    sketch:
+      kind: composite
+      segments:
+      - kind: line
+        start:
+        - -10
+        - 0
+        end:
+        - 10
+        - 0
+      - kind: arc
+        start:
+        - 10
+        - 0
+        end:
+        - -10
+        - 0
+        radius: 10
+        ccw: true
+    height_mm: 5
+expected:
+  is_solid: true
+  volume_mm3:
+  - 769.69
+  - 801.106
+  bbox_mm:
+  - - 19.75
+    - 9.85
+    - 4.9
+  - - 20.25
+    - 10.15
+    - 5.1
+  notes: 'Composite loops must CLOSE: seg[i].end == seg[i+1].start and last.end
+    == first.start. Arc = {start,end,radius,ccw}.'

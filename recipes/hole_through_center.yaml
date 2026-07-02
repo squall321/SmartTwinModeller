@@ -1,0 +1,38 @@
+name: hole_through_center
+intent_en: Drill a 6 mm through-hole down the center of a plate (depth omitted =
+  through)
+intent_kr: 판 중앙에 지름 6mm 관통 구멍을 뚫어줘 (depth 생략 = 관통)
+tags:
+- hole
+- through
+- drill
+- center
+- plate
+spec:
+- op: box
+  args:
+    length_mm: 30
+    width_mm: 30
+    height_mm: 8
+- op: hole
+  args:
+    position:
+    - 0
+    - 0
+    - 8
+    diameter_mm: 6
+    direction: -Z
+expected:
+  is_solid: true
+  volume_mm3:
+  - 6834.329
+  - 7113.281
+  bbox_mm:
+  - - 29.65
+    - 29.65
+    - 7.87
+  - - 30.35
+    - 30.35
+    - 8.13
+  notes: hole takes a WORLD position on the entry face and drills along direction;
+    depth_mm=None means through-hole.

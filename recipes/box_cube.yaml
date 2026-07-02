@@ -1,0 +1,26 @@
+name: box_cube
+intent_en: Create a 20 mm cube
+intent_kr: 한 변 20mm 정육면체 블록을 만들어줘
+tags:
+- box
+- cube
+- block
+- primitive
+spec:
+- op: box
+  args:
+    length_mm: 20
+    width_mm: 20
+    height_mm: 20
+expected:
+  is_solid: true
+  volume_mm3:
+  - 7840.0
+  - 8160.0
+  bbox_mm:
+  - - 19.75
+    - 19.75
+    - 19.75
+  - - 20.25
+    - 20.25
+    - 20.25

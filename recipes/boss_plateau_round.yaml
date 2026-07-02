@@ -1,0 +1,44 @@
+name: boss_plateau_round
+intent_en: Raise a circular boss (plateau) 6 mm tall on the top face — the additive
+  counterpart of a pocket
+intent_kr: 윗면에 지름 16 높이 6 원형 보스(플래토)를 세워줘
+tags:
+- boss
+- plateau
+- raise
+- circular
+- top
+- face
+spec:
+- op: box
+  args:
+    length_mm: 40
+    width_mm: 40
+    height_mm: 8
+- op: extrude_plateau
+  args:
+    face_selector:
+      kind: faces_by_normal
+      direction:
+      - 0.0
+      - 0.0
+      - 1.0
+      tol_deg: 5.0
+    sketch:
+      kind: circle
+      diameter_mm: 16
+    height_mm: 6
+expected:
+  is_solid: true
+  volume_mm3:
+  - 13726.245
+  - 14286.499
+  bbox_mm:
+  - - 39.55
+    - 39.55
+    - 13.81
+  - - 40.45
+    - 40.45
+    - 14.19
+  notes: extrude_plateau ADDS material on the selected face (boss); extrude_pocket
+    removes it.

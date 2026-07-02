@@ -1,0 +1,53 @@
+name: sketch_revolve_hemisphere
+intent_en: Revolve a quarter-disc profile (line + 90-degree arc) into a solid hemisphere
+intent_kr: 직선과 90도 호로 이루어진 사분원 단면을 회전시켜 반구를 만들어줘
+tags:
+- revolve
+- hemisphere
+- dome
+- arc
+- quarter
+- lathe
+spec:
+- op: sketch_revolve
+  args:
+    sketch:
+      kind: composite
+      segments:
+      - kind: line
+        start:
+        - 0
+        - 0
+        end:
+        - 10
+        - 0
+      - kind: arc
+        start:
+        - 10
+        - 0
+        end:
+        - 0
+        - 10
+        radius: 10
+        ccw: true
+      - kind: line
+        start:
+        - 0
+        - 10
+        end:
+        - 0
+        - 0
+    angle_deg: 360
+expected:
+  is_solid: true
+  volume_mm3:
+  - 2052.507
+  - 2136.283
+  bbox_mm:
+  - - 19.75
+    - 19.75
+    - 9.85
+  - - 20.25
+    - 20.25
+    - 10.15
+  notes: A profile may TOUCH the Z axis (x=0) but must not cross it; V = (2/3)*pi*r^3.

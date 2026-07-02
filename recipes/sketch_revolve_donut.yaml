@@ -1,0 +1,34 @@
+name: sketch_revolve_donut
+intent_en: Revolve an off-axis circle profile 360 degrees around the Z axis to make
+  a donut / torus
+intent_kr: 축에서 떨어진 원 단면을 Z축 기준 360도 회전시켜 도넛을 만들어줘
+tags:
+- revolve
+- lathe
+- donut
+- torus
+- circle
+- z-axis
+spec:
+- op: sketch_revolve
+  args:
+    sketch:
+      kind: circle
+      diameter_mm: 6
+      center_x_mm: 15
+    angle_deg: 360
+expected:
+  is_solid: true
+  volume_mm3:
+  - 2611.497
+  - 2718.089
+  bbox_mm:
+  - - 38.526
+    - 38.526
+    - 5.89
+  - - 39.406
+    - 39.406
+    - 6.11
+  notes: 'THE Z-LOCK: sketch_revolve only revolves about the world Z axis (axis_direction
+    must be (0,0,±1)). Profile local x = radial distance and must stay on the +x
+    half-plane.'

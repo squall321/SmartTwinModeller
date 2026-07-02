@@ -1,0 +1,44 @@
+name: sketch_revolve_stepped_shaft
+intent_en: Revolve a stepped half-profile (polygon on the +x half-plane) into a
+  stepped shaft — two diameters in one lathe operation
+intent_kr: 계단형 반단면(다각형)을 회전시켜 2단 축(스텝 샤프트)을 만들어줘
+tags:
+- revolve
+- shaft
+- stepped
+- lathe
+- polygon
+- turning
+spec:
+- op: sketch_revolve
+  args:
+    sketch:
+      kind: polygon
+      vertices:
+      - - 0
+        - 0
+      - - 6
+        - 0
+      - - 6
+        - 10
+      - - 3
+        - 10
+      - - 3
+        - 22
+      - - 0
+        - 22
+    angle_deg: 360
+expected:
+  is_solid: true
+  volume_mm3:
+  - 1440.86
+  - 1499.67
+  bbox_mm:
+  - - 11.83
+    - 11.83
+    - 21.73
+  - - 12.17
+    - 12.17
+    - 22.27
+  notes: 'Lathe idiom: draw the HALF section (radius vs height) as a polygon touching
+    the axis, then revolve 360.'

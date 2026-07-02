@@ -46,6 +46,11 @@ _DYNAMIC_ORCHESTRATOR_MACROS = {
     "emit_parametric_script", "estimate_cost", "recognize_fits",
     "detect_sheet_metal", "measure_assembly_fit", "recommend_process",
     "generate_from_spec", "repair_dfm", "cost_min_variant_search",
+    # Phase-2 orchestrators (2026-07): analyze_assembly runs conditional,
+    # budget-bounded stages (dedup → per-class analyze → interference matrix →
+    # standard-part matching); plan_reexecute loads/resolves/re-runs a saved
+    # plan with an optional baseline — both build their SkillResult in _apply.
+    "analyze_assembly", "plan_reexecute",
 }
 
 

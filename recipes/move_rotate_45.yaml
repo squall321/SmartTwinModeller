@@ -1,0 +1,36 @@
+name: move_rotate_45
+intent_en: Rotate a block 45 degrees about the Z axis (volume unchanged, bbox grows)
+intent_kr: 블록을 Z축 기준 45도 회전시켜줘 (부피 불변, bbox 는 커짐)
+tags:
+- move
+- rotate
+- transform
+- angle
+- z-axis
+spec:
+- op: box
+  args:
+    length_mm: 20
+    width_mm: 20
+    height_mm: 10
+- op: move_body
+  args:
+    rotate_axis:
+    - 0
+    - 0
+    - 1
+    rotate_deg: 45
+expected:
+  is_solid: true
+  volume_mm3:
+  - 3920.0
+  - 4080.0
+  bbox_mm:
+  - - 27.951
+    - 27.951
+    - 9.85
+  - - 28.617
+    - 28.617
+    - 10.15
+  notes: Rotation happens BEFORE translate_mm; a 20x20 square rotated 45 deg spans
+    28.284 mm.

@@ -1,0 +1,41 @@
+name: pocket_round_top_face
+intent_en: Cut a circular pocket (diameter 20, depth 5) into the top face
+intent_kr: 윗면에 지름 20 깊이 5 원형 포켓을 파줘
+tags:
+- pocket
+- circular
+- round
+- top
+- face
+- selector
+spec:
+- op: box
+  args:
+    length_mm: 40
+    width_mm: 40
+    height_mm: 10
+- op: extrude_pocket
+  args:
+    face_selector:
+      kind: faces_by_normal
+      direction:
+      - 0.0
+      - 0.0
+      - 1.0
+      tol_deg: 5.0
+    sketch:
+      kind: circle
+      diameter_mm: 20
+    depth_mm: 5
+expected:
+  is_solid: true
+  volume_mm3:
+  - 14140.62
+  - 14717.788
+  bbox_mm:
+  - - 39.55
+    - 39.55
+    - 9.85
+  - - 40.45
+    - 40.45
+    - 10.15

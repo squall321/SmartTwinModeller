@@ -1,0 +1,35 @@
+name: sketch_extrude_slot_rail_x
+intent_en: Extrude a slot (capsule/stadium) profile into a rail lying along the
+  X axis — slot 30 x 8, length 12
+intent_kr: 슬롯(캡슐형) 단면을 X축 방향으로 12mm 돌출시켜 레일을 만들어줘
+tags:
+- sketch
+- extrude
+- slot
+- capsule
+- stadium
+- axis
+- rail
+spec:
+- op: sketch_extrude
+  args:
+    sketch:
+      kind: slot
+      length_mm: 30
+      width_mm: 8
+    height_mm: 12
+    axis: X
+expected:
+  is_solid: true
+  volume_mm3:
+  - 2660.882
+  - 2769.49
+  bbox_mm:
+  - - 11.83
+    - 29.65
+    - 7.87
+  - - 12.17
+    - 30.35
+    - 8.13
+  notes: slot length_mm includes both semicircular end caps; axis='X' sweeps the
+    sketch-plane normal onto +X.

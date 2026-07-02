@@ -1,0 +1,40 @@
+name: union_two_pads
+intent_en: Fuse a small pad on top of a base block with a boolean union
+intent_kr: 베이스 블록 위에 작은 패드를 union(합집합)으로 붙여줘
+tags:
+- union
+- boolean
+- fuse
+- merge
+- pad
+spec:
+- op: box
+  args:
+    length_mm: 40
+    width_mm: 20
+    height_mm: 10
+- op: union
+  args:
+    other:
+      kind: primitive_box
+      length_mm: 20
+      width_mm: 20
+      height_mm: 10
+      position:
+      - 0
+      - 0
+      - 10
+expected:
+  is_solid: true
+  volume_mm3:
+  - 9800.0
+  - 10200.0
+  bbox_mm:
+  - - 39.55
+    - 19.75
+    - 14.8
+  - - 40.45
+    - 20.25
+    - 15.2
+  notes: primitive_box 'other' is CENTERED on its position — position (0,0,10) spans
+    z 5..15, overlapping the z 0..10 base so the fuse is a single solid.

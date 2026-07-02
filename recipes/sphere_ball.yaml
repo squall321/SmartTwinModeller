@@ -1,0 +1,24 @@
+name: sphere_ball
+intent_en: Create a solid ball, sphere radius 10 mm
+intent_kr: 반지름 10mm 구를 만들어줘
+tags:
+- sphere
+- ball
+- round
+- primitive
+spec:
+- op: sphere
+  args:
+    radius_mm: 10
+expected:
+  is_solid: true
+  volume_mm3:
+  - 4105.014
+  - 4272.566
+  bbox_mm:
+  - - 19.75
+    - 19.75
+    - 19.75
+  - - 20.25
+    - 20.25
+    - 20.25

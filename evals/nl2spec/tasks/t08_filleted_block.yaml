@@ -1,0 +1,22 @@
+task_id: t08_filleted_block
+nl_request_en: A 40x30x10 block with its four vertical edges filleted r=3
+nl_request_kr: 세로 모서리 4개를 반경 3으로 필렛한 40x30x10 블록
+reference_spec:
+- op: box
+  args:
+    length_mm: 40
+    width_mm: 30
+    height_mm: 10
+- op: fillet_edges_by_predicate
+  args:
+    selector:
+      kind: axis_aligned_edges
+      axis: Z
+    radius_mm: 3
+invariants:
+  is_solid: true
+  volume_mm3:
+  - 11684.288
+  - 12161.198
+  feature_counts:
+    fillet_edges_by_predicate: 1

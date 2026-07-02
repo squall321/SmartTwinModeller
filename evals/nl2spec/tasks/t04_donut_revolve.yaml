@@ -1,0 +1,19 @@
+task_id: t04_donut_revolve
+nl_request_en: Make a donut by revolving a 6 mm circle at radius 15 around the Z
+  axis
+nl_request_kr: 반지름 15 위치의 지름 6 원을 Z축으로 회전시켜 도넛을 만들어줘
+reference_spec:
+- op: sketch_revolve
+  args:
+    sketch:
+      kind: circle
+      diameter_mm: 6
+      center_x_mm: 15
+    angle_deg: 360
+invariants:
+  is_solid: true
+  volume_mm3:
+  - 2611.497
+  - 2718.089
+  feature_counts:
+    sketch_revolve: 1

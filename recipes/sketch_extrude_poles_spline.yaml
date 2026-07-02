@@ -1,0 +1,44 @@
+name: sketch_extrude_poles_spline
+intent_en: Extrude a Class-A style closed spline defined BY ITS CONTROL POLYGON
+  (poles), not interpolation — low-oscillation pole-driven curve, 6 mm thick
+intent_kr: 제어점(컨트롤 폴리곤)으로 정의되는 Class-A 폐곡선 스플라인 단면을 6mm 돌출시켜줘
+tags:
+- sketch
+- extrude
+- spline
+- poles
+- control
+- polygon
+- class-a
+spec:
+- op: sketch_extrude
+  args:
+    sketch:
+      kind: poles_spline_closed
+      poles:
+      - - 12
+        - 0
+      - - 12
+        - 12
+      - - -12
+        - 12
+      - - -12
+        - -12
+      - - 12
+        - -12
+      degree: 3
+    height_mm: 6
+expected:
+  is_solid: true
+  volume_mm3:
+  - 2562.911
+  - 2667.519
+  bbox_mm:
+  - - 23.315
+    - 23.433
+    - 5.89
+  - - 23.887
+    - 24.007
+    - 6.11
+  notes: The curve does NOT pass through the poles (it is attracted to them); degree
+    must be < len(poles).

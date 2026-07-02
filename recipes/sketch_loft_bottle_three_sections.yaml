@@ -1,0 +1,38 @@
+name: sketch_loft_bottle_three_sections
+intent_en: Loft a bottle-like body through THREE circular sections at increasing
+  heights
+intent_kr: 지름이 다른 원형 단면 3개를 높이 순서대로 통과하는 병 모양 로프트를 만들어줘
+tags:
+- loft
+- multi-section
+- bottle
+- stack
+- profile
+spec:
+- op: sketch_loft
+  args:
+    sections:
+    - kind: circle
+      diameter_mm: 20
+    - kind: circle
+      diameter_mm: 12
+    - kind: circle
+      diameter_mm: 16
+    heights_mm:
+    - 0
+    - 14
+    - 24
+    ruled: false
+expected:
+  is_solid: true
+  volume_mm3:
+  - 3748.115
+  - 3901.099
+  bbox_mm:
+  - - 24.54
+    - 26.5
+    - 23.71
+  - - 25.136
+    - 27.136
+    - 24.29
+  notes: heights_mm must be STRICTLY increasing and one per section.

@@ -1,0 +1,58 @@
+name: sketch_sweep_handle_xz
+intent_en: Sweep a thin round section along a bent path declared in the XZ plane
+  (a curved handle standing in the XZ plane)
+intent_kr: XZ 평면에 정의한 굽은 경로를 따라 가는 원형 단면을 스윕해 핸들을 만들어줘
+tags:
+- sweep
+- plane
+- xz
+- handle
+- path
+- arc
+spec:
+- op: sketch_sweep
+  args:
+    section:
+      kind: circle
+      diameter_mm: 4
+    path:
+      kind: path
+      plane: XZ
+      segments:
+      - kind: line
+        start:
+        - 0
+        - 0
+        end:
+        - 20
+        - 0
+      - kind: arc
+        start:
+        - 20
+        - 0
+        end:
+        - 28
+        - 8
+        radius: 8
+        ccw: true
+      - kind: line
+        start:
+        - 28
+        - 8
+        end:
+        - 28
+        - 20
+expected:
+  is_solid: true
+  volume_mm3:
+  - 548.837
+  - 571.239
+  bbox_mm:
+  - - 30.466
+    - 3.91
+    - 22.546
+  - - 31.182
+    - 4.09
+    - 23.102
+  notes: SweepPath.plane places the 2D path in XY / XZ / YZ; the section auto-orients
+    to the path START tangent.

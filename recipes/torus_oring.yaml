@@ -1,0 +1,28 @@
+name: torus_oring
+intent_en: 'Create a full torus ring (O-ring shape): major radius 15, tube radius
+  2'
+intent_kr: 중심 반지름 15 튜브 반지름 2 도넛(토러스) 링을 만들어줘
+tags:
+- torus
+- ring
+- oring
+- donut
+- primitive
+spec:
+- op: torus
+  args:
+    major_radius_mm: 15
+    minor_radius_mm: 2
+expected:
+  is_solid: true
+  volume_mm3:
+  - 1160.666
+  - 1208.04
+  bbox_mm:
+  - - 36.383
+    - 36.383
+    - 3.91
+  - - 37.219
+    - 37.219
+    - 4.09
+  notes: major_radius must be > minor_radius (self-intersection refusal).

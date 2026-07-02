@@ -1,0 +1,40 @@
+name: subtract_bored_block
+intent_en: Bore a vertical through-hole in a block by subtracting a cylinder
+intent_kr: 블록에 원기둥을 subtract 해서 세로 관통 구멍을 뚫어줘
+tags:
+- subtract
+- boolean
+- bore
+- hole
+- cylinder
+spec:
+- op: box
+  args:
+    length_mm: 30
+    width_mm: 30
+    height_mm: 20
+- op: subtract
+  args:
+    other:
+      kind: primitive_cylinder
+      diameter_mm: 10
+      height_mm: 40
+      position:
+      - 0
+      - 0
+      - -5
+      axis: +Z
+expected:
+  is_solid: true
+  volume_mm3:
+  - 16100.62
+  - 16757.788
+  bbox_mm:
+  - - 29.65
+    - 29.65
+    - 19.75
+  - - 30.35
+    - 30.35
+    - 20.25
+  notes: primitive_cylinder base sits AT its position (Z-min aligned) — start it
+    below the block so the bore passes through.

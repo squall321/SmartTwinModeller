@@ -1,0 +1,16 @@
+task_id: t01_base_plate
+nl_request_en: Make a rectangular base plate 60 by 40, 5 mm thick
+nl_request_kr: 가로 60 세로 40 두께 5mm 베이스 판을 만들어줘
+reference_spec:
+- op: box
+  args:
+    length_mm: 60
+    width_mm: 40
+    height_mm: 5
+invariants:
+  is_solid: true
+  volume_mm3:
+  - 11760.0
+  - 12240.0
+  feature_counts:
+    box: 1

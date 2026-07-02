@@ -1,0 +1,19 @@
+task_id: t12_scaled_model
+nl_request_en: Take a 40x20x10 block and shrink the whole model to 50%
+nl_request_kr: 40x20x10 블록을 만들어 전체를 절반 크기로 축소해줘
+reference_spec:
+- op: box
+  args:
+    length_mm: 40
+    width_mm: 20
+    height_mm: 10
+- op: scale_body
+  args:
+    factor: 0.5
+invariants:
+  is_solid: true
+  volume_mm3:
+  - 980.0
+  - 1020.0
+  feature_counts:
+    scale_body: 1

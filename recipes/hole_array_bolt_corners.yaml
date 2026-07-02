@@ -1,0 +1,46 @@
+name: hole_array_bolt_corners
+intent_en: Drill a 4-hole bolt pattern (5 mm holes) at the corners of a plate in
+  ONE hole_array call
+intent_kr: 판 네 모서리에 지름 5mm 볼트 구멍 4개를 hole_array 한 번으로 뚫어줘
+tags:
+- hole
+- array
+- pattern
+- bolt
+- corners
+spec:
+- op: box
+  args:
+    length_mm: 60
+    width_mm: 40
+    height_mm: 5
+- op: hole_array
+  args:
+    points:
+    - - -25
+      - -15
+      - 5
+    - - 25
+      - -15
+      - 5
+    - - -25
+      - 15
+      - 5
+    - - 25
+      - 15
+      - 5
+    diameter_mm: 5
+    direction: -Z
+expected:
+  is_solid: true
+  volume_mm3:
+  - 11375.155
+  - 11839.447
+  bbox_mm:
+  - - 59.35
+    - 39.55
+    - 4.9
+  - - 60.65
+    - 40.45
+    - 5.1
+  notes: hole_array = one op for N identical holes; points are WORLD entry coordinates.

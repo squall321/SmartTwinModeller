@@ -1,0 +1,34 @@
+name: sketch_extrude_drafted_pad
+intent_en: Extrude a 20 x 20 pad 10 mm tall with 5 degrees of side-wall draft (molding-style
+  taper)
+intent_kr: 측벽에 5도 구배(draft)를 준 20 x 20 패드를 10mm 돌출시켜줘
+tags:
+- sketch
+- extrude
+- draft
+- taper
+- mold
+- wall
+spec:
+- op: sketch_extrude
+  args:
+    sketch:
+      kind: rectangle
+      length_mm: 20
+      width_mm: 20
+    height_mm: 10
+    draft_deg: 5.0
+expected:
+  is_solid: true
+  volume_mm3:
+  - 3587.046
+  - 3733.456
+  bbox_mm:
+  - - 19.75
+    - 19.75
+    - 9.85
+  - - 20.25
+    - 20.25
+    - 10.15
+  notes: draft_deg > 0 makes walls converge toward the top; volume is therefore
+    LESS than the straight 4000 mm3 prism.

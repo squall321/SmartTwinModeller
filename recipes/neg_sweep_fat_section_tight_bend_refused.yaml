@@ -1,0 +1,56 @@
+name: neg_sweep_fat_section_tight_bend_refused
+intent_en: 'NEGATIVE example — a section wider than the bend radius folds through
+  the arc centre and is REFUSED (fm.sweep_self_intersection): keep the section radial
+  extent below the smallest path bend radius'
+intent_kr: 부정 예제 — 굽힘 반경보다 굵은 단면은 안쪽 벽이 접혀 fm.sweep_self_intersection 으로 거절된다
+tags:
+- negative
+- sweep
+- self-intersection
+- bend
+- radius
+- refusal
+spec:
+- op: box
+  args:
+    length_mm: 5
+    width_mm: 5
+    height_mm: 2
+- op: sketch_sweep
+  args:
+    section:
+      kind: circle
+      diameter_mm: 12
+    path:
+      kind: path
+      plane: XY
+      segments:
+      - kind: line
+        start:
+        - 0
+        - 0
+        end:
+        - 10
+        - 0
+      - kind: arc
+        start:
+        - 10
+        - 0
+        end:
+        - 13
+        - 3
+        radius: 3
+        ccw: true
+      - kind: line
+        start:
+        - 13
+        - 3
+        end:
+        - 13
+        - 20
+expected:
+  ok: false
+  failing_op: sketch_sweep
+  error_contains: fm.sweep_self_intersection
+  notes: 'The helical-spring law: section radial extent (6) >= bend radius (3) folds
+    the inner wall. Conservative up-front refusal.'

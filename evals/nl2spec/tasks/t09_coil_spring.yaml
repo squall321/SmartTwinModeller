@@ -1,0 +1,19 @@
+task_id: t09_coil_spring
+nl_request_en: 'A coil spring: 2 mm wire on a helix of radius 8, pitch 4, 5 turns'
+nl_request_kr: 코일 반지름 8 피치 4 5회전, 와이어 지름 2mm 코일 스프링
+reference_spec:
+- op: helix_sweep
+  args:
+    section:
+      kind: circle
+      diameter_mm: 2
+    coil_radius_mm: 8
+    pitch_mm: 4
+    turns: 5
+invariants:
+  is_solid: true
+  volume_mm3:
+  - 777.338
+  - 809.066
+  feature_counts:
+    helix_sweep: 1

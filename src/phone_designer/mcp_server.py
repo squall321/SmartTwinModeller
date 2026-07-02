@@ -699,6 +699,97 @@ def cad_quote_package(body_id: str = "", part_path: str = "",
         return _err(exc)
 
 
+# ── Phase-2 surfaces: recipes / drawings / parametric re-execute / assembly ───
+@mcp.tool()
+def cad_find_recipe(query: str, top_k: int = 5) -> dict:
+    """FIND a proven spec RECIPE by intent (EN or KR — e.g. 'bent pipe', '기어',
+    'counterbore holes'): returns ready-to-adapt cad_generate specs WITH their
+    expected invariants (volume range, is_solid). Every recipe in the corpus is
+    executed in CI, so a returned spec is known-good — start from one instead of
+    composing cold."""
+    try:
+        _ensure_skills()
+        from phone_designer.mcp_support._recipes import find_recipe
+        hits = find_recipe(query, top_k=top_k)
+        return {"ok": True, "n": len(hits), "recipes": hits}
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+def cad_drawing(body_id: str = "", part_path: str = "",
+                part_name: str = "", include_section: bool = True) -> dict:
+    """Generate a third-angle ENGINEERING DRAWING SHEET (front/top/right + iso
+    HLR views with hidden lines, optional section, title block, dimension table,
+    hole table) as a self-contained HTML + layered VISIBLE/HIDDEN DXF per view.
+    Labeled DRAFT FOR REVIEW — anchored callouts + tables, no automatic leader
+    placement (v1)."""
+    try:
+        _ensure_skills()
+        from phone_designer.skills.inspect.drawing_sheet import DrawingSheet
+        body, _ = _resolve(part_path or None, body_id or None)
+        pname = _safe_name(part_name or _body_name(body_id) or "part")
+        out_dir = _WORKSPACE / "drawings"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        ds = DrawingSheet().apply(body, {
+            "out_dir": str(out_dir), "part_name": pname,
+            "include_section": include_section,
+        }).extras
+        sheet = ds.get("drawing_sheet") or {}
+        written = sheet.get("written") or {}
+        uris = [_uri(p) for p in written.values()
+                if isinstance(p, str) and os.path.exists(p)]
+        return {"ok": True, "sheet": sheet, "resource_uris": uris,
+                "grade": "draft"}
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+def cad_reexecute(plan_path: str = "", plan: dict | None = None,
+                  parameter_overrides: dict | None = None) -> dict:
+    """RE-EXECUTE a saved parametric plan (schema v2) with parameter OVERRIDES —
+    e.g. {'wall': 2.2} — and report the volume/bbox deltas vs the baseline plus
+    any selector drift (the honest rebuild-error warning). The parametric
+    re-edit loop for plans produced by cad_generate/cad_export('py')."""
+    try:
+        _ensure_skills()
+        from phone_designer.skills.reverse_engineer.plan_reexecute import (
+            PlanReexecute,
+        )
+        args: dict = {"parameter_overrides": parameter_overrides or {}}
+        if plan_path:
+            args["plan_path"] = plan_path
+        if plan is not None:
+            args["plan"] = plan
+        rx = PlanReexecute().apply(None, args).extras["reexecute"]
+        return {"ok": True, **rx}
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+def cad_analyze_assembly(assembly_path: str,
+                         per_component_timeout_s: float | None = None) -> dict:
+    """Analyze a MULTI-BODY STEP assembly in one call: split into components,
+    dedup identical parts by signature (50 bolts = 1 analysis), per-class light
+    analysis, pairwise interference/clearance matrix (static pose only), and
+    standard-part recognition — recognized standard parts get CATALOG lines,
+    never machined-cost estimates. Returns the versioned AssemblyReportV1."""
+    try:
+        _ensure_skills()
+        from phone_designer.skills.reverse_engineer.analyze_assembly import (
+            AnalyzeAssembly,
+        )
+        args: dict = {"assembly_path": assembly_path}
+        if per_component_timeout_s is not None:
+            args["per_component_timeout_s"] = per_component_timeout_s
+        rep = AnalyzeAssembly().apply(None, args).extras["assembly_analysis"]
+        return {"ok": True, **rep}
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
 def main() -> None:
     mcp.run()
 

@@ -140,6 +140,8 @@ def _solid_stats(body: Any) -> tuple[int, float]:
     selector_kinds=[],
     history_rules={},
     produces_features=["quote_package"],
+    expansion=["mass_properties", "estimate_cost", "recommend_process",
+               "dxf_export"],
     preserves=["body_topology"],
     manufacturing={},
     failure_modes=["fm.no_solid_body", "fm.invalid_args"],

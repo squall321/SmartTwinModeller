@@ -1,0 +1,28 @@
+name: box_plate
+intent_en: Create a simple rectangular plate 60 x 40 x 5 mm
+intent_kr: 가로 60 세로 40 두께 5mm 직사각형 판을 만들어줘
+tags:
+- box
+- plate
+- rectangular
+- primitive
+- create
+spec:
+- op: box
+  args:
+    length_mm: 60
+    width_mm: 40
+    height_mm: 5
+expected:
+  is_solid: true
+  volume_mm3:
+  - 11760.0
+  - 12240.0
+  bbox_mm:
+  - - 59.35
+    - 39.55
+    - 4.9
+  - - 60.65
+    - 40.45
+    - 5.1
+  notes: box is XY-centered with its base at Z=0 (not fully centered).

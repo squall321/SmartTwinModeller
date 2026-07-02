@@ -1,0 +1,48 @@
+name: sketch_extrude_bspline_blob
+intent_en: Extrude a smooth free-form blob through interpolation fit points (closed
+  periodic B-spline) 5 mm thick
+intent_kr: 지정한 점들을 지나는 부드러운 폐곡선(B-스플라인) 단면을 5mm 돌출시켜줘
+tags:
+- sketch
+- extrude
+- bspline
+- freeform
+- blob
+- interpolate
+spec:
+- op: sketch_extrude
+  args:
+    sketch:
+      kind: bspline_closed
+      fit_points:
+      - - 12
+        - 0
+      - - 6
+        - 5
+      - - 0
+        - 12
+      - - -7
+        - 6
+      - - -12
+        - 0
+      - - -6
+        - -6
+      - - 0
+        - -12
+      - - 7
+        - -6
+    height_mm: 5
+expected:
+  is_solid: true
+  volume_mm3:
+  - 1538.927
+  - 1601.741
+  bbox_mm:
+  - - 25.744
+    - 25.112
+    - 4.9
+  - - 26.366
+    - 25.72
+    - 5.1
+  notes: bspline_closed INTERPOLATES through fit_points (curve passes through them)
+    — contrast with poles_spline_closed (control polygon).

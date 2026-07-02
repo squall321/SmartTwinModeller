@@ -1,0 +1,28 @@
+name: sphere_hemisphere_dome
+intent_en: Create a solid hemisphere dome (upper half of a sphere) via the sphere
+  latitude-angle arguments
+intent_kr: 반구 돔을 만들어줘 (sphere 의 위도 각도 인자로 위쪽 절반만)
+tags:
+- sphere
+- hemisphere
+- dome
+- half
+- angle
+spec:
+- op: sphere
+  args:
+    radius_mm: 12
+    angle1_deg: 0.0
+expected:
+  is_solid: true
+  volume_mm3:
+  - 3546.733
+  - 3691.497
+  bbox_mm:
+  - - 23.71
+    - 23.71
+    - 11.83
+  - - 24.29
+    - 24.29
+    - 12.17
+  notes: angle1_deg=0 keeps latitudes 0..90 deg -> upper hemisphere; V = (2/3)*pi*r^3.

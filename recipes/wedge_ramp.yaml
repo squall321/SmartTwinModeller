@@ -1,0 +1,29 @@
+name: wedge_ramp
+intent_en: 'Create a wedge ramp: 30 long, 20 wide, 10 tall, tapering to a sharp
+  top edge (ltx=0)'
+intent_kr: 길이 30 폭 20 높이 10 위쪽이 날카로운 쐐기(램프)를 만들어줘
+tags:
+- wedge
+- ramp
+- taper
+- primitive
+spec:
+- op: wedge
+  args:
+    dx: 30
+    dy: 20
+    dz: 10
+    ltx_mm: 0
+expected:
+  is_solid: true
+  volume_mm3:
+  - 2940.0
+  - 3060.0
+  bbox_mm:
+  - - 29.65
+    - 19.75
+    - 9.85
+  - - 30.35
+    - 20.25
+    - 10.15
+  notes: ltx_mm is the top-face X length; 0 makes a triangular prism ramp.

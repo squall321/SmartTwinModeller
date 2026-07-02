@@ -1,0 +1,28 @@
+name: cone_frustum
+intent_en: 'Create a truncated cone (frustum): lower radius 10, upper radius 4,
+  height 12 mm'
+intent_kr: 아래 반지름 10 위 반지름 4 높이 12mm 원뿔대를 만들어줘
+tags:
+- cone
+- frustum
+- truncated
+- taper
+- primitive
+spec:
+- op: cone
+  args:
+    radius_lower_mm: 10
+    radius_upper_mm: 4
+    height_mm: 12
+expected:
+  is_solid: true
+  volume_mm3:
+  - 1921.147
+  - 1999.561
+  bbox_mm:
+  - - 19.75
+    - 19.75
+    - 11.83
+  - - 20.25
+    - 20.25
+    - 12.17

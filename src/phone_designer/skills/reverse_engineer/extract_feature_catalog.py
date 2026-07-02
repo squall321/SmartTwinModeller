@@ -807,8 +807,11 @@ class ExtractFeatureCatalog(SkillBase):
             description="Run independent detectors concurrently via "
                         "ThreadPoolExecutor (max 4 workers). OCCT calls release "
                         "the GIL for most heavy work, so 1.5-2x speedup is "
-                        "typical on multi-core boxes. Set False for "
-                        "deterministic single-threaded execution.",
+                        "typical on multi-core boxes. DETERMINISM (2026-07-02): "
+                        "a canonical single-threaded triangulation pass before "
+                        "the fan-out fixes the shape's mesh/bbox state, so the "
+                        "catalog is byte-identical run-to-run AND parallel == "
+                        "serial; this flag is a pure performance knob.",
         )
         classify_pockets_extra_args: dict = Field(
             default_factory=dict,
@@ -914,6 +917,51 @@ class ExtractFeatureCatalog(SkillBase):
         # ── per-detector timings + skipped-due-to-too-big tracking ─────────
         timings_sec: dict[str, float] = {}
         skipped_detectors: list[str] = []
+
+        # ── canonical triangulation (DETERMINISM fix, 2026-07-02) ──────────
+        # THE nondeterminism mechanism (diagnosed in the PACK-B comment above
+        # and in the detect_*_array precompute note below): the FIRST
+        # triangulation of the shape makes every LATER BRepBndLib
+        # Add_s / AddOptimal_s call return a slightly different (mesh-derived,
+        # deflection-inflated, ~0.01 mm) bbox. detect_mirror_symmetry is the
+        # only detector in the parallel pool that tessellates
+        # (BRepMesh_IncrementalMesh @ 0.5 mm / 20°), so WHICH bbox each other
+        # detector saw depended on ThreadPoolExecutor scheduling — the catalog
+        # differed run-to-run (measured: 3 distinct catalogs over 6 runs on a
+        # box+holes+fillets fixture).
+        #
+        # Fix: tessellate ONCE here, single-threaded, with EXACTLY the
+        # parameters detect_mirror_symmetry uses (so its own mesh call becomes
+        # a no-op and the total meshing work is unchanged — we only move WHEN
+        # it happens: before the fan-out instead of racing inside it). After
+        # this pass the triangulation state is fixed for the whole catalog
+        # build, so every bbox read is schedule-independent in BOTH parallel
+        # and serial mode (parallel==serial, run-to-run byte-identical).
+        #
+        # Ordering notes:
+        #   * MUST run AFTER the _initial_bbox snapshot above — that snapshot
+        #     is deliberately the PRE-triangulation exact bbox (PACK B).
+        #   * No output re-sort is needed downstream: the pool merge is
+        #     name-keyed (results[name]) and every list-producing section runs
+        #     serially in fixed order. Re-sorting the feature lists themselves
+        #     would CHANGE hole ids (standard_matches references them) and
+        #     break the committed corpus baselines, so we deliberately do not.
+        _t0 = time.perf_counter()
+        try:
+            import math as _math
+
+            from OCP.BRepMesh import BRepMesh_IncrementalMesh
+
+            _mesher = BRepMesh_IncrementalMesh(
+                _occt_shape(body), 0.5, False, _math.radians(20.0), True,
+            )
+            _mesher.Perform()
+        except Exception:
+            # Best-effort: an unmeshable shape falls back to the historic
+            # behaviour (detectors mesh lazily); never fail the catalog here.
+            pass
+        timings_sec["canonical_tessellation"] = round(
+            time.perf_counter() - _t0, 4)
 
         def _is_too_big(exc: BaseException) -> bool:
             msg = str(exc).lower()

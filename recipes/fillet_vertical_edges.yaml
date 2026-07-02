@@ -1,0 +1,37 @@
+name: fillet_vertical_edges
+intent_en: Fillet the four VERTICAL edges of a block (r=3) using the axis_aligned_edges
+  Z selector
+intent_kr: axis_aligned_edges 셀렉터로 블록의 세로 모서리 4개만 반경 3 필렛해줘
+tags:
+- fillet
+- vertical
+- edges
+- selector
+- axis
+- round
+spec:
+- op: box
+  args:
+    length_mm: 40
+    width_mm: 30
+    height_mm: 10
+- op: fillet_edges_by_predicate
+  args:
+    selector:
+      kind: axis_aligned_edges
+      axis: Z
+    radius_mm: 3
+expected:
+  is_solid: true
+  volume_mm3:
+  - 11684.288
+  - 12161.198
+  bbox_mm:
+  - - 39.55
+    - 29.65
+    - 9.85
+  - - 40.45
+    - 30.35
+    - 10.15
+  notes: axis_aligned_edges Z = only the edges parallel to Z (the 4 corner verticals),
+    leaving the top/bottom rims sharp.

@@ -1,0 +1,38 @@
+name: move_leave_copy_pair
+intent_en: 'Duplicate a block 30 mm away using move_body leave_copy=true (a 2-body
+  compound: original + moved copy)'
+intent_kr: move_body 의 leave_copy=true 로 블록을 30mm 옆에 복제해줘 (원본+복제 2-바디 컴파운드)
+tags:
+- move
+- copy
+- duplicate
+- leave
+- compound
+- pattern
+spec:
+- op: box
+  args:
+    length_mm: 10
+    width_mm: 10
+    height_mm: 10
+- op: move_body
+  args:
+    translate_mm:
+    - 30
+    - 0
+    - 0
+    leave_copy: true
+expected:
+  is_solid: true
+  volume_mm3:
+  - 1960.0
+  - 2040.0
+  bbox_mm:
+  - - 39.55
+    - 9.85
+    - 9.85
+  - - 40.45
+    - 10.15
+    - 10.15
+  notes: leave_copy=true is the seed idiom for booleans/patterns; volume doubles
+    because both bodies remain.

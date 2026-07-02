@@ -1,0 +1,30 @@
+name: cylinder_lying_x
+intent_en: Create a cylinder lying along the X axis using the axis argument (no
+  extra rotate step needed)
+intent_kr: X축 방향으로 누운 원기둥을 만들어줘 (회전 단계 없이 axis 인자 사용)
+tags:
+- cylinder
+- axis
+- horizontal
+- lying
+- orientation
+spec:
+- op: cylinder
+  args:
+    radius_mm: 6
+    height_mm: 50
+    axis: X
+expected:
+  is_solid: true
+  volume_mm3:
+  - 5541.77
+  - 5767.964
+  bbox_mm:
+  - - 49.45
+    - 11.83
+    - 11.83
+  - - 50.55
+    - 12.17
+    - 12.17
+  notes: 'Idiom: create skills take axis=''X''|''Y''|''Z'' — cheaper and more robust
+    than creating Z-up then move_body-rotating.'

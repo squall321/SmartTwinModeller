@@ -82,8 +82,18 @@ def test_extract_feature_catalog_aggregates_all_keys():
         "symmetries", "patterns", "standard_matches",
     ):
         assert k in cat, f"missing catalog key: {k}"
-    # at least one hole found
-    assert len(cat["holes"]) >= 1
+    # DETERMINISM fix (2026-07-02, test_catalog_determinism.py): the old
+    # ``len(cat["holes"]) >= 1`` pinned a THREAD-RACE ARTIFACT — pre-fix the
+    # catalog reported 1 hole ONLY under parallel scheduling (pre-fix
+    # parallel=False and standalone ClassifyHoles both report 0 on this
+    # body; one drill flickered into 'holes' from a mid-classification
+    # partial bbox state). The deterministic truth for these three Ø4x6
+    # blind drills is: classify_pockets captures all 3 as circular pockets,
+    # classify_holes 0. Pin that all three drills ARE captured.
+    assert len(cat["holes"]) + len(cat["pockets"]) >= 3, (
+        f"3 drills not captured: holes={len(cat['holes'])} "
+        f"pockets={len(cat['pockets'])}"
+    )
     # the box is symmetric — at least one mirror plane should score > 0.5
     if cat["symmetries"]:
         assert max(s["symmetry_score"] for s in cat["symmetries"]) > 0.3

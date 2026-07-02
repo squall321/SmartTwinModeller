@@ -4,7 +4,7 @@ The universal 2D fab format (laser / waterjet / plasma cutting, sheet-metal
 nesting). The repo ALREADY computes the exact 2D loops — this skill turns them into
 the manufacturing artifact that previously could never leave the system.
 
-Three sources (``source``):
+Four sources (``source``):
   * ``section`` (default) — the body's cross-section at a plane, projected into that
     plane's in-plane frame (reuses inspect/cross_section polylines).
   * ``silhouette`` — ALL edges brute-projected along a view direction (reuses
@@ -14,6 +14,13 @@ Three sources (``source``):
     laser/waterjet cut file use ``section`` or ``flat_pattern``.
   * ``flat_pattern`` — the sheet-metal flat blank outline (reuses
     detect_sheet_metal flat_pattern.outline_2d).
+  * ``hlr`` — hidden-line-removal drawing view (reuses inspect/hlr_view):
+    visible curves (VCompound + visible outlines) land on the ``VISIBLE``
+    layer, hidden curves (HCompound + hidden outlines) on the ``HIDDEN``
+    layer (dashed linetype when available). ``plane_normal`` is the view
+    direction (camera → body). If hlr_view fell back to the brute silhouette
+    (face budget / HLR failure) the HIDDEN layer is empty and extras carry
+    the honest ``label='non_cut_ready'``.
 
 Each 2D loop is written as a DXF LWPOLYLINE (closed if it closes within tol) via
 ``ezdxf`` (already installed as a build123d dependency). Read-only — the body is
@@ -33,6 +40,69 @@ from phone_designer.skills._registry import skill
 from phone_designer.skills._spec import SkillBase, SkillResult
 
 _EPS_CLOSE = 1e-3
+
+
+def write_layered_dxf(
+    path: str | Path,
+    layer_loops: dict[str, list[list[tuple[float, float]]]],
+    *,
+    layer_linetypes: dict[str, str] | None = None,
+) -> dict[str, int]:
+    """Write 2D loops onto named DXF layers. Returns {layer: n_polylines}.
+
+    Shared by DxfExport(source='hlr') and inspect/drawing_sheet so both emit
+    the exact same DXF convention (mm units, LWPOLYLINE, close-within-tol).
+    ALL requested layers are created even when empty — a drawing consumer can
+    rely on VISIBLE/HIDDEN existing. Raises ValueError('fm.dxf_write_failed:…')
+    on any I/O / ezdxf failure; raw error preserved.
+    """
+    try:
+        import ezdxf
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError(f"fm.dxf_write_failed: ezdxf unavailable: {exc}")
+
+    out_path = Path(path)
+    try:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError(f"fm.dxf_write_failed: {type(exc).__name__}: {exc}")
+
+    doc = ezdxf.new(setup=True)
+    doc.units = 4  # mm
+    msp = doc.modelspace()
+    linetypes = layer_linetypes or {}
+    written: dict[str, int] = {}
+    for layer_name, loops in layer_loops.items():
+        if layer_name != "0" and layer_name not in doc.layers:
+            attribs: dict[str, Any] = {}
+            lt_req = linetypes.get(layer_name)
+            if lt_req:
+                # ezdxf's setup=True ships DASHED but NOT a 'HIDDEN'
+                # linetype — fall back so hidden layers still render dashed.
+                for lt in (lt_req, "DASHED"):
+                    if lt in doc.linetypes:
+                        attribs["linetype"] = lt
+                        break
+            doc.layers.add(layer_name, **attribs)
+        n = 0
+        for loop in loops:
+            if len(loop) < 2:
+                continue
+            closed = (math.hypot(loop[0][0] - loop[-1][0],
+                                 loop[0][1] - loop[-1][1]) <= _EPS_CLOSE)
+            pts = loop[:-1] if closed and len(loop) > 2 else loop
+            msp.add_lwpolyline(pts, close=closed,
+                               dxfattribs={"layer": layer_name})
+            n += 1
+        written[layer_name] = n
+
+    try:
+        doc.saveas(str(out_path))
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError(f"fm.dxf_write_failed: {type(exc).__name__}: {exc}")
+    if not out_path.exists():
+        raise ValueError(f"fm.dxf_write_failed: file not written → {out_path}")
+    return written
 
 
 def _inplane_frame(normal):
@@ -59,7 +129,9 @@ def _inplane_frame(normal):
             "(cross-section at a plane, projected 2D — laser/waterjet/plasma, "
             "nesting) | 'silhouette' (all-edges projection along a view dir; "
             "hidden edges included — NOT a cut-ready outline) | 'flat_pattern' "
-            "(sheet-metal blank outline — cut-ready). Each loop → a DXF "
+            "(sheet-metal blank outline — cut-ready) | 'hlr' (hidden-line-"
+            "removal drawing view: VISIBLE + HIDDEN curves on separate DXF "
+            "layers; plane_normal = view direction). Each loop → a DXF "
             "LWPOLYLINE via ezdxf. Read-only — only the filesystem is touched.",
     selector_kinds=[],
     history_rules={},
@@ -73,7 +145,7 @@ def _inplane_frame(normal):
 class DxfExport(SkillBase):
     class Args(BaseModel):
         path: str = Field(min_length=1, description="Output .dxf path.")
-        source: Literal["section", "silhouette", "flat_pattern"] = Field(
+        source: Literal["section", "silhouette", "flat_pattern", "hlr"] = Field(
             default="section",
             description="Which 2D geometry to export.")
         plane_origin: tuple[float, float, float] = Field(
@@ -82,11 +154,21 @@ class DxfExport(SkillBase):
         plane_normal: tuple[float, float, float] = Field(
             default=(0.0, 0.0, 1.0),
             description="For source='section': the section-plane normal. For "
-                        "'silhouette': the view direction.")
+                        "'silhouette'/'hlr': the view direction (camera → "
+                        "body).")
+        hlr_max_face_count: int | None = Field(
+            default=None, ge=1,
+            description="For source='hlr': override hlr_view's exact-HLR "
+                        "face budget (over budget → honest silhouette "
+                        "fallback, HIDDEN layer empty, label "
+                        "'non_cut_ready'). None → hlr_view default.")
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
         if body is None:
             raise ValueError("fm.no_curves: dxf_export needs a body.")
+
+        if args.source == "hlr":
+            return self._apply_hlr(body, args)
 
         loops_2d = self._collect_loops(body, args)
         if not loops_2d:
@@ -135,6 +217,44 @@ class DxfExport(SkillBase):
                 "written_path": str(out_path),
                 "source": args.source,
                 "n_polylines": n_written,
+            },
+        )
+
+    def _apply_hlr(self, body: Any, args: Args) -> SkillResult:
+        """source='hlr' — layered drawing view (VISIBLE / HIDDEN)."""
+        from phone_designer.skills.inspect.hlr_view import HlrView
+
+        hlr_args: dict[str, Any] = {"view_direction": list(args.plane_normal)}
+        if args.hlr_max_face_count is not None:
+            hlr_args["max_face_count"] = args.hlr_max_face_count
+        ex = HlrView().apply(body, hlr_args).extras
+        outline = ex.get("outline", {})
+        visible = (list(ex.get("visible_polylines_2d", []))
+                   + list(outline.get("visible_polylines_2d", [])))
+        hidden = (list(ex.get("hidden_polylines_2d", []))
+                  + list(outline.get("hidden_polylines_2d", [])))
+        if not (visible or hidden):
+            raise ValueError(
+                "fm.no_curves: source='hlr' produced no 2D curves.")
+
+        written = write_layered_dxf(
+            args.path,
+            {"VISIBLE": visible, "HIDDEN": hidden},
+            layer_linetypes={"HIDDEN": "HIDDEN"},
+        )
+        return SkillResult(
+            body=body,
+            history=EntityHistoryMap(),
+            extras={
+                "written_path": str(Path(args.path)),
+                "source": "hlr",
+                "n_polylines": sum(written.values()),
+                "layers": written,
+                # honest passthrough: 'non_cut_ready' when hlr_view fell back
+                # to the brute silhouette (HIDDEN layer empty in that case).
+                "hlr_mode": ex.get("mode"),
+                "label": ex.get("label"),
+                "note": ex.get("note"),
             },
         )
 

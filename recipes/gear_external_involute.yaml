@@ -1,0 +1,31 @@
+name: gear_external_involute
+intent_en: 'Create an external involute spur gear: module 1.5, 24 teeth, face width
+  8, with a 5 mm center bore'
+intent_kr: 모듈 1.5 잇수 24 폭 8 의 인벌류트 평기어를 중심 구멍 5mm 와 함께 만들어줘
+tags:
+- gear
+- involute
+- spur
+- teeth
+- module
+- bore
+spec:
+- op: gear_external_involute
+  args:
+    module_mm: 1.5
+    n_teeth: 24
+    width_mm: 8
+    bore_diameter_mm: 5
+expected:
+  is_solid: true
+  volume_mm3:
+  - 7673.758
+  - 7986.972
+  bbox_mm:
+  - - 38.559
+    - 38.559
+    - 7.87
+  - - 39.439
+    - 39.439
+    - 8.13
+  notes: Pitch diameter = module * n_teeth = 36 mm; bore is optional (0 = no bore).

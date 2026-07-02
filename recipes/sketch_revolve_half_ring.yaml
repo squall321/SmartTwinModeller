@@ -1,0 +1,33 @@
+name: sketch_revolve_half_ring
+intent_en: Revolve a rectangular section only 180 degrees to make a half ring (open
+  C shape)
+intent_kr: 직사각형 단면을 180도만 회전시켜 반쪽 링(C자 형태)을 만들어줘
+tags:
+- revolve
+- half
+- ring
+- partial
+- angle
+- c-shape
+spec:
+- op: sketch_revolve
+  args:
+    sketch:
+      kind: rectangle
+      length_mm: 4
+      width_mm: 6
+      center_x_mm: 10
+    angle_deg: 180
+expected:
+  is_solid: true
+  volume_mm3:
+  - 738.902
+  - 769.062
+  bbox_mm:
+  - - 23.71
+    - 11.83
+    - 5.89
+  - - 24.29
+    - 12.17
+    - 6.11
+  notes: angle_deg in (0, 360]; 180 gives half the full-revolve volume (Pappus).

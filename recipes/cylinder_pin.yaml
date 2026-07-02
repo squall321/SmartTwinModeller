@@ -1,0 +1,27 @@
+name: cylinder_pin
+intent_en: 'Create a round pin: cylinder diameter 8 mm, height 30 mm'
+intent_kr: 지름 8mm 높이 30mm 원기둥 핀을 만들어줘
+tags:
+- cylinder
+- pin
+- shaft
+- round
+- primitive
+spec:
+- op: cylinder
+  args:
+    radius_mm: 4
+    height_mm: 30
+expected:
+  is_solid: true
+  volume_mm3:
+  - 1477.805
+  - 1538.123
+  bbox_mm:
+  - - 7.87
+    - 7.87
+    - 29.65
+  - - 8.13
+    - 8.13
+    - 30.35
+  notes: cylinder takes radius_mm (not diameter) and is Z-up from base_z_mm.

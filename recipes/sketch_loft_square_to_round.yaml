@@ -1,0 +1,38 @@
+name: sketch_loft_square_to_round
+intent_en: Loft smoothly from a square base to a round top — the classic square-to-circle
+  adapter (mismatched vertex counts are fine when ruled=false)
+intent_kr: 사각형 밑면에서 원형 윗면으로 부드럽게 이어지는 사각-원형 어댑터를 로프트로 만들어줘
+tags:
+- loft
+- square
+- circle
+- adapter
+- transition
+- smooth
+spec:
+- op: sketch_loft
+  args:
+    sections:
+    - kind: rectangle
+      length_mm: 12
+      width_mm: 12
+    - kind: circle
+      diameter_mm: 6
+    heights_mm:
+    - 0
+    - 12
+    ruled: false
+expected:
+  is_solid: true
+  volume_mm3:
+  - 929.42
+  - 967.356
+  bbox_mm:
+  - - 11.83
+    - 11.83
+    - 11.83
+  - - 12.17
+    - 12.17
+    - 12.17
+  notes: ruled=false (smooth) tolerates square->circle; ruled=true wants matching
+    vertex counts.

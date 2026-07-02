@@ -131,6 +131,8 @@ import phone_designer.skills.inspect.section_to_sketch  # noqa: F401
 import phone_designer.skills.inspect.curvature_comb  # noqa: F401
 import phone_designer.skills.inspect.cosmetic_thread  # noqa: F401
 import phone_designer.skills.inspect.quote_package  # noqa: F401
+import phone_designer.skills.inspect.hlr_view  # noqa: F401
+import phone_designer.skills.inspect.drawing_sheet  # noqa: F401
 import phone_designer.skills.inspect.measure_assembly_fit  # noqa: F401
 import phone_designer.skills.inspect.recommend_process  # noqa: F401
 import phone_designer.skills.inspect.mesh_quality  # noqa: F401
@@ -334,6 +336,8 @@ import phone_designer.skills.reverse_engineer.feature_change_classify  # noqa: F
 import phone_designer.skills.reverse_engineer.identify_key_dimensions  # noqa: F401
 import phone_designer.skills.reverse_engineer.compare_parts  # noqa: F401
 import phone_designer.skills.reverse_engineer.analyze_part  # noqa: F401
+import phone_designer.skills.reverse_engineer.analyze_assembly  # noqa: F401
+import phone_designer.skills.reverse_engineer.plan_reexecute  # noqa: F401
 import phone_designer.skills.reverse_engineer.emit_parametric_script  # noqa: F401
 import phone_designer.skills.reverse_engineer.recover_design_relations  # noqa: F401
 import phone_designer.skills.reverse_engineer.apply_variant_drivers  # noqa: F401

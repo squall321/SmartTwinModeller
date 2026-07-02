@@ -1,0 +1,33 @@
+task_id: t13_d_extrusion
+nl_request_en: Extrude a D-shaped profile (20 mm chord + semicircle) 5 mm thick
+nl_request_kr: 지름 20 반원과 현으로 이루어진 D자 단면을 5mm 돌출시켜줘
+reference_spec:
+- op: sketch_extrude
+  args:
+    sketch:
+      kind: composite
+      segments:
+      - kind: line
+        start:
+        - -10
+        - 0
+        end:
+        - 10
+        - 0
+      - kind: arc
+        start:
+        - 10
+        - 0
+        end:
+        - -10
+        - 0
+        radius: 10
+        ccw: true
+    height_mm: 5
+invariants:
+  is_solid: true
+  volume_mm3:
+  - 769.69
+  - 801.106
+  feature_counts:
+    sketch_extrude: 1

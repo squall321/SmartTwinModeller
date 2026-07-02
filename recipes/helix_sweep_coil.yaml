@@ -1,0 +1,34 @@
+name: helix_sweep_coil
+intent_en: 'Sweep a 2 mm round wire along an analytic helix: coil radius 8, pitch
+  4, 5 turns — a coil spring body'
+intent_kr: 코일 반지름 8 피치 4 5회전 나선을 따라 지름 2mm 원형 단면을 스윕해 코일 스프링을 만들어줘
+tags:
+- helix
+- sweep
+- coil
+- spring
+- spiral
+- wire
+spec:
+- op: helix_sweep
+  args:
+    section:
+      kind: circle
+      diameter_mm: 2
+    coil_radius_mm: 8
+    pitch_mm: 4
+    turns: 5
+expected:
+  is_solid: true
+  volume_mm3:
+  - 777.338
+  - 809.066
+  bbox_mm:
+  - - 19.587
+    - 19.574
+    - 23.465
+  - - 20.083
+    - 20.07
+    - 24.041
+  notes: Section must be CENTRED on its local origin (offset sections are refused)
+    and its radial extent must stay < coil_radius_mm.

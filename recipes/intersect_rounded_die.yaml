@@ -1,0 +1,41 @@
+name: intersect_rounded_die
+intent_en: Intersect a 20 mm cube with a 24 mm diameter cylinder to get a rounded-corner
+  die (boolean COMMON)
+intent_kr: 정육면체와 원기둥의 교집합(intersect)으로 모서리가 둥근 주사위 블록을 만들어줘
+tags:
+- intersect
+- boolean
+- common
+- rounded
+- corner
+spec:
+- op: box
+  args:
+    length_mm: 20
+    width_mm: 20
+    height_mm: 20
+- op: intersect
+  args:
+    other:
+      kind: primitive_cylinder
+      diameter_mm: 24
+      height_mm: 20
+      position:
+      - 0
+      - 0
+      - 0
+      axis: +Z
+expected:
+  is_solid: true
+  volume_mm3:
+  - 7455.143
+  - 7759.435
+  bbox_mm:
+  - - 19.75
+    - 19.75
+    - 19.75
+  - - 20.25
+    - 20.25
+    - 20.25
+  notes: intersect keeps only the overlap; cylinder r12 < half-diagonal 14.14, so
+    the cube corners are shaved off.

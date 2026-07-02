@@ -1,0 +1,230 @@
+{
+  "schema": 1,
+  "lane": "nl2spec_replay",
+  "generated_at": "2026-07-02T11:26:37+00:00",
+  "n_tasks": 13,
+  "n_passed": 13,
+  "records": {
+    "t01_base_plate": {
+      "task_id": "t01_base_plate",
+      "lane": "replay",
+      "ok": true,
+      "passed": true,
+      "is_solid": true,
+      "volume_mm3": 12000.0,
+      "n_steps": 1,
+      "n_ok": 1,
+      "checks": {
+        "is_solid": "pass",
+        "volume_mm3": "pass",
+        "feature_counts": "pass"
+      },
+      "failures": [],
+      "error": null
+    },
+    "t02_bracket_four_holes": {
+      "task_id": "t02_bracket_four_holes",
+      "lane": "replay",
+      "ok": true,
+      "passed": true,
+      "is_solid": true,
+      "volume_mm3": 11607.301,
+      "n_steps": 5,
+      "n_ok": 5,
+      "checks": {
+        "is_solid": "pass",
+        "volume_mm3": "pass",
+        "feature_counts": "pass"
+      },
+      "failures": [],
+      "error": null
+    },
+    "t03_bent_pipe": {
+      "task_id": "t03_bent_pipe",
+      "lane": "replay",
+      "ok": true,
+      "passed": true,
+      "is_solid": true,
+      "volume_mm3": 1486.279,
+      "n_steps": 1,
+      "n_ok": 1,
+      "checks": {
+        "is_solid": "pass",
+        "volume_mm3": "pass",
+        "feature_counts": "pass"
+      },
+      "failures": [],
+      "error": null
+    },
+    "t04_donut_revolve": {
+      "task_id": "t04_donut_revolve",
+      "lane": "replay",
+      "ok": true,
+      "passed": true,
+      "is_solid": true,
+      "volume_mm3": 2664.793,
+      "n_steps": 1,
+      "n_ok": 1,
+      "checks": {
+        "is_solid": "pass",
+        "volume_mm3": "pass",
+        "feature_counts": "pass"
+      },
+      "failures": [],
+      "error": null
+    },
+    "t05_frustum_loft": {
+      "task_id": "t05_frustum_loft",
+      "lane": "replay",
+      "ok": true,
+      "passed": true,
+      "is_solid": true,
+      "volume_mm3": 520.0,
+      "n_steps": 1,
+      "n_ok": 1,
+      "checks": {
+        "is_solid": "pass",
+        "volume_mm3": "pass",
+        "feature_counts": "pass"
+      },
+      "failures": [],
+      "error": null
+    },
+    "t06_pocketed_tray": {
+      "task_id": "t06_pocketed_tray",
+      "lane": "replay",
+      "ok": true,
+      "passed": true,
+      "is_solid": true,
+      "volume_mm3": 21600.0,
+      "n_steps": 2,
+      "n_ok": 2,
+      "checks": {
+        "is_solid": "pass",
+        "volume_mm3": "pass",
+        "feature_counts": "pass"
+      },
+      "failures": [],
+      "error": null
+    },
+    "t07_counterbore_plate": {
+      "task_id": "t07_counterbore_plate",
+      "lane": "replay",
+      "ok": true,
+      "passed": true,
+      "is_solid": true,
+      "volume_mm3": 8847.68,
+      "n_steps": 2,
+      "n_ok": 2,
+      "checks": {
+        "is_solid": "pass",
+        "volume_mm3": "pass",
+        "feature_counts": "pass"
+      },
+      "failures": [],
+      "error": null
+    },
+    "t08_filleted_block": {
+      "task_id": "t08_filleted_block",
+      "lane": "replay",
+      "ok": true,
+      "passed": true,
+      "is_solid": true,
+      "volume_mm3": 11922.743,
+      "n_steps": 2,
+      "n_ok": 2,
+      "checks": {
+        "is_solid": "pass",
+        "volume_mm3": "pass",
+        "feature_counts": "pass"
+      },
+      "failures": [],
+      "error": null
+    },
+    "t09_coil_spring": {
+      "task_id": "t09_coil_spring",
+      "lane": "replay",
+      "ok": true,
+      "passed": true,
+      "is_solid": true,
+      "volume_mm3": 793.202,
+      "n_steps": 1,
+      "n_ok": 1,
+      "checks": {
+        "is_solid": "pass",
+        "volume_mm3": "pass",
+        "feature_counts": "pass"
+      },
+      "failures": [],
+      "error": null
+    },
+    "t10_mirrored_block": {
+      "task_id": "t10_mirrored_block",
+      "lane": "replay",
+      "ok": true,
+      "passed": true,
+      "is_solid": true,
+      "volume_mm3": 8000.0,
+      "n_steps": 3,
+      "n_ok": 3,
+      "checks": {
+        "is_solid": "pass",
+        "volume_mm3": "pass",
+        "feature_counts": "pass"
+      },
+      "failures": [],
+      "error": null
+    },
+    "t11_hex_standoff": {
+      "task_id": "t11_hex_standoff",
+      "lane": "replay",
+      "ok": true,
+      "passed": true,
+      "is_solid": true,
+      "volume_mm3": 1537.105,
+      "n_steps": 2,
+      "n_ok": 2,
+      "checks": {
+        "is_solid": "pass",
+        "volume_mm3": "pass",
+        "feature_counts": "pass"
+      },
+      "failures": [],
+      "error": null
+    },
+    "t12_scaled_model": {
+      "task_id": "t12_scaled_model",
+      "lane": "replay",
+      "ok": true,
+      "passed": true,
+      "is_solid": true,
+      "volume_mm3": 1000.0,
+      "n_steps": 2,
+      "n_ok": 2,
+      "checks": {
+        "is_solid": "pass",
+        "volume_mm3": "pass",
+        "feature_counts": "pass"
+      },
+      "failures": [],
+      "error": null
+    },
+    "t13_d_extrusion": {
+      "task_id": "t13_d_extrusion",
+      "lane": "replay",
+      "ok": true,
+      "passed": true,
+      "is_solid": true,
+      "volume_mm3": 785.398,
+      "n_steps": 1,
+      "n_ok": 1,
+      "checks": {
+        "is_solid": "pass",
+        "volume_mm3": "pass",
+        "feature_counts": "pass"
+      },
+      "failures": [],
+      "error": null
+    }
+  }
+}

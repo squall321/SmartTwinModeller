@@ -1,0 +1,41 @@
+name: sketch_extrude_l_bracket
+intent_en: Extrude an L-shaped bracket profile (polygon) 6 mm thick
+intent_kr: L자 브래킷 단면(다각형)을 6mm 두께로 돌출시켜줘
+tags:
+- sketch
+- extrude
+- polygon
+- l-shape
+- bracket
+spec:
+- op: sketch_extrude
+  args:
+    sketch:
+      kind: polygon
+      vertices:
+      - - 0
+        - 0
+      - - 40
+        - 0
+      - - 40
+        - 10
+      - - 10
+        - 10
+      - - 10
+        - 30
+      - - 0
+        - 30
+    height_mm: 6
+expected:
+  is_solid: true
+  volume_mm3:
+  - 3528.0
+  - 3672.0
+  bbox_mm:
+  - - 39.55
+    - 29.65
+    - 5.89
+  - - 40.45
+    - 30.35
+    - 6.11
+  notes: polygon auto-closes last->first vertex; vertices must be distinct.

@@ -1,0 +1,45 @@
+name: sketch_extrude_polygon_filleted
+intent_en: Extrude an L-profile with all sketch corners filleted r=2 via the polygon
+  corner_fillet_r argument (2D fillet, not a 3D edge fillet)
+intent_kr: 모든 꼭짓점을 반경 2로 둥글린 L자 다각형 단면을 6mm 돌출시켜줘 (2D 필렛)
+tags:
+- sketch
+- extrude
+- polygon
+- fillet
+- corner
+- 2d
+spec:
+- op: sketch_extrude
+  args:
+    sketch:
+      kind: polygon
+      vertices:
+      - - 0
+        - 0
+      - - 40
+        - 0
+      - - 40
+        - 10
+      - - 10
+        - 10
+      - - 10
+        - 30
+      - - 0
+        - 30
+      corner_fillet_r: 2.0
+    height_mm: 6
+expected:
+  is_solid: true
+  volume_mm3:
+  - 3507.81
+  - 3650.986
+  bbox_mm:
+  - - 39.55
+    - 29.65
+    - 5.89
+  - - 40.45
+    - 30.35
+    - 6.11
+  notes: corner_fillet_r rounds the 2D profile corners BEFORE extrusion — often
+    cheaper/safer than a 3D fillet_edges_by_predicate afterwards.

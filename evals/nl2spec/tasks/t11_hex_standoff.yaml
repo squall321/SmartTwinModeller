@@ -1,0 +1,25 @@
+task_id: t11_hex_standoff
+nl_request_en: 'A hex standoff: hexagonal prism (R8, h10) with a 4 mm through-hole'
+nl_request_kr: 지름 4 관통 구멍이 뚫린 육각 스탠드오프 (외접 반지름 8 높이 10)
+reference_spec:
+- op: prism_n_sided
+  args:
+    n_sides: 6
+    circumscribed_radius_mm: 8
+    height_mm: 10
+- op: hole
+  args:
+    position:
+    - 0
+    - 0
+    - 10
+    diameter_mm: 4
+    direction: -Z
+invariants:
+  is_solid: true
+  volume_mm3:
+  - 1506.363
+  - 1567.847
+  feature_counts:
+    prism_n_sided: 1
+    hole: 1

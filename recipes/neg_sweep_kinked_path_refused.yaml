@@ -1,0 +1,50 @@
+name: neg_sweep_kinked_path_refused
+intent_en: 'NEGATIVE example — sweeping around a sharp 90-degree line-line corner
+  is REFUSED (fm.sweep_tangent_discontinuity): the path must be tangent-continuous;
+  insert a fillet arc at the corner instead'
+intent_kr: 부정 예제 — 90도로 꺾인(킹크) 경로 스윕은 fm.sweep_tangent_discontinuity 로 거절된다. 모서리에
+  접선 연속 원호를 넣어야 한다
+tags:
+- negative
+- sweep
+- kink
+- corner
+- refusal
+- tangent
+- discontinuity
+spec:
+- op: box
+  args:
+    length_mm: 5
+    width_mm: 5
+    height_mm: 2
+- op: sketch_sweep
+  args:
+    section:
+      kind: circle
+      diameter_mm: 6
+    path:
+      kind: path
+      plane: XY
+      segments:
+      - kind: line
+        start:
+        - 0
+        - 0
+        end:
+        - 20
+        - 0
+      - kind: line
+        start:
+        - 20
+        - 0
+        end:
+        - 20
+        - 20
+expected:
+  ok: false
+  failing_op: sketch_sweep
+  error_contains: fm.sweep_tangent_discontinuity
+  notes: MakePipeShell would SILENTLY drop the swept volume at the kink, so the
+    skill refuses any joint turning > 30 degrees. The tiny placeholder box exists
+    only so the failing spec still returns a body for inspection.

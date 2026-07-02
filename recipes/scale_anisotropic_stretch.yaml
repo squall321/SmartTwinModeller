@@ -1,0 +1,34 @@
+name: scale_anisotropic_stretch
+intent_en: Stretch a cylinder 3x along Z only with anisotropic factors_xyz
+intent_kr: 원기둥을 Z축으로만 3배 늘려줘 (비등방 factors_xyz)
+tags:
+- scale
+- anisotropic
+- stretch
+- factors
+- z-axis
+spec:
+- op: cylinder
+  args:
+    radius_mm: 5
+    height_mm: 10
+- op: scale_body
+  args:
+    factors_xyz:
+    - 1
+    - 1
+    - 3
+expected:
+  is_solid: true
+  volume_mm3:
+  - 2328.964
+  - 2424.024
+  bbox_mm:
+  - - 14.8
+    - 17.098
+    - 29.65
+  - - 15.2
+    - 17.544
+    - 30.35
+  notes: Anisotropic scaling of curved faces converts them to NURBS internally (GTransform)
+    — fine for export, but analytic cylinder-ness is not preserved.

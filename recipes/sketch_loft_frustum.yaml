@@ -1,0 +1,37 @@
+name: sketch_loft_frustum
+intent_en: Loft (ruled) from a 10x10 square to a 4x4 square over 10 mm height —
+  a rectangular frustum
+intent_kr: 10x10 사각형에서 4x4 사각형으로 높이 10mm 를 직선(ruled) 로프트해줘
+tags:
+- loft
+- frustum
+- ruled
+- taper
+- sections
+spec:
+- op: sketch_loft
+  args:
+    sections:
+    - kind: rectangle
+      length_mm: 10
+      width_mm: 10
+    - kind: rectangle
+      length_mm: 4
+      width_mm: 4
+    heights_mm:
+    - 0
+    - 10
+    ruled: true
+expected:
+  is_solid: true
+  volume_mm3:
+  - 509.6
+  - 530.4
+  bbox_mm:
+  - - 9.85
+    - 9.85
+    - 9.85
+  - - 10.15
+    - 10.15
+    - 10.15
+  notes: 'Prismatoid check: V = h/6*(A0 + 4*Am + A1) = 520 for this pair.'

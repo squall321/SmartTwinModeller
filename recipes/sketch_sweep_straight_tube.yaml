@@ -1,0 +1,41 @@
+name: sketch_sweep_straight_tube
+intent_en: Sweep a 6 mm round section along a single straight 20 mm line (equivalent
+  to an extrude)
+intent_kr: 지름 6mm 원형 단면을 직선 경로 20mm 를 따라 스윕해줘
+tags:
+- sweep
+- straight
+- tube
+- rod
+- line
+- path
+spec:
+- op: sketch_sweep
+  args:
+    section:
+      kind: circle
+      diameter_mm: 6
+    path:
+      kind: path
+      plane: XY
+      segments:
+      - kind: line
+        start:
+        - 0
+        - 0
+        end:
+        - 20
+        - 0
+expected:
+  is_solid: true
+  volume_mm3:
+  - 554.177
+  - 576.797
+  bbox_mm:
+  - - 19.75
+    - 5.89
+    - 5.89
+  - - 20.25
+    - 6.11
+    - 6.11
+  notes: 'A one-line path sweep equals a prism: V = A * L.'

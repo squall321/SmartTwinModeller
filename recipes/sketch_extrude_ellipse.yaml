@@ -1,0 +1,29 @@
+name: sketch_extrude_ellipse
+intent_en: 'Extrude an elliptical pad: radii 10 x 6, thickness 4'
+intent_kr: 장반경 10 단반경 6 타원 패드를 4mm 두께로 돌출시켜줘
+tags:
+- sketch
+- extrude
+- ellipse
+- oval
+- pad
+spec:
+- op: sketch_extrude
+  args:
+    sketch:
+      kind: ellipse
+      radius_x_mm: 10
+      radius_y_mm: 6
+    height_mm: 4
+expected:
+  is_solid: true
+  volume_mm3:
+  - 738.902
+  - 769.062
+  bbox_mm:
+  - - 19.75
+    - 11.83
+    - 3.91
+  - - 20.25
+    - 12.17
+    - 4.09

@@ -81,6 +81,20 @@ class GenerateFromSpec(SkillBase):
                         "body is an OPEN surface (create_open_surface / "
                         "fill_surface_patch / surface blends).")
         plan_name: str = Field(default="generated")
+        # Plan schema v2 (2026-07-02) — OPTIONAL named-parameter table. When
+        # given, any step arg (nested at any depth) may be an expression node
+        # {'$expr': 'housing_length/2 - wall'} resolved BEFORE the Plan is
+        # built (plan/params.py: simpleeval whitelist, undefined-name + cycle
+        # detection → fm.expr_error). Default None = pre-v2 behaviour with NO
+        # resolution pass at all — byte-stable manifest for param-less specs.
+        parameters: dict[str, Any] | None = Field(
+            default=None,
+            description="Optional named parameters {name: value | {value, unit, "
+                        "description}}. Enables {'$expr': ...} nodes in step "
+                        "args. A broken table (cycle / bad override shape) "
+                        "raises fm.expr_error; a bad $expr in ONE step is "
+                        "isolated into spec_errors like any other bad step. "
+                        "None (default) = no resolution pass (byte-stable).")
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
         from phone_designer.plan.executor import PlanExecutor, _import_all_skills
@@ -90,6 +104,19 @@ class GenerateFromSpec(SkillBase):
         # register the WHOLE skill library before the per-step name pre-check —
         # otherwise a skill not yet imported is wrongly rejected as 'unknown'.
         _import_all_skills()
+
+        # Plan schema v2 — resolve the parameter table ONCE up front. A broken
+        # TABLE (cycle, non-finite, bad value shape) is an args-level refusal:
+        # raise fm.expr_error (raw cause preserved), never mask into a half-
+        # built part. parameters=None skips this entirely (byte-stable).
+        param_table: dict[str, float] | None = None
+        if args.parameters is not None:
+            from phone_designer.plan.params import (
+                ExprError,
+                resolve_args as _resolve_expr_args,
+                resolve_parameter_table,
+            )
+            param_table = resolve_parameter_table(args.parameters)
 
         spec_errors: list[str] = []
         steps: list[Step] = []
@@ -112,6 +139,16 @@ class GenerateFromSpec(SkillBase):
             except Exception:  # noqa: BLE001
                 spec_errors.append(f"step {i}: unknown skill '{op}'")
                 continue
+            if param_table is not None:
+                # a bad $expr in ONE step (undefined name, sibling keys, eval
+                # failure) is isolated exactly like an unknown skill — the
+                # rest of the build still runs.
+                try:
+                    sargs = _resolve_expr_args(
+                        dict(sargs), param_table, _path=f"step {i} ({op})")
+                except ExprError as exc:
+                    spec_errors.append(f"step {i}: {exc}")
+                    continue
             steps.append(Step(id=f"s{i}_{op}", skill=op, args=dict(sargs)))
 
         out_body = body
@@ -169,5 +206,9 @@ class GenerateFromSpec(SkillBase):
             "spec_errors": spec_errors,
             "grade": "constructed",
         }
+        # only when the v2 kwarg was actually used — the param-less manifest
+        # stays key-for-key identical to pre-v2 output (byte-stable).
+        if param_table is not None:
+            generated["parameters_resolved"] = dict(param_table)
         return SkillResult(body=out_body, history=EntityHistoryMap(),
                            extras={"generated": generated})

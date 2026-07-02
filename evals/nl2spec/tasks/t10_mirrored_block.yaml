@@ -1,0 +1,34 @@
+task_id: t10_mirrored_block
+nl_request_en: Model the +X half of a block and mirror-merge it across the YZ plane
+  into one symmetric solid
+nl_request_kr: +X 쪽 반쪽 블록을 만들고 YZ 평면으로 미러-머지해서 대칭 솔리드로 합쳐줘
+reference_spec:
+- op: box
+  args:
+    length_mm: 20
+    width_mm: 20
+    height_mm: 10
+- op: move_body
+  args:
+    translate_mm:
+    - 10
+    - 0
+    - 0
+- op: mirror_body
+  args:
+    plane_origin_mm:
+    - 0
+    - 0
+    - 0
+    plane_normal:
+    - 1
+    - 0
+    - 0
+    merge: true
+invariants:
+  is_solid: true
+  volume_mm3:
+  - 7840.0
+  - 8160.0
+  feature_counts:
+    mirror_body: 1
