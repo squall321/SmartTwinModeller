@@ -146,6 +146,8 @@ import phone_designer.skills.io.mesh_simplify  # noqa: F401
 import phone_designer.skills.io.mesh_to_brep  # noqa: F401
 import phone_designer.skills.io.dxf_export  # noqa: F401
 import phone_designer.skills.io.mesh_export  # noqa: F401
+import phone_designer.skills.io.mesh_import  # noqa: F401
+import phone_designer.skills.io.point_cloud_import  # noqa: F401
 import phone_designer.skills.io.gltf_export  # noqa: F401
 import phone_designer.skills.io.stl_export  # noqa: F401
 import phone_designer.skills.io.stl_import  # noqa: F401
