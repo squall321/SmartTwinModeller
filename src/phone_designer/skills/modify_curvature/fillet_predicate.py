@@ -2,10 +2,18 @@
 
 Selector 로 지정된 edge 들에 동일 radius fillet 적용.
 PoC 의 fillet_with_history 를 framework 안에 internalize.
+
+Class-A knobs (2026-07): ``continuity='g2'`` builds a CURVATURE-continuous blend
+(maker.SetContinuity(GeomAbs_G2, tol)) and ``fillet_shape`` picks the cross-section
+law (rational | quasi_angular | polynomial via maker.SetFilletShape) — the standard
+cosmetic-fillet controls every general CAD kernel exposes. Defaults preserve the
+historical behaviour exactly (OCCT's own G1 rational), so existing plans are
+byte-stable.
 """
 from __future__ import annotations
 
-from typing import Any
+import math
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -53,10 +61,22 @@ class FilletEdgesByPredicate(SkillBase):
     class Args(BaseModel):
         selector: SelectorRef
         radius_mm: float = Field(ge=0.05, le=50.0)
+        continuity: Literal["g1", "g2"] = Field(
+            default="g1",
+            description="Blend continuity to the adjacent faces: g1 (tangent, the "
+                        "OCCT default — historical behaviour) or g2 (curvature-"
+                        "continuous, for Class-A / cosmetic surfaces).")
+        fillet_shape: Literal["rational", "quasi_angular", "polynomial"] = Field(
+            default="rational",
+            description="Cross-section law: rational (exact circular, default) | "
+                        "quasi_angular (near-circular, better for G2) | polynomial "
+                        "(fully polynomial, smoothest for downstream NURBS work).")
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
         from build123d import Part
         from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet
+        from OCP.ChFi3d import ChFi3d_Polynomial, ChFi3d_QuasiAngular
+        from OCP.GeomAbs import GeomAbs_G2
 
         from phone_designer.skills._resolvers import resolve_edges
         shape = body.wrapped if hasattr(body, "wrapped") else body
@@ -65,6 +85,12 @@ class FilletEdgesByPredicate(SkillBase):
             raise RuntimeError(f"selector matched 0 edges: {args.selector.model_dump()}")
 
         maker = BRepFilletAPI_MakeFillet(shape)
+        if args.fillet_shape != "rational":
+            maker.SetFilletShape(
+                ChFi3d_QuasiAngular if args.fillet_shape == "quasi_angular"
+                else ChFi3d_Polynomial)
+        if args.continuity == "g2":
+            maker.SetContinuity(GeomAbs_G2, math.radians(1.0))
         for e in edges:
             maker.Add(args.radius_mm, e)
         maker.Build()

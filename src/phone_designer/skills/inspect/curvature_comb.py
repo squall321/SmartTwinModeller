@@ -17,7 +17,9 @@ Strategy:
        parameter sampling if the abscissa algo does not converge).
     3. At each station u: ``BRepLProp_CLProps(ac, u, 2, tol)`` →
        ``.Curvature()`` (1/radius) and ``.Value()`` (the 3D point).
-    4. radius = 1/κ when κ > eps, else +inf (a straight segment has κ = 0).
+    4. radius = 1/κ when κ > eps, else None (a straight segment has κ = 0;
+       None instead of +inf because `Infinity` is not valid strict JSON and
+       breaks MCP clients).
 
 A curvature comb for a true circle of radius R reads κ = 1/R at EVERY station
 (constant), which is the classic sanity check the test asserts.
@@ -178,9 +180,10 @@ class CurvatureComb(SkillBase):
                 "u": round(float(u), 9),
                 "point": pt,
                 "curvature": round(kappa, 12),
-                # inf is JSON-unfriendly; keep the float here — callers that
-                # serialize should map inf → null. Rounding leaves inf intact.
-                "radius": radius if math.isinf(radius) else round(radius, 9),
+                # math.inf breaks strict JSON (json.dumps emits the non-standard
+                # token `Infinity`, which MCP clients reject) — emit None for a
+                # straight/flat station instead.
+                "radius": None if math.isinf(radius) else round(radius, 9),
             })
 
             if kappa > max_curvature:
@@ -190,7 +193,8 @@ class CurvatureComb(SkillBase):
 
         extras = {
             "samples": samples,
-            "min_radius": min_radius if math.isinf(min_radius) else round(min_radius, 9),
+            # None (not inf) when every station is straight — JSON/MCP-safe.
+            "min_radius": None if math.isinf(min_radius) else round(min_radius, 9),
             "max_curvature": round(max_curvature, 12),
             "n_samples": len(samples),
             "edge_count": len(edges),

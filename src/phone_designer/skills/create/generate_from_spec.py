@@ -75,7 +75,11 @@ class GenerateFromSpec(SkillBase):
                         "gear/…); later steps are features (hole/pocket/boss/…).")
         validate_solid: bool = Field(
             default=True,
-            description="Validate the result is a closed solid (volume > 0).")
+            description="Validate the result is a CLOSED SOLID (volume > 0 AND at "
+                        "least one TopAbs_SOLID — an open shell honestly fails "
+                        "this). Pass False for surface-first workflows whose final "
+                        "body is an OPEN surface (create_open_surface / "
+                        "fill_surface_patch / surface blends).")
         plan_name: str = Field(default="generated")
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
@@ -137,7 +141,16 @@ class GenerateFromSpec(SkillBase):
                 volume_mm3 = float(
                     MassProperties().apply(out_body, {}).extras.get("volume_mm3")
                     or 0.0)
-                is_solid = volume_mm3 > 0.0
+                # volume>0 alone LIES for an OPEN shell: VolumeProperties_s applies
+                # the divergence theorem and returns a nonzero pseudo-mass for an
+                # un-capped skin (e.g. create_open_surface). Topology never lies —
+                # also require at least one actual TopAbs_SOLID sub-shape.
+                from OCP.TopAbs import TopAbs_SOLID
+                from OCP.TopExp import TopExp_Explorer
+                shp = (out_body.wrapped if hasattr(out_body, "wrapped")
+                       else out_body)
+                has_solid = TopExp_Explorer(shp, TopAbs_SOLID).More()
+                is_solid = volume_mm3 > 0.0 and has_solid
             except Exception as exc:  # noqa: BLE001
                 spec_errors.append(f"solid validation failed: {type(exc).__name__}")
 

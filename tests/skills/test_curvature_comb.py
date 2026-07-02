@@ -53,7 +53,14 @@ def test_curvature_comb_circle_radius_10_constant():
 
 
 def test_curvature_comb_straight_edge_is_flat():
-    """A straight box edge has κ = 0 → radius = +inf at every station."""
+    """A straight box edge has κ = 0 → radius = None at every station.
+
+    None, NOT math.inf: json.dumps(inf) emits the non-standard token `Infinity`,
+    which strict JSON parsers (MCP clients) reject — the whole extras payload
+    must stay JSON-serializable.
+    """
+    import json
+
     box = Box().apply(None, {"length_mm": 30, "width_mm": 30, "height_mm": 10}).body
 
     r = CurvatureComb().apply(box, {
@@ -65,11 +72,13 @@ def test_curvature_comb_straight_edge_is_flat():
     assert ex["n_samples"] >= 2
     for s in ex["samples"]:
         assert s["curvature"] < 1e-9
-        assert math.isinf(s["radius"])
+        assert s["radius"] is None
 
-    assert math.isinf(ex["min_radius"])
+    assert ex["min_radius"] is None
     assert ex["max_curvature"] < 1e-9
     assert r.body is box
+    # the whole payload must survive STRICT json round-trip (allow_nan=False).
+    json.dumps(ex, allow_nan=False)
 
 
 def test_curvature_comb_no_edges_raises():

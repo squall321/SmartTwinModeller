@@ -134,16 +134,21 @@ def test_open_surface_is_discoverable_in_the_manifest():
 
 
 def test_open_surface_from_scratch_via_generate_from_spec():
-    # Registration note: create_open_surface must be imported (as this test module
-    # does at top) so generate_from_spec resolves the op. It becomes discoverable
-    # everywhere once the export_manifest import line is added by the maintainer.
-    # generate_from_spec reports its OWN is_solid via VolumeProperties_s, which
-    # returns a nonzero divergence-theorem pseudo-volume for an open shell (True)
-    # — so we assert the build succeeded, not that flag (the skill's own extras
-    # report is_solid=False honestly via a solid-count topology check).
+    # generate_from_spec's is_solid is now HONEST for an open shell (volume>0 AND
+    # a TopAbs_SOLID present — VolumeProperties_s alone returns a nonzero
+    # divergence-theorem pseudo-volume and used to lie True). So:
+    #   * with the default validate_solid=True, an open-surface spec reports
+    #     is_solid=False and ok=False — the honest refusal;
+    #   * a surface-first workflow passes validate_solid=False → ok=True.
     from phone_designer.skills.create.generate_from_spec import GenerateFromSpec
-    g = GenerateFromSpec().apply(None, {"spec": [
-        {"op": "create_open_surface", "args": {
-            "sections": [_SQ20, _SQ10], "heights_mm": [0, 10],
-            "mode": "lofted", "ruled": True}}]}).extras["generated"]
-    assert g["ok"] and not g["spec_errors"]
+    spec = [{"op": "create_open_surface", "args": {
+        "sections": [_SQ20, _SQ10], "heights_mm": [0, 10],
+        "mode": "lofted", "ruled": True}}]
+
+    strict = GenerateFromSpec().apply(None, {"spec": spec}).extras["generated"]
+    assert strict["is_solid"] is False and strict["ok"] is False
+
+    surf = GenerateFromSpec().apply(None, {
+        "spec": spec, "validate_solid": False}).extras["generated"]
+    assert surf["ok"] and not surf["spec_errors"]
+    assert surf["is_solid"] is False  # still honestly reported
