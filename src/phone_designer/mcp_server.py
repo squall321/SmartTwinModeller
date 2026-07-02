@@ -1,14 +1,20 @@
 """MCP server — drive the CAD modeller from an LLM client (Claude, …).
 
 Exposes the reverse-engineering + GENERATION + manufacturing-analysis pipeline as
-a small, ergonomic set of MCP tools over stdio. The LLM client becomes the
+an ergonomic set of MCP tools over stdio. The LLM client becomes the
 natural-language → spec interpreter: it discovers ops with ``cad_list_skills`` /
-``cad_get_skill_schema`` (every one of the ~383 registered skills has a JSON-Schema
+``cad_get_skill_schema`` (every one of the 419 registered skills has a JSON-Schema
 args model), composes a build spec, and calls ``cad_generate`` — no custom NL
-parser needed.
+parser needed. See docs/MCP_CLIENT_GUIDE.md for the full tool reference + loops.
 
-Tools (all ``cad_*``-namespaced): cad_list_skills, cad_get_skill_schema,
-cad_generate, cad_analyze, cad_estimate_cost, cad_recommend_process, cad_export.
+Tools (all ``cad_*``-namespaced), grouped:
+  discovery    — cad_list_skills, cad_get_skill_schema, cad_find_recipe
+  session      — cad_generate, cad_import, cad_modify, cad_undo, cad_preflight,
+                 cad_measure, cad_preview, cad_export
+  analysis     — cad_analyze, cad_estimate_cost, cad_recommend_process,
+                 cad_repair_dfm, cad_dfm_workflow, cad_analyze_assembly
+  deliverables — cad_quote_package, cad_drawing, cad_compare, cad_variants,
+                 cad_cheapest_variant, cad_reexecute
 
 STATE / ARTIFACT MODEL: geometry flows as FILES + a session BODY CACHE.
 ``cad_generate`` writes the result to a STEP (+ optional STL / editable .py) in a
