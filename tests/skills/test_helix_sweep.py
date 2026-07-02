@@ -12,9 +12,14 @@ exact only for a planar closed curve moving perpendicular to a path that does no
 self-overlap; a helix has mild torsion so a 6% tolerance is honest.)
 
 Also pins the honest guards the OCCT builder does NOT provide: a section radial
-extent ≥ coil_radius folds through the axis (structured refusal), and is_solid is
-gated on volume>0. The wire-cast fix is implicitly pinned — a bare TopoDS_Shape
-fed to MakePipeShell/BRepAdaptor_CompCurve HANGS, so a passing (non-timeout) build
+extent about its LOCAL ORIGIN ≥ coil_radius folds through the axis (structured
+refusal, offset-aware — a bbox half-SIZE guard was bypassed by center_y_mm
+offsets), an off-centre section falsifies the coil_radius/Pappus extras
+(fm.helix_section_offcentre), pitch < the oriented section's axial extent makes
+adjacent coils interpenetrate and double-counts the overlap volume
+(fm.helix_pitch_overlap, only when turns ≥ 1), and is_solid is gated on
+volume>0. The wire-cast fix is implicitly pinned — a bare TopoDS_Shape fed to
+MakePipeShell/BRepAdaptor_CompCurve HANGS, so a passing (non-timeout) build
 proves the TopoDS.Wire_s cast on BOTH the helix wire and the section wire.
 """
 from __future__ import annotations
@@ -69,8 +74,12 @@ def test_helix_sweep_bbox_spans_diameter_plus_section():
 
 def test_rectangle_section_helix_builds():
     # a non-circular (rectangular ribbon) section — an auger/scroll flight — must
-    # also build to a positive-volume solid.
-    r = _hx(section={"kind": "rectangle", "length_mm": 6, "width_mm": 2},
+    # also build to a positive-volume solid. Section local X maps near-axially,
+    # so the flight is 2mm thick axially (length) × 6mm wide radially (width);
+    # the old 6×2 case had a 6mm axial extent > pitch 5 and self-intersected
+    # (BOPAlgo SelfInterMode=True) — it is now the fm.helix_pitch_overlap
+    # refusal pinned below.
+    r = _hx(section={"kind": "rectangle", "length_mm": 2, "width_mm": 6},
             coil_radius_mm=12, pitch_mm=5, turns=2.5)
     assert r["is_solid"] and r["volume_mm3"] > 0
     assert r["section_kind"] == "rectangle"
@@ -95,6 +104,57 @@ def test_section_wider_than_coil_refused():
     with pytest.raises(ValueError, match="helix_section_exceeds_coil"):
         _hx(section={"kind": "circle", "diameter_mm": 24},
             coil_radius_mm=10, pitch_mm=6, turns=2)
+
+
+def test_offset_section_spanning_axis_refused():
+    # d=4 circle offset cy=-10 on a coil of radius 10: bbox half-SIZE is only 2
+    # (< 10, the old guard passed and swept 11mm³ of self-intersecting scrap),
+    # but the section really spans y ∈ [-12,-8] about its local origin — the
+    # wall folds through the +Z axis. The guard must measure extent about the
+    # LOCAL ORIGIN (raw bbox coords), not the size.
+    with pytest.raises(ValueError, match="helix_section_exceeds_coil"):
+        _hx(section={"kind": "circle", "diameter_mm": 4, "center_y_mm": -10},
+            coil_radius_mm=10, pitch_mm=6, turns=2)
+
+
+def test_mildly_offcentre_section_refused_as_offcentre():
+    # cy=+3 passes the radial-extent guard (max extent 5 < 10) but sweeps at a
+    # real centreline radius of 13 while extras would claim coil_radius_mm=10 /
+    # Pappus at R=10 (probe: vol 2058.6 vs claimed 1579.7). coil_radius_mm is
+    # documented as the distance to the section CENTRE → honest refusal instead
+    # of false metadata.
+    with pytest.raises(ValueError, match="helix_section_offcentre"):
+        _hx(section={"kind": "circle", "diameter_mm": 4, "center_y_mm": 3},
+            coil_radius_mm=10, pitch_mm=6, turns=2)
+
+
+def test_pitch_smaller_than_section_axial_extent_refused():
+    # d=6 circle with pitch 2: each turn advances only 2mm but the coil tube is
+    # ~6mm tall axially → adjacent coils interpenetrate; VolumeProperties
+    # double-counts the overlap (probe: reported 5330mm³ exceeds the coil's own
+    # enclosing annulus capacity 4523mm³; BOPAlgo self-intersection=True).
+    with pytest.raises(ValueError, match="helix_pitch_overlap"):
+        _hx(section={"kind": "circle", "diameter_mm": 6},
+            coil_radius_mm=10, pitch_mm=2, turns=3)
+
+
+def test_ribbon_axial_extent_exceeding_pitch_refused():
+    # the OLD test_rectangle_section_helix_builds case: 6mm of the ribbon maps
+    # axially (local X) but pitch is 5 → coils interpenetrate (probe-verified
+    # self-intersecting). The measured-extent guard must refuse it while the
+    # swapped 2(axial)×6(radial) flight above still builds.
+    with pytest.raises(ValueError, match="helix_pitch_overlap"):
+        _hx(section={"kind": "rectangle", "length_mm": 6, "width_mm": 2},
+            coil_radius_mm=12, pitch_mm=5, turns=2.5)
+
+
+def test_subturn_tight_pitch_still_builds():
+    # turns=0.5 with pitch 2 and a d=6 tube: there is NO adjacent coil, so the
+    # pitch guard must not fire — probe-verified valid solid (BOPAlgo
+    # self-intersection=False, vol 888.7).
+    r = _hx(section={"kind": "circle", "diameter_mm": 6},
+            coil_radius_mm=10, pitch_mm=2, turns=0.5)
+    assert r["is_solid"] and r["volume_mm3"] == pytest.approx(888.7, rel=0.02)
 
 
 # ── discoverability ──────────────────────────────────────────────────────────

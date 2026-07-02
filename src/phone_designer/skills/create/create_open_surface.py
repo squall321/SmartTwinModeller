@@ -16,8 +16,10 @@ Two modes:
     counts, e.g. square→circle); ``ruled=True`` is a faceted linear transition.
   * ``ruled`` — exactly TWO sections; ``BRepFill.Shell_s(wire1, wire2)`` builds a
     single ruled shell directly between the two outer wires (the classic
-    "loft between two curves" primitive, no ThruSections). Cleanest when the two
-    sections have matching vertex counts.
+    "loft between two curves" primitive, no ThruSections). The two wires MUST
+    have matching edge counts — BRepFill.Shell pairs edges 1:1 and mismatches
+    silently yield a partial band, so they are refused up front
+    (fm.surface_ruled_incompatible_wires; use mode='lofted' instead).
 
 Sections stack along +Z (heights_mm, strictly increasing), reusing the exact
 section machinery of sketch_loft: ``_build_planar_face`` → ``_outer_wire`` →
@@ -105,6 +107,7 @@ def _is_solid(shape) -> bool:
     failure_modes=["fm.surface_height_count_mismatch",
                    "fm.surface_heights_not_monotonic",
                    "fm.surface_ruled_needs_two_sections",
+                   "fm.surface_ruled_incompatible_wires",
                    "fm.surface_failed", "fm.surface_degenerate"],
     cost_hint=0.35,
     result_grade="measured",
@@ -168,6 +171,32 @@ class CreateOpenSurface(SkillBase):
             _translate_wire(_outer_wire(_build_planar_face(sk)), z)
             for sk, z in zip(sections, heights)
         ]
+
+        # ── ruled compatibility guard (BEFORE the try — its ValueError must not
+        # be re-wrapped as fm.surface_failed) ─────────────────────────────────
+        if args.mode == "ruled":
+            # BRepFill.Shell_s pairs the two wires' edges 1:1. With mismatched
+            # edge counts it silently returns a PARTIAL band (verified: rect
+            # 4 edges → circle 1 edge gave a single 96.8mm² face with bbox
+            # [10, 7, 10], not even spanning the sections). Refuse honestly.
+            from OCP.TopAbs import TopAbs_EDGE
+            from OCP.TopExp import TopExp_Explorer
+
+            def _n_edges(w) -> int:
+                n = 0
+                ex = TopExp_Explorer(w, TopAbs_EDGE)
+                while ex.More():
+                    n += 1
+                    ex.Next()
+                return n
+
+            n0, n1 = _n_edges(wires[0]), _n_edges(wires[1])
+            if n0 != n1:
+                raise ValueError(
+                    f"fm.surface_ruled_incompatible_wires: wire edge counts "
+                    f"{n0} vs {n1} — BRepFill.Shell requires matching edge "
+                    "counts; use mode='lofted' (ThruSections tolerates "
+                    "mismatched sections).")
 
         # ── build the OPEN surface ────────────────────────────────────────────
         try:

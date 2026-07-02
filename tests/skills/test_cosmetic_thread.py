@@ -178,3 +178,24 @@ def test_unknown_designation_raises():
 def test_unparseable_designation_raises():
     with pytest.raises(ValueError):
         CosmeticThread().apply(_cylinder(), {"designation": "banana"})
+
+
+# (h) physically impossible explicit pitches refuse (fm.invalid_pitch)
+
+
+def test_oversized_explicit_pitch_refused():
+    # M6x8: minor = 6 - 1.08253175*8 ≈ -2.66 mm — impossible, must refuse
+    # instead of annotating a negative minor diameter.
+    with pytest.raises(ValueError, match=r"fm\.invalid_pitch") as ei:
+        CosmeticThread().apply(_cylinder(), {"designation": "M6x8"})
+    assert "minor diameter" in str(ei.value)
+
+
+def test_zero_explicit_pitch_refused():
+    # M6x0: zero pitch is degenerate (minor == major) — must refuse.
+    with pytest.raises(ValueError, match=r"fm\.invalid_pitch"):
+        CosmeticThread().apply(_cylinder(), {"designation": "M6x0"})
+
+
+def test_invalid_pitch_declared_as_failure_mode():
+    assert "fm.invalid_pitch" in CosmeticThread.spec.failure_modes

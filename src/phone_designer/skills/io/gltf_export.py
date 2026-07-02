@@ -19,6 +19,14 @@ OCCT 7.8 writes glTF natively through ``RWGltf_CafWriter``, which serializes an
 ``binary`` selects GLB (True) vs glTF+bin (False); by default it is inferred
 from the extension (``.glb`` → binary, anything else → text glTF).
 
+Units / orientation: glTF 2.0 fixes the coordinate space at **1 unit = 1 metre,
++Y up** (spec §3.4) while our geometry is mm / Z-up. The XCAF doc is stamped
+with a mm length unit (``XCAFDoc_DocumentTool.SetLengthUnit_s(doc, 0.001)`` —
+the writer scales vertices mm→m) and the shape is pre-rotated -90° about +X
+(emitted as a node rotation quaternion) so viewers see the model upright at
+true scale. The applied convention is recorded in extras (``units``,
+``up_axis``, ``unit_scale_applied``).
+
 Body is returned unchanged (read-only — only the filesystem is touched).
 """
 from __future__ import annotations
@@ -107,8 +115,10 @@ class GltfExport(SkillBase):
             TCollection_ExtendedString,
         )
         from OCP.TDocStd import TDocStd_Document
+        from OCP.TopLoc import TopLoc_Location
         from OCP.XCAFApp import XCAFApp_Application
         from OCP.XCAFDoc import XCAFDoc_DocumentTool
+        from OCP.gp import gp_Ax1, gp_Dir, gp_Pnt, gp_Trsf
 
         if body is None:
             raise ValueError("gltf_export: body is None")
@@ -139,14 +149,32 @@ class GltfExport(SkillBase):
         )
         mesher.Perform()
         if not mesher.IsDone():
-            raise RuntimeError("gltf_export: BRepMesh_IncrementalMesh failed")
+            raise ValueError(
+                "gltf_export: fm.tessellation_failed — "
+                "BRepMesh_IncrementalMesh failed")
+
+        n_tri = _count_triangles(shape)
+        if n_tri == 0:
+            raise ValueError(
+                "gltf_export: fm.tessellation_failed — body produced 0 "
+                "triangles (no faces or empty tessellation); refusing to "
+                "write an empty glTF scene")
 
         # 2. Minimal XCAF doc carrying the tessellated shape.
+        #    glTF 2.0 mandates metres / +Y up (spec §3.4) while our geometry
+        #    is mm / Z-up: stamp the doc with a mm length unit (the writer
+        #    scales vertices mm→m) and pre-rotate -90° about +X — the Moved
+        #    location shares the triangulation and is emitted as a node
+        #    rotation quaternion, so viewers see the model upright.
         app = XCAFApp_Application.GetApplication_s()
         doc = TDocStd_Document(TCollection_ExtendedString("gltf-XCAF"))
         app.InitDocument(doc)
+        XCAFDoc_DocumentTool.SetLengthUnit_s(doc, 0.001)  # doc unit = mm
+        rot = gp_Trsf()
+        rot.SetRotation(gp_Ax1(gp_Pnt(0, 0, 0), gp_Dir(1, 0, 0)), -math.pi / 2.0)
+        shape_y_up = shape.Moved(TopLoc_Location(rot))
         shape_tool = XCAFDoc_DocumentTool.ShapeTool_s(doc.Main())
-        shape_tool.AddShape(shape, False, True)
+        shape_tool.AddShape(shape_y_up, False, True)
 
         # 3. Write. The 3-arg Perform overload exports the whole document
         #    (no label filter). file_info is an (optional) key/value metadata
@@ -155,9 +183,13 @@ class GltfExport(SkillBase):
         file_info = TColStd_IndexedDataMapOfStringString()
         ok = writer.Perform(doc, file_info, Message_ProgressRange())
         if not ok:
-            raise RuntimeError("gltf_export: RWGltf_CafWriter.Perform returned False")
+            raise ValueError(
+                "gltf_export: fm.gltf_write_failed — "
+                "RWGltf_CafWriter.Perform returned False")
         if not out_path.exists():
-            raise RuntimeError(f"gltf_export: file not produced → {out_path}")
+            raise ValueError(
+                f"gltf_export: fm.gltf_write_failed — file not produced → "
+                f"{out_path}")
 
         # glTF (text) mode also writes a `.bin` buffer sidecar next to the JSON.
         bin_sidecar = out_path.with_suffix(".bin")
@@ -173,9 +205,13 @@ class GltfExport(SkillBase):
                 "binary": bool(is_binary),
                 "format": "glb" if is_binary else "gltf",
                 "bin_sidecar_path": sidecar_path,
-                "triangle_count": int(_count_triangles(shape)),
+                "triangle_count": int(n_tri),
                 "linear_deflection_mm": float(args.linear_deflection_mm),
                 "angular_deflection_deg": float(args.angular_deflection_deg),
                 "file_size_bytes": int(out_path.stat().st_size),
+                # glTF 2.0 convention actually applied to the written file.
+                "units": "m",
+                "up_axis": "+Y",
+                "unit_scale_applied": 0.001,
             },
         )

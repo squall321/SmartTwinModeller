@@ -154,7 +154,7 @@ def _resolve_cyl_face_count(body: Any, selector: SelectorRef | None) -> int:
     produces_features=["cosmetic_thread"],
     preserves=["body_topology"],
     manufacturing={},
-    failure_modes=[],
+    failure_modes=["fm.invalid_pitch"],
     cost_hint=0.05,
     post_conditions=[PostCondition(kind="body_present")],
 )
@@ -202,6 +202,18 @@ class CosmeticThread(SkillBase):
             else float(entry["pitch_mm"])
         )
         minor_dia_mm = major_dia_mm - _ISO_MINOR_INTERNAL_FACTOR * pitch_mm
+
+        # Physical sanity on the (possibly explicit) pitch: zero pitch is
+        # degenerate and a pitch >= major/1.08253175 drives the ISO 68-1 minor
+        # diameter to <= 0 — a typo'd 'MxP' (e.g. 'M6x8') must refuse instead
+        # of silently emitting an impossible spec to downstream consumers.
+        if pitch_mm <= 0 or minor_dia_mm <= 0:
+            raise ValueError(
+                f"cosmetic_thread: fm.invalid_pitch — pitch {pitch_mm:g} mm is "
+                f"invalid for {key}: resulting minor diameter would be "
+                f"{minor_dia_mm:.3f} mm (must satisfy 0 < pitch < "
+                f"{major_dia_mm / _ISO_MINOR_INTERNAL_FACTOR:.3f} mm)"
+            )
 
         # Normalized designation for the record — always include the pitch so
         # the annotation is unambiguous ('M6' coarse -> 'M6x1.0').

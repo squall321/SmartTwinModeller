@@ -23,7 +23,9 @@ Each copy is materialised with ``apply_transform_shape`` (deep copy), then all c
 are fused pairwise with ``BRepAlgoAPI_Fuse``. If ANY fuse fails (IsDone False /
 raise / null), the whole result falls back to a ``build_compound`` of the copies —
 an honest multi-body container rather than a silent lie. ``is_solid`` is gated on
-volume>1e-6.
+volume>1e-6. NOTE: OCCT's Fuse of DISJOINT solids "succeeds" but returns an
+N-solid compound, so extras report ``n_bodies = count_solids(result)`` (the true
+solid count) and ``fused`` is True only when the union really yields ONE solid.
 
 Verified law (box 10×10×10, vol 1000):
   * linear count=3 spacing=20 (disjoint)   -> total vol 3000
@@ -110,7 +112,7 @@ def _fuse_all(shapes: list):
     preserves=[],
     manufacturing={},
     failure_modes=["fm.pattern_no_body", "fm.zero_direction", "fm.zero_axis",
-                   "fm.pattern_failed"],
+                   "fm.zero_spacing", "fm.zero_angle", "fm.pattern_failed"],
     cost_hint=0.2,
     result_grade="measured",
     post_conditions=[PostCondition(kind="body_present")],
@@ -155,12 +157,22 @@ class PatternSeedBody(SkillBase):
                     raise ValueError(
                         "fm.zero_direction: linear pattern needs a non-zero "
                         "direction vector.")
+                if self.count > 1 and abs(self.spacing_mm) < 1e-9:
+                    raise ValueError(
+                        "fm.zero_spacing: linear pattern with count>1 needs a "
+                        "non-zero spacing_mm — all copies would coincide with "
+                        "the seed.")
             else:
                 a = self.axis
                 if math.sqrt(a[0] ** 2 + a[1] ** 2 + a[2] ** 2) < 1e-12:
                     raise ValueError(
                         "fm.zero_axis: circular pattern needs a non-zero axis "
                         "vector.")
+                if self.count > 1 and abs(self.total_angle_deg) < 1e-9:
+                    raise ValueError(
+                        "fm.zero_angle: circular pattern with count>1 needs a "
+                        "non-zero total_angle_deg — all copies would coincide "
+                        "with the seed.")
             return self
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
@@ -169,6 +181,7 @@ class PatternSeedBody(SkillBase):
         from phone_designer.skills.assembly._compound import (
             apply_transform_shape,
             build_compound,
+            count_solids,
             make_axis_rotation_trsf,
             make_translation_trsf,
         )
@@ -228,6 +241,12 @@ class PatternSeedBody(SkillBase):
             raise ValueError(
                 f"fm.pattern_failed: result volume {vol:.6g}mm³ ≈ 0.")
 
+        # Honest body count: BRepAlgoAPI_Fuse of DISJOINT solids "succeeds" but
+        # returns a compound of N solids — count them instead of trusting the
+        # fuse flag. fused=True only when the result really is one solid.
+        n_solids = count_solids(out)
+        fused = fused and n_solids == 1
+
         return SkillResult(
             body=Part(out),
             history=EntityHistoryMap(rules={
@@ -239,7 +258,7 @@ class PatternSeedBody(SkillBase):
                 "mode": args.mode,
                 "count": args.count,
                 "fused": fused,
-                "n_bodies": 1 if fused else len(copies),
+                "n_bodies": n_solids,
                 "direction": list(args.direction) if args.mode == "linear" else None,
                 "spacing_mm": args.spacing_mm if args.mode == "linear" else None,
                 "axis": list(args.axis) if args.mode == "circular" else None,

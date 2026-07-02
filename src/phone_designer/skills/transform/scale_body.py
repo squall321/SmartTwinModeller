@@ -30,7 +30,9 @@ def _volume(shape) -> float:
     from OCP.BRepGProp import BRepGProp
     from OCP.GProp import GProp_GProps
     g = GProp_GProps()
-    BRepGProp.VolumeProperties_s(shape, g)
+    # Adaptive-eps overload: the anisotropic GTransform path converts every face
+    # to a B-spline, and the no-eps overload over-integrates those by ~0.9%.
+    BRepGProp.VolumeProperties_s(shape, g, 1e-6)
     return abs(float(g.Mass()))
 
 

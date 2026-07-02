@@ -23,6 +23,12 @@ Contract:
   * face_selector must resolve to exactly ONE face and that face must be PLANAR
     (a Move Face on a curved face is a different, ill-posed operation — refused
     with fm.face_not_planar).
+  * every wall adjacent to the moved face must be PRISMATIC, i.e. parallel to
+    the move direction (perpendicular to the moved face). Only then does the
+    prism-slab Fuse/Cut equal true Move Face semantics. Drafted/tapered walls
+    (e.g. a cone frustum's lateral face) would silently yield a stepped pad or
+    knife-edge pocket instead of extending the wall — refused with
+    fm.adjacent_wall_not_prismatic.
   * distance_mm == 0 is a no-op error (fm.zero_distance).
   * is_solid gated: the result must have volume > 1e-6 and grow (fuse) or shrink
     (cut) monotonically — verified by the volume_increased/volume_decreased-style
@@ -78,6 +84,68 @@ def _planar_face_outward_normal(face) -> tuple[float, float, float]:
     return (nx, ny, nz)
 
 
+def _check_adjacent_walls_prismatic(shape, face, nx: float, ny: float, nz: float,
+                                    tol: float = 1e-3) -> None:
+    """Refuse unless every face sharing an edge with ``face`` is PRISMATIC —
+    parallel to the move direction (nx,ny,nz) along the shared edge.
+
+    The prism-slab Fuse/Cut used by move_face equals true Move Face semantics
+    ONLY under this condition; a tapered/drafted neighbour wall would silently
+    produce a stepped pad (grow) or knife-edge pocket (shrink). Raises
+    ``fm.adjacent_wall_not_prismatic`` with the worst wall tilt in degrees.
+    """
+    import math
+
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepAdaptor import BRepAdaptor_Curve2d
+    from OCP.BRepGProp import BRepGProp_Face
+    from OCP.gp import gp_Pnt, gp_Vec
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
+    from OCP.TopExp import TopExp, TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+    from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
+
+    e2f = TopTools_IndexedDataMapOfShapeListOfShape()
+    TopExp.MapShapesAndAncestors_s(shape, TopAbs_EDGE, TopAbs_FACE, e2f)
+
+    worst = 0.0
+    it = TopExp_Explorer(face, TopAbs_EDGE)
+    while it.More():
+        edge = TopoDS.Edge_s(it.Current())
+        it.Next()
+        if BRep_Tool.Degenerated_s(edge):
+            continue
+        if not e2f.Contains(edge):
+            continue
+        for nb in e2f.FindFromKey(edge):
+            nb_face = TopoDS.Face_s(nb)
+            if nb_face.IsSame(face):
+                continue
+            # sample the neighbour's surface normal along the shared edge via
+            # its pcurve; the wall is prismatic iff normal ⟂ move direction.
+            c2d = BRepAdaptor_Curve2d(edge, nb_face)
+            u0, u1 = c2d.FirstParameter(), c2d.LastParameter()
+            gpf = BRepGProp_Face(nb_face)
+            for k in range(5):
+                uv = c2d.Value(u0 + (u1 - u0) * (k + 0.5) / 5.0)
+                p = gp_Pnt()
+                v = gp_Vec()
+                gpf.Normal(uv.X(), uv.Y(), p, v)
+                mag = v.Magnitude()
+                if mag < 1e-12:
+                    continue  # surface singularity — no usable normal here
+                dot = abs((v.X() * nx + v.Y() * ny + v.Z() * nz) / mag)
+                worst = max(worst, dot)
+    if worst > tol:
+        ang = math.degrees(math.asin(min(1.0, worst)))
+        raise ValueError(
+            "fm.adjacent_wall_not_prismatic: move_face v1 only heals side walls "
+            "parallel to the move direction (perpendicular to the moved face); "
+            f"a neighbour wall is tilted {ang:.1f}° from the sweep direction — "
+            "the prism-slab boolean would produce a stepped pad / knife-edge "
+            "pocket, not a Move Face.")
+
+
 def _prism_from_face(face, nx: float, ny: float, nz: float, extent: float):
     """Extrude ``face`` along the unit vector (nx,ny,nz) by ``extent`` (>0),
     returning a prism SOLID (the swept slab between the two face positions)."""
@@ -100,11 +168,14 @@ def _prism_from_face(face, nx: float, ny: float, nz: float, extent: float):
     level="atomic",
     summary="Offset/translate ONE selected PLANAR face along its outward normal "
             "by distance_mm (signed), healing the adjacent side walls to the new "
-            "plane — the Fusion Press-Pull / SolidWorks Move Face op. distance_mm>0 "
-            "prisms the face OUTWARD and FUSES (volume grows); distance_mm<0 prisms "
-            "INWARD and CUTS (volume shrinks). Robustly implemented by extruding the "
-            "face's own geometry into a slab and Fuse/Cut with the base solid. "
-            "face_selector must match exactly one planar face; is_solid gated.",
+            "plane (Fusion Press-Pull / SolidWorks Move Face) — walls heal ONLY "
+            "when they are parallel to the move direction; drafted/tapered "
+            "neighbour walls are refused (fm.adjacent_wall_not_prismatic). "
+            "distance_mm>0 prisms the face OUTWARD and FUSES (volume grows); "
+            "distance_mm<0 prisms INWARD and CUTS (volume shrinks). Implemented by "
+            "extruding the face's own geometry into a slab and Fuse/Cut with the "
+            "base solid. face_selector must match exactly one planar face; "
+            "is_solid gated.",
     selector_kinds=["faces"],
     history_rules={
         "moved_face":  HistoryRule.MODIFIED_INHERIT,
@@ -124,6 +195,7 @@ def _prism_from_face(face, nx: float, ny: float, nz: float, extent: float):
         "fm.no_face_matched",
         "fm.multiple_faces_matched",
         "fm.face_not_planar",
+        "fm.adjacent_wall_not_prismatic",
         "fm.move_face_boolean_failed",
         "fm.volume_wrong_direction",
     ],
@@ -176,6 +248,12 @@ class MoveFace(SkillBase):
 
         # Outward normal of the planar face (raises fm.face_not_planar if curved).
         nx, ny, nz = _planar_face_outward_normal(face)
+
+        # Prismatic-wall guard: the prism-slab Fuse/Cut below equals true Move
+        # Face semantics ONLY when every adjacent wall is parallel to the sweep
+        # direction. Refuse tapered/drafted neighbours instead of silently
+        # producing a stepped pad / knife-edge pocket.
+        _check_adjacent_walls_prismatic(shape, face, nx, ny, nz)
 
         # Build the swept slab from the face's own geometry, along the outward
         # normal for a grow (dist>0) or inward for a shrink (dist<0). extent is

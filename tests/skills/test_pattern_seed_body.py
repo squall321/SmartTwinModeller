@@ -45,7 +45,10 @@ def test_linear_disjoint_sums_volumes():
     })
     v = _volume(r.body)
     assert abs(v - 3000.0) < 1.0, f"disjoint x3 vol {v:.3f}, expected 3000"
-    assert r.extras["transform"]["fused"] is True
+    # OCCT Fuse of disjoint solids "succeeds" but yields a 3-solid compound —
+    # extras must report the TRUE solid count, not fused=True/n_bodies=1.
+    assert r.extras["transform"]["n_bodies"] == 3
+    assert r.extras["transform"]["fused"] is False
 
 
 def test_linear_overlap_unions_volume():
@@ -58,6 +61,9 @@ def test_linear_overlap_unions_volume():
     assert abs(v - 2000.0) < 1.0, f"overlap union vol {v:.3f}, expected 2000"
     dx, dy, dz = _bbox(r.body)
     assert abs(dx - 20.0) < 1e-3 and abs(dy - 10.0) < 1e-3 and abs(dz - 10.0) < 1e-3
+    # genuinely-overlapping copies union into ONE solid -> honest fused=True.
+    assert r.extras["transform"]["n_bodies"] == 1
+    assert r.extras["transform"]["fused"] is True
 
 
 def test_count_one_returns_seed():
@@ -80,6 +86,7 @@ def test_circular_off_center_full_ring():
     v = _volume(r.body)
     assert abs(v - 4000.0) < 2.0, f"circular ring vol {v:.3f}, expected ~4000"
     assert r.extras["transform"]["count"] == 4
+    assert r.extras["transform"]["n_bodies"] == 4  # disjoint -> honest count.
 
 
 def test_zero_direction_refused():
@@ -90,6 +97,38 @@ def test_zero_direction_refused():
             "direction": (0.0, 0.0, 0.0), "spacing_mm": 20.0,
         })
     assert "zero_direction" in str(exc.value)
+
+
+def test_zero_spacing_refused():
+    # spacing_mm defaults to 0.0 — count>1 with zero spacing is N coincident
+    # copies fused back into the unchanged seed, reported as an N-instance
+    # pattern. Must refuse, not lie.
+    import pytest
+    with pytest.raises(Exception) as exc:
+        PatternSeedBody().apply(_seed(), {
+            "mode": "linear", "count": 5, "direction": (1.0, 0.0, 0.0),
+        })
+    assert "fm.zero_spacing" in str(exc.value)
+
+
+def test_zero_angle_refused():
+    import pytest
+    with pytest.raises(Exception) as exc:
+        PatternSeedBody().apply(_seed(), {
+            "mode": "circular", "count": 6, "total_angle_deg": 0.0,
+        })
+    assert "fm.zero_angle" in str(exc.value)
+
+
+def test_count_one_zero_spacing_still_valid():
+    # count=1 is documented as "returns the seed unchanged" — the default
+    # spacing_mm=0.0 must NOT be refused there.
+    r = PatternSeedBody().apply(_seed(), {
+        "mode": "linear", "count": 1,
+    })
+    v = _volume(r.body)
+    assert abs(v - 1000.0) < 1.0
+    assert r.extras["transform"]["n_bodies"] == 1
 
 
 def test_post_condition_and_registration():

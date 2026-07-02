@@ -209,24 +209,29 @@ class MeshExport(SkillBase):
         )
         mesher.Perform()
         if not mesher.IsDone():
-            raise RuntimeError("mesh_export: BRepMesh_IncrementalMesh failed")
+            raise ValueError(
+                "fm.tessellation_failed: BRepMesh_IncrementalMesh failed")
 
         vertices, triangles = _collect_mesh(shape)
         if not triangles:
-            raise RuntimeError(
-                "mesh_export: no triangles produced — tessellation empty"
+            raise ValueError(
+                "fm.tessellation_failed: no triangles produced — "
+                "tessellation empty"
             )
 
         out_path = Path(args.path)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-
-        if fmt == "obj":
-            _write_obj(out_path, vertices, triangles)
-        else:
-            _write_ply(out_path, vertices, triangles)
-
-        if not out_path.exists() or out_path.stat().st_size == 0:
-            raise RuntimeError(f"mesh_export: write produced no file → {out_path}")
+        try:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            if fmt == "obj":
+                _write_obj(out_path, vertices, triangles)
+            else:
+                _write_ply(out_path, vertices, triangles)
+            if not out_path.exists() or out_path.stat().st_size == 0:
+                raise ValueError(
+                    f"fm.mesh_write_failed: write produced no file → {out_path}")
+        except OSError as exc:
+            raise ValueError(
+                f"fm.mesh_write_failed: {type(exc).__name__}: {exc}")
 
         return SkillResult(
             body=body,

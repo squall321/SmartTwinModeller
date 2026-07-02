@@ -17,6 +17,7 @@ refusal (fm.offset_collapsed).
 """
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -25,13 +26,21 @@ from phone_designer.skills._history import EntityHistoryMap
 from phone_designer.skills._post_conditions import PostCondition
 from phone_designer.skills._registry import skill
 from phone_designer.skills._spec import SkillBase, SkillResult
-from phone_designer.skills.modify_pocket._sketch import SketchSpec
+from phone_designer.skills.modify_pocket._sketch import EPS_CLOSE, SketchSpec
 
 _SAMPLES_PER_EDGE = 24
 
 
 def _sample_wire_2d(wire) -> list[tuple[float, float]]:
-    """Ordered 2D (x,y) points along a planar wire (z≈0), via BRepTools_WireExplorer."""
+    """Ordered 2D (x,y) points along a planar wire (z≈0), via BRepTools_WireExplorer.
+
+    Dedup threshold is EPS_CLOSE — PolygonSketch's own coincidence tolerance.
+    Since hypot >= max(|dx|,|dy|), keeping a point only when one component
+    exceeds EPS_CLOSE guarantees every consecutive pair passes the polygon
+    validator: sub-µm offset artifacts (e.g. the tiny corner arcs of a
+    +0.005mm offset) collapse HERE instead of escaping as a raw pydantic
+    ValidationError. The wraparound pair (last, first) is deduped too.
+    """
     from OCP.BRepAdaptor import BRepAdaptor_Curve
     from OCP.BRepTools import BRepTools_WireExplorer
     from OCP.gp import gp_Pnt
@@ -48,9 +57,15 @@ def _sample_wire_2d(wire) -> list[tuple[float, float]]:
             p = gp_Pnt()
             ac.D0(t, p)
             xy = (round(p.X(), 4), round(p.Y(), 4))
-            if not pts or (abs(pts[-1][0] - xy[0]) > 1e-4 or abs(pts[-1][1] - xy[1]) > 1e-4):
+            if not pts or (abs(pts[-1][0] - xy[0]) > EPS_CLOSE
+                           or abs(pts[-1][1] - xy[1]) > EPS_CLOSE):
                 pts.append(xy)
         ex.Next()
+    # PolygonSketch also validates the WRAPAROUND pair: drop trailing points
+    # coincident (within EPS_CLOSE) with pts[0].
+    while len(pts) > 1 and math.hypot(pts[-1][0] - pts[0][0],
+                                      pts[-1][1] - pts[0][1]) < EPS_CLOSE:
+        pts.pop()
     return pts
 
 
@@ -82,7 +97,7 @@ class OffsetSketch(SkillBase):
                         "inward. Must be non-zero.")
 
     def _apply(self, body: Any, args: Args) -> SkillResult:
-        from pydantic import TypeAdapter
+        from pydantic import TypeAdapter, ValidationError
 
         from phone_designer.skills.create.sketch_loft import _outer_wire
         from phone_designer.skills.modify_pocket._closed_path_sweep import _offset_wire
@@ -117,8 +132,16 @@ class OffsetSketch(SkillBase):
             "center_x_mm": 0.0,
             "center_y_mm": 0.0,
         }
-        # validate it round-trips through the SketchSpec union.
-        TypeAdapter(SketchSpec).validate_python(new_sketch)
+        # validate it round-trips through the SketchSpec union. Belt-and-braces:
+        # the EPS_CLOSE dedup above should make this unreachable, but a
+        # degenerate loop must surface as the structured refusal, never as a
+        # raw pydantic ValidationError.
+        try:
+            TypeAdapter(SketchSpec).validate_python(new_sketch)
+        except ValidationError as exc:
+            raise ValueError(
+                f"fm.offset_collapsed: offset produced a degenerate polygon "
+                f"(edges below the {EPS_CLOSE}mm sketch tolerance): {exc}")
 
         return SkillResult(
             body=body,

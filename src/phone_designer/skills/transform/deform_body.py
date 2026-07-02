@@ -19,6 +19,12 @@ into a solid. HONEST: because a B-spline face only approximates the warped surfa
 the result VOLUME is approximate — it converges to the true value as ``refine``
 grows (a 20×20×40 box twisted 80°: refine 0 → 28% low, refine 16 → 0.24% low). The
 default refine=12 keeps volume error under ~1%. is_solid is gated on volume>1e-6.
+
+HONEST limits: each warped face is rebuilt from its FULL surface patch, so a face
+with inner wires (a through-hole) would come back with the hole silently filled —
+such bodies are REFUSED (fm.deform_failed). The re-sewn solid's orientation is
+checked via its SIGNED volume and flipped if inside-out, so downstream booleans
+get the body, not its complement.
 """
 from __future__ import annotations
 
@@ -35,12 +41,17 @@ from phone_designer.skills._spec import SkillBase, SkillResult
 _EPS_VOL = 1e-6
 
 
-def _volume(shape) -> float:
+def _signed_volume(shape) -> float:
+    # SIGNED volume: negative means the solid is inside-out (inward orientation).
     from OCP.BRepGProp import BRepGProp
     from OCP.GProp import GProp_GProps
     g = GProp_GProps()
     BRepGProp.VolumeProperties_s(shape, g)
-    return abs(float(g.Mass()))
+    return float(g.Mass())
+
+
+def _volume(shape) -> float:
+    return abs(_signed_volume(shape))
 
 
 def _z_range(shape):
@@ -113,7 +124,7 @@ class DeformBody(SkillBase):
         )
         from OCP.Geom import Geom_BSplineSurface
         from OCP.gp import gp_Pnt
-        from OCP.TopAbs import TopAbs_FACE, TopAbs_SHELL
+        from OCP.TopAbs import TopAbs_FACE, TopAbs_SHELL, TopAbs_WIRE
         from OCP.TopExp import TopExp_Explorer
         from OCP.TopoDS import TopoDS
 
@@ -127,6 +138,29 @@ class DeformBody(SkillBase):
         if span < 1e-9:
             raise ValueError(
                 "fm.deform_flat_z: body has ~zero Z extent — nothing to warp along Z.")
+
+        # A warped face is rebuilt from its FULL B-spline surface patch
+        # (BRepBuilderAPI_MakeFace(bs)), which drops every trimming wire — a face
+        # with inner wires (a through-hole's circles, slots…) would come back with
+        # the hole silently FILLED. Refuse honestly instead of delivering
+        # wrong-but-plausible geometry.
+        n_faces_in = 0
+        exf = TopExp_Explorer(shape, TopAbs_FACE)
+        while exf.More():
+            n_wires = 0
+            exw = TopExp_Explorer(exf.Current(), TopAbs_WIRE)
+            while exw.More():
+                n_wires += 1
+                exw.Next()
+            if n_wires > 1:
+                raise ValueError(
+                    f"fm.deform_failed: a face of the input body has {n_wires} "
+                    "wires (inner wires / holes) — deform_body rebuilds each "
+                    "warped face from its full surface patch, which would "
+                    "silently fill the hole. Deform the plain solid first, then "
+                    "cut the hole.")
+            n_faces_in += 1
+            exf.Next()
 
         twist_total = math.radians(args.twist_deg)
 
@@ -149,7 +183,12 @@ class DeformBody(SkillBase):
                 f = TopoDS.Face_s(ex.Current())
                 surf = BRep_Tool.Surface_s(f)
                 if isinstance(surf, Geom_BSplineSurface):
-                    bs = surf
+                    # NEVER mutate `surf`: BRep_Tool.Surface_s returns the LIVE
+                    # geometry handle, which the input body SHARES when its faces
+                    # are already B-splines (NurbsConvert reuses the handle then).
+                    # Copy() detaches it (OCP returns a concrete
+                    # Geom_BSplineSurface — no DownCast needed/available).
+                    bs = surf.Copy()
                     if args.refine > 0:
                         bs.IncreaseDegree(min(bs.UDegree() + 2, 8),
                                           min(bs.VDegree() + 2, 8))
@@ -177,17 +216,34 @@ class DeformBody(SkillBase):
             solid = None
             exs = TopExp_Explorer(sewed, TopAbs_SHELL)
             if exs.More():
-                ms = BRepBuilderAPI_MakeSolid(TopoDS.Shell_s(exs.Current()))
-                if ms.IsDone():
-                    solid = ms.Solid()
+                shell = TopoDS.Shell_s(exs.Current())
+                # only the FIRST shell is kept — accept it only if it carries all
+                # of the input's faces (a shell that dropped faces would MakeSolid
+                # into wrong-but-plausible geometry).
+                n_shell_faces = 0
+                exsf = TopExp_Explorer(shell, TopAbs_FACE)
+                while exsf.More():
+                    n_shell_faces += 1
+                    exsf.Next()
+                if n_shell_faces == n_faces_in:
+                    ms = BRepBuilderAPI_MakeSolid(shell)
+                    if ms.IsDone():
+                        solid = ms.Solid()
         except Exception as exc:  # noqa: BLE001
             raise ValueError(f"fm.deform_failed: {type(exc).__name__}: {exc}")
 
         if solid is None:
             raise ValueError(
-                "fm.deform_not_solid: the warped faces did not re-sew into a closed "
-                "solid (try a higher refine, or a smaller twist/taper).")
-        vol_after = _volume(solid)
+                "fm.deform_not_solid: the warped faces did not re-sew into one "
+                "closed solid carrying all input faces (try a higher refine, or a "
+                "smaller twist/taper).")
+        # Sewing may hand back an INSIDE-OUT shell (negative signed volume): the
+        # solid then classifies interior points OUT and downstream booleans get
+        # the complement of the body. Detect and flip.
+        vol_after = _signed_volume(solid)
+        if vol_after < 0.0:
+            solid = TopoDS.Solid_s(solid.Complemented())
+            vol_after = _signed_volume(solid)
         if solid.IsNull() or vol_after <= _EPS_VOL:
             raise ValueError(f"fm.deform_not_solid: warped volume {vol_after:.6g} ≈ 0.")
 

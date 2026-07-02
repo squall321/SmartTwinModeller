@@ -88,6 +88,7 @@ class MirrorBody(SkillBase):
         from phone_designer.skills.assembly._compound import (
             apply_transform_shape,
             build_compound,
+            count_solids,
         )
 
         if body is None:
@@ -115,10 +116,17 @@ class MirrorBody(SkillBase):
             fuse.Build()
             if not fuse.IsDone():
                 raise ValueError(
-                    "fm.mirror_failed: mirror-merge fuse failed (IsDone=False). "
-                    "The plane may not touch the body — merge needs the halves to "
-                    "share the mirror plane.")
+                    "fm.mirror_failed: mirror-merge fuse failed (IsDone=False).")
             out = fuse.Shape()
+            # Fuse of DISJOINT solids "succeeds" (IsDone=True) but returns a
+            # multi-solid compound — no single symmetric body exists then.
+            n_solids = count_solids(out)
+            if n_solids > 1:
+                raise ValueError(
+                    f"fm.mirror_failed: mirror-merge produced {n_solids} disjoint "
+                    "solids — the body does not reach the mirror plane, so no "
+                    "single symmetric body exists. Use merge=False (+keep_original) "
+                    "for a 2-body result.")
             n_bodies = 1
         elif args.keep_original:
             out = build_compound([shape, mirrored])

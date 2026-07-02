@@ -63,3 +63,27 @@ def test_no_face_matched_rejected():
     bogus = {"kind": "faces_by_normal", "direction": (1.0, 1.0, 1.0), "tol_deg": 0.1}
     with pytest.raises(ValueError, match="fm.no_face_matched"):
         MoveFace().apply(body, {"face_selector": bogus, "distance_mm": 5.0})
+
+
+def test_tapered_adjacent_wall_rejected():
+    # Cone frustum (R=10, r=5, h=10): its lateral wall is TAPERED (26.6 deg off
+    # the +Z sweep direction), so the prism-slab Fuse/Cut would silently build a
+    # stepped pad (grow) or knife-edge pocket (shrink) instead of Move Face
+    # semantics — both directions must be refused.
+    from build123d import Cone
+    frustum = Cone(bottom_radius=10, top_radius=5, height=10)
+    with pytest.raises(ValueError, match="fm.adjacent_wall_not_prismatic"):
+        MoveFace().apply(frustum, {"face_selector": TOP, "distance_mm": 5.0})
+    with pytest.raises(ValueError, match="fm.adjacent_wall_not_prismatic"):
+        MoveFace().apply(frustum, {"face_selector": TOP, "distance_mm": -5.0})
+
+
+def test_prismatic_curved_wall_still_allowed():
+    # A cylinder's lateral wall is CURVED but PRISMATIC (parallel to +Z), so the
+    # guard must not fire: moving the top face +5 grows exactly pi*r^2*5.
+    import math
+
+    from build123d import Cylinder
+    cyl = Cylinder(radius=5, height=10)
+    r = MoveFace().apply(cyl, {"face_selector": TOP, "distance_mm": 5.0})
+    assert _vol(r.body.wrapped) == pytest.approx(math.pi * 25.0 * 15.0, rel=1e-6)

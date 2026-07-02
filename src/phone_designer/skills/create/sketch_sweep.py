@@ -182,7 +182,10 @@ class SketchSweep(SkillBase):
         orientation: Literal["frenet", "fixed"] = Field(
             default="frenet",
             description="frenet = section stays perpendicular to the path tangent "
-                        "(follows the curve); fixed = constant orientation.")
+                        "(follows the curve); fixed = constant orientation (fixed "
+                        "trihedron — sections stay parallel, so volume = area × "
+                        "net advance along the start tangent; a path turning ≥90° "
+                        "from the start tangent is refused, fm.sweep_degenerate).")
         origin_mm: tuple[float, float, float] = Field(
             default=(0.0, 0.0, 0.0),
             description="World translation of the swept solid. Identity by default.")
@@ -250,10 +253,44 @@ class SketchSweep(SkillBase):
                     f"> {_KINK_MAX_DEG:.0f}°; MakePipeShell silently drops swept "
                     "volume at a sharp corner — insert a fillet arc so the segment "
                     "tangents match, or split into separate sweeps.")
+        # fixed orientation keeps the section normal at the START tangent; if a
+        # later path tangent turns ≥90° from it, the parallel sections travel
+        # WITHIN their own plane and the swept wall collapses to zero thickness
+        # (OCCT still "succeeds" with a degenerate flap) — refuse up front.
+        # Line/arc tangent angles are monotone per edge, so endpoint checks
+        # catch any perpendicular crossing.
+        if args.orientation == "fixed":
+            t0 = tans[0][0]
+            for i, (en, ex) in enumerate(tans):
+                for t in (en, ex):
+                    if t == (0.0, 0.0):
+                        continue
+                    if t[0] * t0[0] + t[1] * t0[1] <= 1e-9:
+                        raise ValueError(
+                            f"fm.sweep_degenerate: orientation='fixed' but the "
+                            f"path tangent at edge {i} turns ≥90° from the start "
+                            "tangent — parallel sections collapse to a zero-"
+                            "thickness wall there; use orientation='frenet' or "
+                            "split the path.")
 
         # ── GUARD 2: self-intersection (section wider than the bend radius) ───
+        # Radial extent is measured about the section's LOCAL ORIGIN (raw bbox
+        # min/max), NOT the bbox half-SIZE: _transform_face_to_frame attaches
+        # local (0,0) to the spine, so a center_x/y_mm offset rides the whole
+        # section off the spine and its true reach includes that offset. For an
+        # origin-centred section this equals the old half-size. Conservative by
+        # design — the planar guard has no per-arc bend-centre side info, so an
+        # offset toward the OUTER side is refused too.
         sec_face0 = _build_planar_face(section)
-        sec_extent = max(_bbox_mm(sec_face0)[:2]) / 2.0  # in-plane half-extent
+        from OCP.Bnd import Bnd_Box
+        from OCP.BRepBndLib import BRepBndLib
+        sbb = Bnd_Box()
+        try:
+            BRepBndLib.AddOptimal_s(sec_face0, sbb)
+        except Exception:
+            BRepBndLib.Add_s(sec_face0, sbb)
+        sxmin, symin, _szmin, sxmax, symax, _szmax = sbb.Get()
+        sec_extent = max(abs(sxmin), abs(sxmax), abs(symin), abs(symax))
         bend_radii = [s.radius for s in path.segments if s.kind == "arc"]
         if bend_radii and sec_extent >= min(bend_radii) - 1e-9:
             raise ValueError(
@@ -286,7 +323,17 @@ class SketchSweep(SkillBase):
         # ── sweep → SOLID ─────────────────────────────────────────────────────
         try:
             ps = BRepOffsetAPI_MakePipeShell(spine)
-            ps.SetMode(args.orientation == "frenet")
+            if args.orientation == "fixed":
+                # TRUE constant orientation = the fixed-trihedron overload
+                # SetMode(gp_Ax2) ("all sections will be parallel" per OCCT).
+                # SetMode(False) would be CORRECTED-FRENET — the section still
+                # rotates with the tangent, byte-identical to 'frenet' on a
+                # bent path (verified), i.e. NOT fixed.
+                from OCP.gp import gp_Ax2, gp_Dir
+                ps.SetMode(gp_Ax2(gp_Pnt(p.X(), p.Y(), p.Z()),
+                                  gp_Dir(*tangent)))
+            else:
+                ps.SetMode(True)  # frenet trihedron
             ps.Add(sec_wire, False, False)
             ps.Build()
             if not ps.IsDone() or not ps.MakeSolid():

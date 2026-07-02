@@ -123,6 +123,18 @@ def test_ruled_mode_needs_exactly_two_sections():
             heights_mm=[0, 5, 10], mode="ruled")
 
 
+def test_ruled_mode_mismatched_edge_counts_refused():
+    # rectangle wire = 4 edges, circle wire = 1 edge. BRepFill.Shell pairs the
+    # wires' edges 1:1, so this mismatch used to SILENTLY return a partial band
+    # (a single 96.8mm² face with bbox [10, 7, 10] — not even spanning the
+    # declared sections; the lofted reference spans [10, 10, 10] at ~274mm²).
+    # Now an honest structured refusal steering to mode='lofted'.
+    with pytest.raises(ValueError, match="surface_ruled_incompatible_wires"):
+        _os(sections=[{"kind": "rectangle", "length_mm": 10, "width_mm": 10},
+                      {"kind": "circle", "diameter_mm": 4}],
+            heights_mm=[0, 10], mode="ruled")
+
+
 # ── discoverability + from-scratch via generate_from_spec (MCP) ───────────────
 
 def test_open_surface_is_discoverable_in_the_manifest():

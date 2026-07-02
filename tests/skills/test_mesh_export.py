@@ -159,6 +159,41 @@ def test_mesh_export_none_body_raises(tmp_path):
         MeshExport().apply(None, {"path": str(tmp_path / "x.obj")})
 
 
+# -------------------------------------------------- structured failure modes -
+
+def _edge_only_compound():
+    """A compound holding a single edge — zero faces, zero triangles."""
+    from OCP.BRep import BRep_Builder
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
+    from OCP.TopoDS import TopoDS_Compound
+    from OCP.gp import gp_Pnt
+
+    comp = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(comp)
+    builder.Add(comp, BRepBuilderAPI_MakeEdge(
+        gp_Pnt(0, 0, 0), gp_Pnt(1, 0, 0)).Edge())
+    return comp
+
+
+def test_mesh_export_zero_triangles_fm_tessellation_failed(tmp_path):
+    """Zero-triangle input must raise the DECLARED fm.tessellation_failed
+    (was a raw RuntimeError without the token)."""
+    with pytest.raises(ValueError, match=r"fm\.tessellation_failed"):
+        MeshExport().apply(_edge_only_compound(),
+                           {"path": str(tmp_path / "empty.obj")})
+
+
+def test_mesh_export_blocked_path_fm_mesh_write_failed(tmp_path):
+    """A path whose parent component is an existing FILE must surface the
+    DECLARED fm.mesh_write_failed (was a raw OSError from mkdir)."""
+    blocker = tmp_path / "blocker.txt"
+    blocker.write_text("not a directory", encoding="ascii")
+    out = blocker / "out.obj"
+    with pytest.raises(ValueError, match=r"fm\.mesh_write_failed"):
+        MeshExport().apply(_make_box(), {"path": str(out)})
+
+
 # ------------------------------------------------------------- spec sanity ---
 
 def test_mesh_export_spec_registered():

@@ -4,7 +4,8 @@ The SolidWorks *Replace Face* / *Move Face (offset)* op, robust v1. Pick ONE
 planar target face (via ``face_selector``), then define the REPLACEMENT plane —
 either:
   * ``offset_mm`` — offset the selected face's OWN plane along its outward
-    normal (positive = outward/grow, negative = inward/shrink), or
+    normal (negative trims inward; POSITIVE CANNOT ADD MATERIAL — v1 is
+    trim-based, so a plane that clears the solid is refused), or
   * ``plane_origin_mm`` + ``plane_normal`` — a caller-given absolute plane.
 
 The replacement plane is used as an unbounded cutting Tool on the solid
@@ -13,10 +14,16 @@ solid's MATERIAL side of that plane is kept — so the adjacent walls are
 re-trimmed to the new boundary automatically.
 
 Which side is "material"? The selected face's OUTWARD normal points AWAY from
-the solid (into free space). The kept piece is therefore the one whose centroid
-lies on the −outward-normal side of the replacement plane. This is what makes
-"replace the top (z=20) face with a plane at z=17" SHORTEN a box to z∈[0,17]
-(vol 6800 for a 20×20×20 box) rather than keep the thin z∈[17,20] slab.
+the solid (into free space). The kept piece is the one whose centroid lies on
+the −material side of the replacement plane, classified along the REPLACEMENT
+PLANE'S OWN unit normal oriented to agree with the face's outward normal
+(sign of n·fn). Classifying along the plane normal (not the face normal) is
+what makes the side test origin-independent for TILTED replacement planes —
+any point on the plane gives the same split. This is what makes "replace the
+top (z=20) face with a plane at z=17" SHORTEN a box to z∈[0,17] (vol 6800 for
+a 20×20×20 box) rather than keep the thin z∈[17,20] slab. A replacement plane
+perpendicular to the selected face (n·fn ≈ 0) has NO defined material side and
+is refused (fm.replace_plane_perpendicular).
 
 Scope of v1 (honest limits):
   * The target face must be PLANAR (a plane surface). A curved target is
@@ -28,8 +35,10 @@ Scope of v1 (honest limits):
     fixes the material side). More/less than one is refused.
 
 is_solid gated on kept volume > _EPS_VOL. A replacement plane that misses the
-body entirely (leaves the solid on one side) is a structured refusal, not a
-zero-volume "body".
+body entirely (leaves the solid on one side) is a structured refusal —
+fm.replace_no_cut when everything lands on the outward side, and
+fm.replace_plane_misses_body when the splitter never cut (the body would be
+returned unchanged as a silent no-op, e.g. a positive offset past the solid).
 """
 from __future__ import annotations
 
@@ -98,7 +107,9 @@ def _planar_face_plane(face):
     summary="Retarget a solid's selected PLANAR face to a new plane (SolidWorks "
             "Replace/Move Face). face_selector picks ONE planar face; the "
             "replacement plane is either its own plane offset by offset_mm along "
-            "its outward normal (−=shrink, +=grow), or an absolute "
+            "its outward normal (negative trims inward; POSITIVE CANNOT ADD "
+            "MATERIAL — a plane that clears the solid is refused, "
+            "fm.replace_plane_misses_body), or an absolute "
             "plane_origin_mm+plane_normal. The plane cuts the solid "
             "(BRepAlgoAPI_Splitter) and the MATERIAL-side piece is kept, "
             "re-trimming the adjacent walls. E.g. replace a 20³ box's top "
@@ -118,8 +129,10 @@ def _planar_face_plane(face):
         "fm.target_face_not_planar",
         "fm.zero_plane_normal",
         "fm.replace_underspecified",
+        "fm.replace_plane_perpendicular",
         "fm.replace_failed",
         "fm.replace_no_cut",
+        "fm.replace_plane_misses_body",
     ],
     cost_hint=0.3,
     post_conditions=[PostCondition(kind="body_present")],
@@ -132,8 +145,11 @@ class ReplaceFace(SkillBase):
         offset_mm: float | None = Field(
             default=None,
             description="Offset the SELECTED face's own plane by this along its "
-                        "outward normal. Negative shrinks the solid, positive "
-                        "grows it. Mutually exclusive with plane_origin_mm/normal.")
+                        "outward normal. Negative trims the solid inward. "
+                        "POSITIVE CANNOT ADD MATERIAL (v1 is trim-based): a "
+                        "positive offset whose plane clears the solid is refused "
+                        "(fm.replace_plane_misses_body). Mutually exclusive with "
+                        "plane_origin_mm/normal.")
         plane_origin_mm: tuple[float, float, float] | None = Field(
             default=None,
             description="A point on the ABSOLUTE replacement plane. Provide with "
@@ -177,6 +193,7 @@ class ReplaceFace(SkillBase):
         if body is None:
             raise ValueError("fm.no_body: replace_face needs an input body.")
         shape = body.wrapped if hasattr(body, "wrapped") else body
+        vol_before = _volume(shape)
 
         # ── 1. resolve the ONE planar target face ────────────────────────────
         faces = resolve_faces(shape, args.face_selector, body=body)
@@ -234,12 +251,28 @@ class ReplaceFace(SkillBase):
             raise ValueError("fm.replace_failed: no solid pieces after the cut.")
 
         # ── 4. keep the MATERIAL side (opposite the face's outward normal) ───
-        # material lies on the −outward-normal half-space. A piece's centroid
-        # projected onto the outward normal (measured from a point on the new
-        # plane) is NEGATIVE on the material side.
+        # Classify along the REPLACEMENT PLANE'S own unit normal, oriented to
+        # agree with the face's outward normal (sign of n·fn). Projecting on
+        # the plane normal makes the side test origin-independent for tilted
+        # planes: (centroid − origin)·rn is the signed distance to the plane,
+        # identical for every origin ON the plane. (Projecting on the FACE
+        # normal instead would shift with in-plane origin moves — same plane,
+        # different keep/drop verdicts.) Material is the NEGATIVE side.
+        d_align = nx * fnx + ny * fny + nz * fnz
+        if abs(d_align) < 1e-9:
+            raise ValueError(
+                "fm.replace_plane_perpendicular: the replacement plane is "
+                "perpendicular to the selected face's outward normal — the "
+                "material side is undefined. Use split_body for a "
+                "perpendicular cut.")
+        if d_align >= 0.0:
+            rnx, rny, rnz = nx, ny, nz
+        else:
+            rnx, rny, rnz = -nx, -ny, -nz
+
         def side(piece) -> float:
             cx, cy, cz = _centroid(piece)
-            return (cx - ox) * fnx + (cy - oy) * fny + (cz - oz) * fnz
+            return (cx - ox) * rnx + (cy - oy) * rny + (cz - oz) * rnz
 
         material = [p for p in pieces if side(p) < 0.0]
         if not material:
@@ -255,6 +288,21 @@ class ReplaceFace(SkillBase):
         vol = _volume(out)
         if out is None or out.IsNull() or vol <= _EPS_VOL:
             raise ValueError(f"fm.replace_failed: kept volume {vol:.6g}mm³ ≈ 0.")
+
+        # HONEST no-op guard: if the splitter never cut (one piece, volume
+        # unchanged) the plane missed the solid entirely — e.g. a POSITIVE
+        # offset past the body. v1 is trim-based and cannot ADD material, so
+        # returning the unchanged body as success would be a silent no-op.
+        if (len(pieces) == 1
+                and abs(vol - vol_before) <= max(_EPS_VOL, 1e-9 * vol_before)):
+            detail = (f"the +{args.offset_mm}mm offset plane cleared the solid"
+                      if args.offset_mm is not None and args.offset_mm > 0
+                      else "the replacement plane does not intersect the solid")
+            raise ValueError(
+                f"fm.replace_plane_misses_body: {detail} — the body would be "
+                "returned unchanged. replace_face v1 is trim-based and CANNOT "
+                "ADD material; move the plane so it cuts the body (e.g. a "
+                "negative offset).")
 
         return SkillResult(
             body=Part(out),

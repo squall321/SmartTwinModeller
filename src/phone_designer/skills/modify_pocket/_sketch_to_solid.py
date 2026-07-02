@@ -181,9 +181,15 @@ def _edge_arc_radius(start_xy, end_xy, radius: float, ccw: bool):
         cx, cy = cx_left, cy_left
     else:
         cx, cy = cx_right, cy_right
-    axis = gp_Ax2(gp_Pnt(cx, cy, 0.0), gp_Dir(0, 0, 1))
+    # Build the circle so its natural (increasing-parameter) direction matches
+    # the requested travel direction: +Z axis for ccw, -Z axis for cw. With
+    # Sense=True the trimmed arc is then the FORWARD-parameterized minor arc
+    # start→end. (Passing Sense=ccw on a +Z circle instead yields the
+    # complement arc with a backwards parameterization for cw — wrong geometry
+    # AND wrong tangents, breaking the sweep kink guard in both directions.)
+    axis = gp_Ax2(gp_Pnt(cx, cy, 0.0), gp_Dir(0, 0, 1.0 if ccw else -1.0))
     circ = gp_Circ(axis, radius)
-    mk = GC_MakeArcOfCircle(circ, gp_Pnt(sx, sy, 0), gp_Pnt(ex, ey, 0), ccw)
+    mk = GC_MakeArcOfCircle(circ, gp_Pnt(sx, sy, 0), gp_Pnt(ex, ey, 0), True)
     if not mk.IsDone():
         raise RuntimeError("GC_MakeArcOfCircle(circle,p1,p2,sense) failed")
     me = BRepBuilderAPI_MakeEdge(mk.Value())
@@ -365,7 +371,14 @@ def _wire_poles_closed(s):
     cx, cy = s.center_x_mm, s.center_y_mm
     poles = list(s.poles)
     n = len(poles)
-    deg = min(s.degree, n - 1)
+    # Documented contract: degree < len(poles). Enforced (NOT silently clamped —
+    # a clamp returns a different curve than requested with no indication).
+    deg = int(s.degree)
+    if deg >= n:
+        raise ValueError(
+            f"poles_spline_closed: degree must be < len(poles) "
+            f"(got degree={deg}, {n} poles)"
+        )
 
     parr = TColgp_Array1OfPnt(1, n)
     for i, (x, y) in enumerate(poles, start=1):
@@ -382,8 +395,13 @@ def _wire_poles_closed(s):
         mults.SetValue(i, 1)
 
     if s.weights is not None:
-        if len(s.weights) != n or any(w <= 0 for w in s.weights):
-            raise ValueError("poles_spline: weights len must == poles and all > 0")
+        # NaN slips past a bare `w <= 0` check and OCCT then silently DROPS all
+        # weights (returns the unweighted curve) — require finite AND positive.
+        if len(s.weights) != n or any(
+            not math.isfinite(w) or w <= 0 for w in s.weights
+        ):
+            raise ValueError(
+                "poles_spline: weights len must == poles and all finite and > 0")
         warr = TColStd_Array1OfReal(1, n)
         for i, w in enumerate(s.weights, start=1):
             warr.SetValue(i, float(w))
@@ -394,7 +412,18 @@ def _wire_poles_closed(s):
     me = BRepBuilderAPI_MakeEdge(curve)
     if not me.IsDone():
         raise RuntimeError("MakeEdge(poles_spline_closed) failed")
-    return _wire_from_edges([me.Edge()])
+    wire = _wire_from_edges([me.Edge()])
+    # A crossed control polygon yields a self-CROSSING periodic curve that
+    # extrudes into an invalid solid which still passes the volume>0 gate
+    # (probe: BRepCheck IsValid=False, extras is_solid=True). Refuse it here so
+    # both the face path and the sweep-path consumers are protected.
+    from OCP.ShapeAnalysis import ShapeAnalysis_Wire
+    if ShapeAnalysis_Wire(wire, _face_from_wire(wire), 1e-6).CheckSelfIntersection():
+        raise ValueError(
+            "fm.self_intersecting_profile: poles control polygon produces a "
+            "self-crossing curve — reorder the poles (e.g. CCW around the "
+            "boundary) so the control polygon does not cross itself.")
+    return wire
 
 
 def _wire_bspline_open(points: list[tuple[float, float]]):

@@ -124,10 +124,34 @@ class PolesSplineSketch(BaseModel):
     weights: list[float] | None = Field(
         default=None,
         description="Optional per-pole weights (rational / NURBS). len must == "
-                    "len(poles); all > 0. None = a non-rational B-spline.")
+                    "len(poles); all finite and > 0. None = a non-rational "
+                    "B-spline.")
     degree: int = Field(default=3, ge=1, le=8)
     center_x_mm: float = 0.0
     center_y_mm: float = 0.0
+
+    @model_validator(mode="after")
+    def _degree_and_weights_valid(self):
+        # Documented contract: degree < len(poles). Refuse — do NOT clamp
+        # (a clamp silently returns a different curve than requested).
+        if self.degree >= len(self.poles):
+            raise ValueError(
+                f"poles_spline_closed: degree must be < len(poles) "
+                f"(got degree={self.degree}, {len(self.poles)} poles)"
+            )
+        if self.weights is not None:
+            if len(self.weights) != len(self.poles):
+                raise ValueError(
+                    f"poles_spline_closed: weights len ({len(self.weights)}) "
+                    f"must == len(poles) ({len(self.poles)})"
+                )
+            # NaN passes a bare `w <= 0` check and OCCT then silently DROPS
+            # every weight (builds the unweighted curve as 'success').
+            if any(not math.isfinite(w) or w <= 0 for w in self.weights):
+                raise ValueError(
+                    "poles_spline_closed: every weight must be finite and > 0"
+                )
+        return self
 
 
 class EllipseSketch(BaseModel):

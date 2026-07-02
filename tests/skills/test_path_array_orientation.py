@@ -64,6 +64,8 @@ def test_straight_path_compound_sums_volumes():
 
 def test_straight_path_fused_sums_volumes():
     # Same 5 disjoint copies, but fuse=True -> still 320 (disjoint union).
+    # OCCT Fuse of disjoint solids "succeeds" but returns a 5-solid compound —
+    # extras must report the TRUE solid count, not fused=True/n_bodies=1.
     r = PathArrayOrientation().apply(_seed(), {
         "path_points": [(0.0, 0.0, 0.0), (40.0, 0.0, 0.0)],
         "count": 5,
@@ -71,6 +73,22 @@ def test_straight_path_fused_sums_volumes():
     })
     v = _volume(r.body)
     assert abs(v - 320.0) < 1.0, f"straight fused vol {v:.3f}, expected 320"
+    assert r.extras["transform"]["n_bodies"] == 5
+    assert r.extras["transform"]["fused"] is False
+
+
+def test_overlapping_fuse_is_one_body():
+    # Stations every 2mm along a straight 8mm path << the 4mm box -> copies
+    # OVERLAP and genuinely union into ONE solid: bar spanning x in [-2, 10]
+    # (XY-centered box) -> 12*4*4 = 192. fused=True must mean exactly this.
+    r = PathArrayOrientation().apply(_seed(), {
+        "path_points": [(0.0, 0.0, 0.0), (8.0, 0.0, 0.0)],
+        "count": 5,
+        "fuse": True,
+    })
+    v = _volume(r.body)
+    assert abs(v - 192.0) < 1.0, f"overlap union vol {v:.3f}, expected 192"
+    assert r.extras["transform"]["n_bodies"] == 1
     assert r.extras["transform"]["fused"] is True
 
 
@@ -150,13 +168,110 @@ def test_align_false_is_translation_only():
     assert r.extras["transform"]["align_to_tangent"] is False
 
 
+def _offset_seed():
+    # Box spanning local x∈[2,4], y∈[-1,1], z∈[-0.5,0.5] — non-axisymmetric,
+    # centroid 3 mm off the frame origin along local +X, so each instance's
+    # centroid reveals the frame X image: X_i = (centroid_i - station_i) / 3.
+    from build123d import Part
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
+    from OCP.gp import gp_Pnt
+    return Part(BRepPrimAPI_MakeBox(
+        gp_Pnt(2.0, -1.0, -0.5), gp_Pnt(4.0, 1.0, 0.5)).Shape())
+
+
+def _solid_centroids(body):
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+    from OCP.TopAbs import TopAbs_SOLID
+    from OCP.TopExp import TopExp_Explorer
+    out = []
+    ex = TopExp_Explorer(body.wrapped, TopAbs_SOLID)
+    while ex.More():
+        g = GProp_GProps()
+        BRepGProp.VolumeProperties_s(ex.Current(), g)
+        c = g.CentreOfMass()
+        out.append((c.X(), c.Y(), c.Z()))
+        ex.Next()
+    return out
+
+
+def test_no_roll_flip_between_stations_on_curved_path():
+    """Regression (parallel transport): gp_Ax3(P, dir(T))'s IMPLICIT X-direction
+    is discontinuous in T, so instances rolled 90–180° about the tangent between
+    adjacent stations as the path heading crossed OCCT's component-magnitude
+    crossover. The frame X must be parallel-transported station to station: the
+    roll between adjacent instances stays below ~2x the tangent turn angle
+    (11.25°/station here), while the old behaviour jumped ~170°.
+    """
+    from OCP.BRepAdaptor import BRepAdaptor_CompCurve
+    from OCP.GCPnts import GCPnts_AbscissaPoint
+    from OCP.gp import gp_Pnt, gp_Vec
+
+    from phone_designer.skills.transform.path_array_orientation import (
+        _build_path_wire,
+    )
+
+    # Quarter circle R=40 from (0,-40,0) to (40,0,0): tangents sweep heading
+    # 0°→90°, the range where the implicit-X flip occurred mid-path.
+    R, n, count = 40.0, 9, 9
+    pts = [
+        (R * math.cos(-math.pi / 2 + math.pi / 2 * k / (n - 1)),
+         R * math.sin(-math.pi / 2 + math.pi / 2 * k / (n - 1)),
+         0.0)
+        for k in range(n)
+    ]
+    r = PathArrayOrientation().apply(_offset_seed(), {
+        "path_points": pts,
+        "count": count,
+        "curve_type": "bspline",
+        "align_to_tangent": True,
+        "fuse": False,
+    })
+    assert _count_solids(r.body) == count
+
+    # Recompute the station points exactly as the skill does, then recover the
+    # frame X image at each station from the instance centroid (3 mm offset).
+    wire = _build_path_wire(pts, "bspline")
+    cc = BRepAdaptor_CompCurve(wire)
+    u0 = cc.FirstParameter()
+    total = float(GCPnts_AbscissaPoint.Length_s(cc))
+    xs = []
+    for i, c in enumerate(_solid_centroids(r.body)):
+        s = total * i / (count - 1)
+        u = GCPnts_AbscissaPoint(cc, s, u0).Parameter()
+        P = gp_Pnt()
+        T = gp_Vec()
+        cc.D1(u, P, T)
+        x = ((c[0] - P.X()) / 3.0, (c[1] - P.Y()) / 3.0, (c[2] - P.Z()) / 3.0)
+        m = math.sqrt(x[0] ** 2 + x[1] ** 2 + x[2] ** 2)
+        assert abs(m - 1.0) < 1e-6, f"station {i}: |X image| {m:.6f} != 1"
+        xs.append(x)
+    max_turn_deg = 2.0 * (90.0 / (count - 1))
+    for i, (a, b) in enumerate(zip(xs, xs[1:])):
+        dot = max(-1.0, min(1.0, a[0] * b[0] + a[1] * b[1] + a[2] * b[2]))
+        ang = math.degrees(math.acos(dot))
+        assert ang < max_turn_deg, (
+            f"roll flip between instances {i} and {i + 1}: {ang:.1f}° "
+            f"(limit {max_turn_deg:.2f}°)")
+
+
 def test_too_few_points_refused():
+    # The refusal must carry the STRUCTURED failure code — a Field(min_length=2)
+    # would fire pydantic's raw too_short error before the validator, making
+    # fm.path_too_few_points unreachable.
     import pytest
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as exc:
         PathArrayOrientation().apply(_seed(), {
             "path_points": [(0.0, 0.0, 0.0)],
             "count": 3,
         })
+    assert "fm.path_too_few_points" in str(exc.value)
+    with pytest.raises(Exception) as exc:
+        PathArrayOrientation().apply(_seed(), {
+            "path_points": [],
+            "count": 3,
+        })
+    assert "fm.path_too_few_points" in str(exc.value)
 
 
 def test_post_condition_and_registration():

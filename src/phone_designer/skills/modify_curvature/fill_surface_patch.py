@@ -102,22 +102,62 @@ class FillSurfacePatch(SkillBase):
         except Exception:
             faces = []
         if faces:
-            for f in faces:
-                for e in _face_edges(f):
-                    filler.Add(e, f, cont, True)
-                    n_added += 1
+            from OCP.BRep import BRep_Tool
+            from OCP.TopTools import TopTools_MapOfShape
+
+            # dedup ACROSS faces: an edge shared by two matched faces must be
+            # Add()ed once (with its first face as support) — double-adding the
+            # same edge with two supports makes BRepFill_Filling always fail.
+            seen = TopTools_MapOfShape()
+            try:
+                for f in faces:
+                    for e in _face_edges(f):
+                        if BRep_Tool.Degenerated_s(e):
+                            # cone-apex / sphere-pole edges have no 3D curve —
+                            # feeding them to the filler crashes Build() with a
+                            # raw Standard_NullObject.
+                            continue
+                        if seen.Contains(e):
+                            continue
+                        seen.Add(e)
+                        filler.Add(e, f, cont, True)
+                        n_added += 1
+            except Exception as ex:  # noqa: BLE001
+                raise ValueError(
+                    f"fm.filler_did_not_converge: BRepFill_Filling raised "
+                    f"{type(ex).__name__}: {ex} — the boundary likely contains "
+                    "seam/degenerate edges of a closed surface (cone/sphere)."
+                ) from ex
         else:
-            edges = resolve_edges(shape, args.boundary_selector)
-            for e in edges:
-                filler.Add(e, GeomAbs_C0, True)
-                n_added += 1
+            try:
+                edges = resolve_edges(shape, args.boundary_selector)
+            except NotImplementedError:
+                # a FACE-kind selector that matched 0 faces has no edge
+                # resolver — treat as "no boundary matched", not a raw crash.
+                edges = []
+            try:
+                for e in edges:
+                    filler.Add(e, GeomAbs_C0, True)
+                    n_added += 1
+            except Exception as ex:  # noqa: BLE001
+                raise ValueError(
+                    f"fm.filler_did_not_converge: BRepFill_Filling raised "
+                    f"{type(ex).__name__}: {ex} on a boundary edge."
+                ) from ex
 
         if n_added == 0:
             raise ValueError(
                 "fm.no_boundary_edges: the selector matched no faces or edges to "
                 "bound the patch.")
 
-        filler.Build()
+        try:
+            filler.Build()
+        except Exception as ex:  # noqa: BLE001
+            raise ValueError(
+                f"fm.filler_did_not_converge: BRepFill_Filling raised "
+                f"{type(ex).__name__}: {ex} — the boundary likely contains "
+                "seam/degenerate edges of a closed surface (cone/sphere)."
+            ) from ex
         if not filler.IsDone():
             raise ValueError(
                 "fm.filler_did_not_converge: BRepFill_Filling failed on the "

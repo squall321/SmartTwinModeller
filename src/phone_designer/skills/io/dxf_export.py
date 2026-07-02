@@ -7,8 +7,11 @@ the manufacturing artifact that previously could never leave the system.
 Three sources (``source``):
   * ``section`` (default) — the body's cross-section at a plane, projected into that
     plane's in-plane frame (reuses inspect/cross_section polylines).
-  * ``silhouette`` — the outer projected outline along a view direction (reuses
-    inspect/silhouette polylines_2d).
+  * ``silhouette`` — ALL edges brute-projected along a view direction (reuses
+    inspect/silhouette polylines_2d). Hidden edges are included — this is NOT a
+    cut-ready outer outline; identical duplicate loops and zero-extent
+    (view-parallel) edges are dropped, but visibility is not computed. For a
+    laser/waterjet cut file use ``section`` or ``flat_pattern``.
   * ``flat_pattern`` — the sheet-metal flat blank outline (reuses
     detect_sheet_metal flat_pattern.outline_2d).
 
@@ -52,11 +55,12 @@ def _inplane_frame(normal):
     name="dxf_export",
     category="inspect",
     level="atomic",
-    summary="Write the body's 2D curves to a DXF file (laser/waterjet/plasma, "
-            "nesting). source='section' (cross-section at a plane, projected 2D) | "
-            "'silhouette' (outer outline along a view dir) | 'flat_pattern' "
-            "(sheet-metal blank outline). Each loop → a DXF LWPOLYLINE via ezdxf. "
-            "Read-only — only the filesystem is touched.",
+    summary="Write the body's 2D curves to a DXF file. source='section' "
+            "(cross-section at a plane, projected 2D — laser/waterjet/plasma, "
+            "nesting) | 'silhouette' (all-edges projection along a view dir; "
+            "hidden edges included — NOT a cut-ready outline) | 'flat_pattern' "
+            "(sheet-metal blank outline — cut-ready). Each loop → a DXF "
+            "LWPOLYLINE via ezdxf. Read-only — only the filesystem is touched.",
     selector_kinds=[],
     history_rules={},
     produces_features=["dxf_artifact"],
@@ -96,7 +100,10 @@ class DxfExport(SkillBase):
             raise ValueError(f"fm.dxf_write_failed: ezdxf unavailable: {exc}")
 
         out_path = Path(args.path)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+        except Exception as exc:  # noqa: BLE001
+            raise ValueError(f"fm.dxf_write_failed: {type(exc).__name__}: {exc}")
 
         doc = ezdxf.new(setup=True)
         doc.units = 4  # mm
@@ -156,8 +163,28 @@ class DxfExport(SkillBase):
             from phone_designer.skills.inspect.silhouette import Silhouette
             ex = Silhouette().apply(body, {
                 "view_direction": list(args.plane_normal)}).extras
-            return [[(round(p[0], 4), round(p[1], 4)) for p in poly]
-                    for poly in ex.get("polylines_2d", []) if poly]
+            # Brute projection emits EVERY edge: coincident edges (e.g. a
+            # box's top + bottom rims) project to identical 2D loops and
+            # view-parallel edges collapse to a single point. Dedupe exact
+            # duplicates (either direction) and drop zero-extent loops so the
+            # DXF is not littered with double-traced / degenerate polylines.
+            out = []
+            seen: set[tuple] = set()
+            for poly in ex.get("polylines_2d", []):
+                if not poly:
+                    continue
+                loop = [(round(p[0], 4), round(p[1], 4)) for p in poly]
+                us = [p[0] for p in loop]
+                vs = [p[1] for p in loop]
+                if (max(us) - min(us) <= _EPS_CLOSE
+                        and max(vs) - min(vs) <= _EPS_CLOSE):
+                    continue  # degenerate: edge parallel to the view direction
+                key = tuple(loop)
+                if key in seen or tuple(reversed(loop)) in seen:
+                    continue  # exact duplicate of an already-kept loop
+                seen.add(key)
+                out.append(loop)
+            return out
 
         # flat_pattern
         from phone_designer.skills.inspect.detect_sheet_metal import DetectSheetMetal

@@ -37,7 +37,7 @@ from phone_designer.skills._spec import SkillBase, SkillResult
     produces_features=["section_sketch"],
     preserves=["body_topology"],
     manufacturing={},
-    failure_modes=["fm.empty_section", "fm.section_open"],
+    failure_modes=["fm.empty_section", "fm.section_open", "fm.too_many_faces"],
     cost_hint=0.15,
     post_conditions=[PostCondition(kind="body_present")],
 )
@@ -64,6 +64,14 @@ class SectionToSketch(SkillBase):
             tuple(args.plane_normal),
             simplify_tol_mm=args.simplify_tol_mm,
         )
+        # The face-count guard SKIPS the section without cutting — that is not
+        # an empty section (the plane may well pass through the body), so it
+        # must not be mislabeled fm.empty_section ("plane may miss the body").
+        if rec.get("skipped"):
+            raise ValueError(
+                f"fm.too_many_faces: body has {rec['face_count']} faces > "
+                f"limit {rec['limit']} — section skipped by the face-count "
+                "guard (raise PHONE_DESIGNER_MAX_FACE_COUNT to override).")
         sketch = rec.get("sketch")
         if sketch is None or rec.get("empty"):
             raise ValueError(

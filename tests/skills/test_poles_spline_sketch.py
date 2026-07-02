@@ -62,6 +62,52 @@ def test_poles_spline_bad_weights_refused():
               "weights": [1, 1], "degree": 3})  # len mismatch
 
 
+def test_poles_spline_nonfinite_weights_refused():
+    # NaN slips past a bare `w <= 0` guard and OCCT silently DROPS all weights,
+    # returning the UNWEIGHTED solid as success — must be a pydantic-layer
+    # refusal instead (finite AND positive required). ValidationError is a
+    # ValueError subclass, so pytest.raises(ValueError) covers both layers.
+    poles = [[0, 0], [30, 0], [30, 20], [0, 20]]
+    for bad in ([1.0, float("nan"), 1.0, 1.0],
+                [1.0, float("inf"), 1.0, 1.0],
+                [1.0, 0.0, 1.0, 1.0],
+                [1.0, -2.0, 1.0, 1.0]):
+        with pytest.raises(ValueError, match="finite and > 0"):
+            _ext({"kind": "poles_spline_closed", "poles": poles,
+                  "weights": bad, "degree": 3})
+
+
+def test_poles_spline_degree_must_be_below_pole_count():
+    # documented contract: degree < len(poles). Was silently clamped to
+    # len(poles)-1 (a different curve than requested) — now a refusal.
+    poles = [[10, 10], [-10, 10], [-10, -10], [10, -10]]
+    with pytest.raises(ValueError, match="degree must be < len\\(poles\\)"):
+        _ext({"kind": "poles_spline_closed", "poles": poles, "degree": 8})
+    with pytest.raises(ValueError, match="degree must be < len\\(poles\\)"):
+        _ext({"kind": "poles_spline_closed", "poles": poles, "degree": 4})
+    # boundary: degree == len(poles)-1 is legal and builds.
+    e = _ext({"kind": "poles_spline_closed", "poles": poles, "degree": 3})
+    assert e["is_solid"] and e["volume_mm3"] > 0
+
+
+def test_poles_spline_crossed_polygon_refused():
+    # a CROSSED pole order makes the periodic curve self-intersect; the prism
+    # passes the volume>0 gate while BRepCheck says invalid (probe-proven), so
+    # the wire builder must refuse with a structured failure mode.
+    with pytest.raises(ValueError, match="self_intersecting_profile"):
+        _ext({"kind": "poles_spline_closed",
+              "poles": [[0, 0], [40, 0], [10, 30], [40, 30]], "degree": 3})
+    # the symmetric figure-eight (near-zero net area) is refused too — the old
+    # volume gate even let this one through (0.392 mm³ > eps).
+    with pytest.raises(ValueError, match="self_intersecting_profile"):
+        _ext({"kind": "poles_spline_closed",
+              "poles": [[0, 0], [40, 0], [0, 30], [40, 30]], "degree": 3})
+    # control: same four poles correctly ordered CCW build a valid solid.
+    e = _ext({"kind": "poles_spline_closed",
+              "poles": [[0, 0], [40, 0], [40, 30], [0, 30]], "degree": 3})
+    assert e["is_solid"] and e["volume_mm3"] > 0
+
+
 def test_poles_spline_reachable_and_discoverable():
     from phone_designer.skills.create.generate_from_spec import GenerateFromSpec
     g = GenerateFromSpec().apply(None, {"spec": [

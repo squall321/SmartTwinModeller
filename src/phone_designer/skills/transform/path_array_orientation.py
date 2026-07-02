@@ -22,10 +22,14 @@ Pipeline (raw OCCT):
   3. Station by ARC LENGTH: s_i = i * L / (count-1) for i in 0..count-1 (both
      ends land). ``GCPnts_AbscissaPoint`` maps each arclength to a curve
      parameter. ``CompCurve.D1(u, P, T)`` gives the point P and tangent T.
-  4. Build a target ``gp_Ax3(P, dir(T))`` (tangent = local +Z) and a fixed
-     source frame at the origin; ``gp_Trsf.SetTransformation(target, src)`` is
-     the rigid re-pose. ``align_to_tangent=False`` falls back to a pure
-     translation P (no rotation) — a plain 3D path distribution.
+  4. Build a target ``gp_Ax3(P, dir(T), dir(X_i))`` (tangent = local +Z) and a
+     fixed source frame at the origin; ``gp_Trsf.SetTransformation(target, src)``
+     is the rigid re-pose. The frame X-axis ``X_i`` is PARALLEL-TRANSPORTED
+     across stations (X_i = normalize(X_prev - (X_prev·T_i)·T_i)) — the
+     single-direction ``gp_Ax3(P, dir(T))`` constructor picks an implicit X that
+     is DISCONTINUOUS in T, rolling instances 90–180° between stations on curved
+     paths. ``align_to_tangent=False`` falls back to a pure translation P (no
+     rotation) — a plain 3D path distribution.
   5. Deep-copy the seed to each station (``apply_transform_shape``); ``fuse``
      (BRepAlgoAPI_Fuse, falls back to a compound if any fuse fails) or keep a
      multi-body ``build_compound``. is_solid gated on volume>1e-6.
@@ -37,6 +41,7 @@ Verified law (seed = 4×4×4 box, vol 64):
 """
 from __future__ import annotations
 
+import math
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -113,23 +118,62 @@ def _build_path_wire(points: list[tuple[float, float, float]], curve_type: str):
     return TopoDS.Wire_s(wire)
 
 
-def _station_transform(P, T, align_to_tangent: bool):
+def _any_perp(t: tuple[float, float, float]) -> tuple[float, float, float]:
+    """Deterministic unit vector perpendicular to the unit vector ``t``.
+
+    Cross ``t`` with the world axis LEAST aligned with it — never degenerate
+    (|cross| >= sqrt(2/3) for the least-aligned axis).
+    """
+    ax = min(((abs(t[0]), (1.0, 0.0, 0.0)),
+              (abs(t[1]), (0.0, 1.0, 0.0)),
+              (abs(t[2]), (0.0, 0.0, 1.0))), key=lambda kv: kv[0])[1]
+    cx = ax[1] * t[2] - ax[2] * t[1]
+    cy = ax[2] * t[0] - ax[0] * t[2]
+    cz = ax[0] * t[1] - ax[1] * t[0]
+    n = math.sqrt(cx * cx + cy * cy + cz * cz)
+    return (cx / n, cy / n, cz / n)
+
+
+def _station_transform(P, T, x_prev, align_to_tangent: bool):
     """Rigid transform placing the seed's origin frame at station (P, tangent T).
 
-    tangent T -> local +Z of the target frame; ``align_to_tangent=False`` uses a
-    pure translation to P (no rotation).
+    tangent T -> local +Z of the target frame. The frame's local +X is
+    PARALLEL-TRANSPORTED from the previous station's X (``x_prev``, unit tuple
+    or None at station 0): X_i = normalize(x_prev - (x_prev·T)·T). Letting the
+    single-direction ``gp_Ax3(P, gp_Dir(T))`` constructor pick the X implicitly
+    made the roll about the tangent DISCONTINUOUS in T — instances flipped
+    90–180° between adjacent stations on curved paths.
+
+    Returns ``(trsf, x_new)``; ``x_new`` feeds the next station.
+    ``align_to_tangent=False`` uses a pure translation to P (no rotation) and
+    passes ``x_prev`` through unchanged.
     """
     from OCP.gp import gp_Ax3, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
 
     trsf = gp_Trsf()
     if not align_to_tangent or T.Magnitude() < 1e-9:
         trsf.SetTranslation(gp_Vec(P.X(), P.Y(), P.Z()))
-        return trsf
-    # tangent becomes the frame's main direction (local +Z).
-    target = gp_Ax3(P, gp_Dir(T))
+        return trsf, x_prev
+    tm = T.Magnitude()
+    t = (T.X() / tm, T.Y() / tm, T.Z() / tm)
+    if x_prev is None:
+        x = _any_perp(t)
+    else:
+        # parallel transport: remove the tangential component, renormalise.
+        dot = x_prev[0] * t[0] + x_prev[1] * t[1] + x_prev[2] * t[2]
+        rx = x_prev[0] - dot * t[0]
+        ry = x_prev[1] - dot * t[1]
+        rz = x_prev[2] - dot * t[2]
+        n = math.sqrt(rx * rx + ry * ry + rz * rz)
+        if n < 1e-9:  # previous X ~ parallel to this tangent — restart the frame.
+            x = _any_perp(t)
+        else:
+            x = (rx / n, ry / n, rz / n)
+    # tangent becomes the frame's main direction (local +Z); X is explicit.
+    target = gp_Ax3(P, gp_Dir(t[0], t[1], t[2]), gp_Dir(x[0], x[1], x[2]))
     src = gp_Ax3(gp_Pnt(0.0, 0.0, 0.0), gp_Dir(0.0, 0.0, 1.0), gp_Dir(1.0, 0.0, 0.0))
     trsf.SetTransformation(target, src)
-    return trsf
+    return trsf, x
 
 
 def _fuse_all(shapes: list):
@@ -161,7 +205,9 @@ def _fuse_all(shapes: list):
             "tangent). Build the wire from path_points (>=2): curve_type='polyline' "
             "(exact) | 'bspline' (smooth C2). Station by ARC LENGTH "
             "(GCPnts_AbscissaPoint) so both ends land; point+tangent via "
-            "CompCurve.D1; gp_Ax3->gp_Trsf rigid re-pose. Unlike path_pattern "
+            "CompCurve.D1; gp_Ax3->gp_Trsf rigid re-pose with the frame X-axis "
+            "parallel-transported across stations (no roll flips between "
+            "instances on curved paths). Unlike path_pattern "
             "(XY-projected, Z dropped, fixed orientation, feature-only) this keeps "
             "the full 3D path and rotates the WHOLE body. fuse=True unions copies "
             "(BRepAlgoAPI_Fuse; compound fallback). align_to_tangent=False = pure "
@@ -181,8 +227,10 @@ def _fuse_all(shapes: list):
 )
 class PathArrayOrientation(SkillBase):
     class Args(BaseModel):
+        # NOTE: no Field(min_length=2) — pydantic's core too_short error would
+        # fire BEFORE the field_validator, making fm.path_too_few_points
+        # unreachable; the validator below owns the >=2 contract.
         path_points: list[tuple[float, float, float]] = Field(
-            min_length=2,
             description="Ordered 3D control points [[x,y,z],...] (>=2) defining the "
                         "path. Full 3D — Z is NOT dropped.")
         count: int = Field(
@@ -222,6 +270,7 @@ class PathArrayOrientation(SkillBase):
         from phone_designer.skills.assembly._compound import (
             apply_transform_shape,
             build_compound,
+            count_solids,
         )
 
         if body is None:
@@ -251,6 +300,7 @@ class PathArrayOrientation(SkillBase):
         # ── station by arc length; re-pose the seed at each station ──────────
         try:
             copies = []
+            x_prev = None  # frame X, parallel-transported station to station.
             for i in range(args.count):
                 if args.count == 1:
                     s = 0.0
@@ -261,7 +311,8 @@ class PathArrayOrientation(SkillBase):
                 P = gp_Pnt()
                 T = gp_Vec()
                 cc.D1(u, P, T)
-                trsf = _station_transform(P, T, args.align_to_tangent)
+                trsf, x_prev = _station_transform(
+                    P, T, x_prev, args.align_to_tangent)
                 copies.append(apply_transform_shape(shape, trsf))
         except Exception as exc:  # noqa: BLE001
             raise ValueError(
@@ -283,6 +334,12 @@ class PathArrayOrientation(SkillBase):
             raise ValueError(
                 f"fm.path_array_failed: result volume {vol:.6g}mm³ ≈ 0.")
 
+        # Honest body count: BRepAlgoAPI_Fuse of DISJOINT solids "succeeds" but
+        # returns an N-solid compound — count the solids instead of trusting the
+        # fuse flag. fused=True only when the result really is one solid.
+        n_solids = count_solids(out)
+        fused = fused and n_solids == 1
+
         return SkillResult(
             body=Part(out),
             history=EntityHistoryMap(rules={
@@ -296,7 +353,7 @@ class PathArrayOrientation(SkillBase):
                 "align_to_tangent": args.align_to_tangent,
                 "fuse": args.fuse,
                 "fused": fused,
-                "n_bodies": 1 if fused else len(copies),
+                "n_bodies": n_solids,
                 "path_length_mm": round(total_len, 3),
                 "n_path_points": len(pts),
                 "volume_mm3": round(vol, 3),

@@ -50,7 +50,8 @@ def _volume(shape) -> float:
             "watertight. The #1 direct-edit/RE primitive: strip a fillet/boss/hole/"
             "logo off imported geometry. Unlike remove_micro_features (sliver "
             "cleanup only) this does true topological defeaturing. Refuses a heal "
-            "that collapses the body (fm.defeature_volume_collapse).",
+            "that collapses the body (fm.defeature_volume_collapse) and faces OCCT "
+            "cannot actually remove (fm.defeature_not_removable — no silent no-op).",
     selector_kinds=["faces"],
     history_rules={"body_faces": HistoryRule.MODIFIED_INHERIT,
                    "removed_faces": HistoryRule.CONSUMED},
@@ -58,6 +59,7 @@ def _volume(shape) -> float:
     preserves=["outer_envelope_outer"],
     manufacturing={},
     failure_modes=["fm.no_faces_selected", "fm.defeature_failed",
+                   "fm.defeature_not_removable",
                    "fm.defeature_volume_collapse"],
     cost_hint=0.3,
     post_conditions=[PostCondition(kind="body_present")],
@@ -108,6 +110,19 @@ class DeleteFaceDefeature(SkillBase):
                 f"fm.defeature_failed: {type(exc).__name__}: {exc} — the selected "
                 "faces may not form a removable feature (try a tighter selection).")
 
+        # HONEST no-op guard: BRepAlgoAPI_Defeaturing reports IsDone()=True even
+        # when it could not remove the faces (the failure is only a warning and
+        # the input shape is returned unchanged). Trust the algorithm HISTORY,
+        # not IsDone: every selected face must actually be removed.
+        hist = df.History()
+        not_removed = [f for f in faces if not hist.IsRemoved(f)]
+        if not_removed:
+            raise ValueError(
+                f"fm.defeature_not_removable: OCCT could not remove "
+                f"{len(not_removed)} of {len(faces)} selected face(s) — not a "
+                "removable feature (the neighbours cannot be extended to heal "
+                "the wound; try a tighter selection).")
+
         vol_after = _volume(result)
         if result is None or result.IsNull() or vol_after <= _EPS_VOL:
             raise ValueError(
@@ -127,6 +142,7 @@ class DeleteFaceDefeature(SkillBase):
                 "body_faces": HistoryRule.MODIFIED_INHERIT,
                 "removed_faces": HistoryRule.CONSUMED}),
             extras={"defeature": {
+                # verified: every selected face passed History().IsRemoved above
                 "n_faces_removed": len(faces),
                 "volume_before_mm3": round(vol_before, 3),
                 "volume_after_mm3": round(vol_after, 3),

@@ -25,6 +25,23 @@ def _tall_box():
     return Box(20, 20, 40, align=(Align.CENTER, Align.CENTER, Align.MIN))
 
 
+def _signed_volume(shape) -> float:
+    # SIGNED volume — negative means the solid is inside-out.
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+    g = GProp_GProps()
+    BRepGProp.VolumeProperties_s(shape, g)
+    return float(g.Mass())
+
+
+def _classify(shape, x, y, z):
+    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+    from OCP.gp import gp_Pnt
+    clf = BRepClass3d_SolidClassifier(shape)
+    clf.Perform(gp_Pnt(x, y, z), 1e-6)
+    return clf.State()
+
+
 def test_twist_is_approximately_volume_preserving():
     # an 80° twist over the height ideally preserves the 16000mm³ volume; at
     # refine=12 the B-spline approximation is within ~1%.
@@ -52,6 +69,44 @@ def test_taper_flare_grows_the_top():
     # taper_ratio > 1 flares the top → volume larger than the straight prism.
     d = _dfm(_tall_box(), mode="taper", taper_ratio=1.5, refine=12)
     assert d["volume_after_mm3"] > 16000
+
+
+def test_twist_solid_is_not_inside_out():
+    # regression: sewing used to hand back an inward-oriented solid (signed
+    # volume −15935): interior points classified OUT and downstream booleans got
+    # the COMPLEMENT of the body. Pin the corrected orientation.
+    from OCP.TopAbs import TopAbs_State
+    res = DeformBody().apply(_tall_box(), {"mode": "twist", "twist_deg": 80, "refine": 12})
+    shape = res.body.wrapped
+    assert _signed_volume(shape) > 0                      # not inside-out
+    assert _classify(shape, 0, 0, 20) == TopAbs_State.TopAbs_IN     # true interior
+    assert _classify(shape, 500, 500, 500) == TopAbs_State.TopAbs_OUT  # far exterior
+
+
+def test_taper_solid_is_not_inside_out():
+    # taper mode had the same inversion (signed volume −9333.33).
+    res = DeformBody().apply(_tall_box(), {"mode": "taper", "taper_ratio": 0.5, "refine": 12})
+    assert _signed_volume(res.body.wrapped) > 0
+
+
+def test_deforming_a_deformed_body_does_not_mutate_it():
+    # regression: when the input's faces are already B-splines, NurbsConvert
+    # reuses the LIVE Geom handles, and the pole edits used to write straight
+    # into the input body — deforming a deformed body corrupted the first result.
+    r1 = DeformBody().apply(_tall_box(), {"mode": "twist", "twist_deg": 30, "refine": 4})
+    v1 = _signed_volume(r1.body.wrapped)
+    DeformBody().apply(r1.body, {"mode": "twist", "twist_deg": 30, "refine": 4})
+    assert _signed_volume(r1.body.wrapped) == pytest.approx(v1, rel=1e-9)
+
+
+def test_refuses_body_with_through_hole():
+    # regression: MakeFace(surface-only) drops inner wires, so a through-hole
+    # used to be silently FILLED (12858mm³ in → 15999mm³ out). Now an honest
+    # structured refusal fires before any warping.
+    from build123d import Cylinder
+    holed = _tall_box() - Cylinder(5, 100)
+    with pytest.raises(ValueError, match=r"fm\.deform_failed.*wires"):
+        _dfm(holed, mode="twist", twist_deg=10, refine=4)
 
 
 def test_twist_needs_nonzero_angle():

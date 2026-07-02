@@ -97,10 +97,23 @@ def test_mirror_body_reflects_and_preserves_volume():
 
 
 def test_mirror_body_merge_doubles_volume():
-    # model-half → mirror-merge: two disjoint congruent halves fuse to 2× volume.
-    r = MirrorBody().apply(_box(10, 10, 10, pos=(15, 0, 0)),
+    # model-half → mirror-merge: a half TOUCHING the plane (x=[0,10], plane x=0)
+    # fuses with its reflection (x=[-10,0]) into ONE 2×-volume symmetric solid.
+    from phone_designer.skills.assembly._compound import count_solids
+    r = MirrorBody().apply(_box(10, 10, 10, pos=(5, 0, 0)),
                            {"plane_normal": [1, 0, 0], "merge": True})
     assert _rv(r) == pytest.approx(2000.0, rel=1e-6)
+    assert r.extras["transform"]["n_bodies"] == 1
+    assert count_solids(r.body.wrapped) == 1
+
+
+def test_mirror_body_merge_disjoint_refused():
+    # a body NOT reaching the mirror plane cannot merge into one symmetric solid:
+    # the fuse "succeeds" (IsDone=True) but yields 2 disjoint solids → refusal,
+    # not a 2-solid compound mislabelled n_bodies=1.
+    with pytest.raises(ValueError, match="disjoint solids"):
+        MirrorBody().apply(_box(10, 10, 10, pos=(15, 0, 0)),
+                           {"plane_normal": [1, 0, 0], "merge": True})
 
 
 def test_mirror_body_zero_normal_refused():
@@ -119,6 +132,20 @@ def test_scale_body_anisotropic_multiplies_per_axis():
     r = ScaleBody().apply(_box(20, 20, 20), {"factors_xyz": [2, 3, 1]})
     assert _rv(r) == pytest.approx(48000.0, rel=1e-6)  # 8000 × 2·3·1
     assert r.extras["transform"]["mode"] == "anisotropic"
+
+
+def test_scale_body_anisotropic_curved_volume_matches_ratio():
+    # cylinder r=5 h=10 stretched ×3 in Z → analytic π·5²·30 = 2356.194 mm³.
+    # GTransform turns every face into a B-spline; the adaptive-eps
+    # VolumeProperties overload keeps the reported volume honest (the no-eps
+    # overload overstated it ~0.86%, contradicting expected_volume_ratio).
+    import math
+    from build123d import Cylinder
+    r = ScaleBody().apply(Cylinder(5, 10), {"factors_xyz": [1, 1, 3]})
+    t = r.extras["transform"]
+    assert t["volume_mm3"] == pytest.approx(750 * math.pi, rel=1e-4)  # 2356.1945
+    assert t["volume_mm3"] / (250 * math.pi) == pytest.approx(
+        t["expected_volume_ratio"], rel=1e-4)  # reported/input == sx·sy·sz
 
 
 def test_scale_body_ambiguous_mode_refused():
