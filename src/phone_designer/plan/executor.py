@@ -48,6 +48,13 @@ class ExecutionResult:
     #   "zero_delta_volume: ..."  — the PLAN-DEPTH-CEILING leniency branch
     #   "upstream_failure"        — cascade skip after a failed step
     skipped_steps: list[dict[str, Any]] = field(default_factory=list)
+    # 3-3 plan-as-feature-tree — per-step recorded EntityHistoryMap in dict
+    # form (``history.to_dict()``), captured for every PASS step. A PASS step
+    # whose skill somehow returned no history object records None (defensive —
+    # SkillResult.history is a required field today). FAIL/SKIPPED steps never
+    # appear. Purely ADDITIVE: nothing in the executor consumes this; the
+    # first consumer is phone_designer.plan.feature_tree.build_feature_tree.
+    step_histories: dict[str, dict[str, Any] | None] = field(default_factory=dict)
 
     @property
     def outcome(self) -> str:
@@ -175,6 +182,12 @@ class PlanExecutor:
                     step.metrics = extras["_step_metrics"]
                 body = skill_result.body
                 result.step_results[step.id] = skill_result
+                # 3-3 feature-tree — record the step's returned
+                # EntityHistoryMap (additive; see ExecutionResult docstring).
+                _hist = getattr(skill_result, "history", None)
+                result.step_histories[step.id] = (
+                    _hist.to_dict() if _hist is not None else None
+                )
 
             except Exception as e:
                 # ``str(e)`` is empty for some OCCT-wrapped exceptions and

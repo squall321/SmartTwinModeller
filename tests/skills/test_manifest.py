@@ -51,6 +51,10 @@ _DYNAMIC_ORCHESTRATOR_MACROS = {
     # standard-part matching); plan_reexecute loads/resolves/re-runs a saved
     # plan with an optional baseline — both build their SkillResult in _apply.
     "analyze_assembly", "plan_reexecute",
+    # Phase-3 (2026-07): plan_edit runs a baseline execution then branches
+    # suppress/insert × incremental/full-rebuild with freeze re-verification —
+    # a dynamic orchestrator, not a fixed atomic sequence.
+    "plan_edit",
 }
 
 

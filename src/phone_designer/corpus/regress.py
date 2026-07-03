@@ -551,6 +551,15 @@ def _parallel_worker(
             os.unlink(plan_out)
         except OSError:
             pass
+        # DETERMINISM FIX (2026-07-03): the planner writes any base-step
+        # scratch STEP (freeform-shell / import_step base) to the DERIVED
+        # sibling path <plan_out stem>_base.step when plan_out_path is set
+        # (instead of the shared run_logs/_tmp/reconstructed_plan_base.step
+        # that concurrent workers used to race). Clean it up with the plan.
+        try:
+            os.unlink(str(Path(plan_out).with_suffix("")) + "_base.step")
+        except OSError:
+            pass
     rec["file"] = rel
     return idx, rel, rec
 

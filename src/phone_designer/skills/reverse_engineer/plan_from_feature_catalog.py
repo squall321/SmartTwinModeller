@@ -1944,8 +1944,25 @@ def _hole_xy_on_line(
 BaseStepKind = Literal["box", "import_step", "preserve_brep"]
 
 
-def _write_body_as_step(body: Any, plan_name: str) -> str | None:
-    """Write the input body to a STEP file under run_logs/_tmp/.
+def _write_body_as_step(
+    body: Any, plan_name: str, out_path: str | None = None
+) -> str | None:
+    """Write the input body to a STEP file.
+
+    Default (``out_path=None``): the historic SHARED scratch location
+    ``run_logs/_tmp/<plan_name>_base.step`` — byte-identical to the original
+    serial behaviour.
+
+    DETERMINISM FIX (2026-07-03): ``out_path`` — when set, write THERE
+    instead. The shared default is a cross-PROCESS race: every concurrent
+    ``corpus-regress --workers N`` worker (and any concurrent analyze_part /
+    assembly_reverse_engineer / variant run) wrote and read the SAME
+    ``reconstructed_plan_base.step``, so a plan whose base step imports that
+    file (``place_freeform_solid`` / ``import_step`` base) could execute
+    ANOTHER worker's geometry — the probe-verified mechanism behind the
+    bimodal match_ratio flap (1.0 <-> ~0.25) under ``--workers 4``.
+    Callers that already isolate their plan file via ``plan_out_path``
+    now isolate this scratch STEP the same way (derived sibling path).
 
     Returns the absolute path string on success, or None if the write
     failed (e.g. body is None, OCCT export error, read-only filesystem).
@@ -1958,10 +1975,14 @@ def _write_body_as_step(body: Any, plan_name: str) -> str | None:
         from OCP.IFSelect import IFSelect_RetDone
         from OCP.STEPControl import STEPControl_AsIs, STEPControl_Writer
 
-        root = pathlib.Path(__file__).resolve().parents[4]
-        tmp_dir = root / "run_logs" / "_tmp"
-        tmp_dir.mkdir(parents=True, exist_ok=True)
-        step_path = tmp_dir / f"{plan_name}_base.step"
+        if out_path is not None:
+            step_path = pathlib.Path(out_path)
+            step_path.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            root = pathlib.Path(__file__).resolve().parents[4]
+            tmp_dir = root / "run_logs" / "_tmp"
+            tmp_dir.mkdir(parents=True, exist_ok=True)
+            step_path = tmp_dir / f"{plan_name}_base.step"
         shape = body.wrapped if hasattr(body, "wrapped") else body
         writer = STEPControl_Writer()
         writer.Transfer(shape, STEPControl_AsIs)
@@ -2354,6 +2375,7 @@ def _freeform_shell_base_step(
     bbox: tuple | None,
     plan_name: str,
     sew_tol_mm: float = 0.1,
+    base_step_out_path: str | None = None,
 ) -> dict | None:
     """Build the ``place_freeform_solid`` base STEP args — or ``None``.
 
@@ -2372,7 +2394,9 @@ def _freeform_shell_base_step(
         import phone_designer.skills.create.place_freeform_solid  # noqa: F401
     except Exception:
         return None
-    step_path = _write_body_as_step(body, plan_name)
+    step_path = _write_body_as_step(
+        body, plan_name, out_path=base_step_out_path
+    )
     if step_path is None:
         return None
     box_shift = _world_to_box_shift(bbox)
@@ -2574,6 +2598,7 @@ def accept_freeform_base(
     base_l: float | None = None,
     base_w: float | None = None,
     base_h: float | None = None,
+    base_step_out_path: str | None = None,
 ) -> dict | None:
     """PILLAR FREEFORM revert-guard (authoritative, full-reconstruction A/B).
 
@@ -2671,7 +2696,10 @@ def accept_freeform_base(
         #    only when it beats both the box and silhouette hausdorff.
         if _freeform_shell_solidifies(body, sew_tol_mm=0.1):
             plan_name = box_plan.get("plan_name") or "reconstructed_plan"
-            ff_step = _freeform_shell_base_step(body, bbox, plan_name)
+            ff_step = _freeform_shell_base_step(
+                body, bbox, plan_name,
+                base_step_out_path=base_step_out_path,
+            )
             if ff_step is not None:
                 kept = _accept_freeform_shell_base(
                     box_plan, ff_step, body, bbox,
@@ -2956,6 +2984,7 @@ def _build_plan(
     plan_name: str = "reconstructed_plan",
     dimension_scale: float = 1.0,
     base_profile_mode: str = "off",
+    base_step_out_path: str | None = None,
 ) -> dict:
     # COMPLEX-CAD pass-25 (2026-06-10, plan item P5): ``dimension_scale``
     # is the caller-declared uniform scale of the CATALOG relative to the
@@ -3199,7 +3228,9 @@ def _build_plan(
     #                           receive the original body via the
     #                           ``initial_body`` kwarg.
     if base_step_kind == "import_step":
-        step_path = _write_body_as_step(body, plan_name)
+        step_path = _write_body_as_step(
+            body, plan_name, out_path=base_step_out_path
+        )
         if step_path is not None:
             steps.append(_new_step("s_base", "import_step", {
                 "path": step_path,
@@ -4028,6 +4059,23 @@ class PlanFromFeatureCatalog(SkillBase):
                 res = ExtractFeatureCatalog().apply(body, {})
                 catalog = res.extras.get("feature_catalog", {})
 
+        # DETERMINISM FIX (2026-07-03): scratch STEP isolation. Any base step
+        # that round-trips the body through a STEP file (freeform-shell /
+        # import_step base) historically used the SHARED
+        # run_logs/_tmp/<plan_name>_base.step — a cross-process race under
+        # corpus-regress --workers N (probe-verified: a sibling writer flips
+        # the Buzzer match 1.0 -> 0.4667 by making the plan import ANOTHER
+        # part's geometry). Callers that isolate their plan file via
+        # plan_out_path now get a DERIVED sibling scratch path
+        # (<plan_out_path stem>_base.step) so concurrent workers never share
+        # it. plan_out_path=None (serial default) keeps the historic shared
+        # path — byte-identical serial behaviour.
+        if args.plan_out_path is not None:
+            _pp = pathlib.Path(args.plan_out_path)
+            base_step_out_path = str(_pp.with_name(_pp.stem + "_base.step"))
+        else:
+            base_step_out_path = None
+
         plan = _build_plan(
             catalog or {},
             body=body,
@@ -4036,6 +4084,7 @@ class PlanFromFeatureCatalog(SkillBase):
             dimension_scale=args.dimension_scale,
             # PILLAR FREEFORM (phase-1, 2026-06-14).
             base_profile_mode=args.base_profile_mode,
+            base_step_out_path=base_step_out_path,
         )
 
         # PILLAR FREEFORM (phase-1, 2026-06-14): authoritative profile-vs-box
@@ -4067,6 +4116,7 @@ class PlanFromFeatureCatalog(SkillBase):
                 plan, body, _guard_bbox,
                 dimension_scale=args.dimension_scale,
                 base_l=_base_l, base_w=_base_w, base_h=_base_h,
+                base_step_out_path=base_step_out_path,
             )
             if prof_plan is not None:
                 plan = prof_plan

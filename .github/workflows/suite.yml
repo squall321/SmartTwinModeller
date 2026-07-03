@@ -173,19 +173,23 @@ jobs:
 
       # box-mode root: PROMOTED TO BLOCKING (2026-07-03). The historic
       # non-determinism ("fails against its own baseline") had two mechanisms,
-      # both now closed for the SERIAL lane this job runs:
+      # both now ROOT-CAUSED AND FIXED:
       #   1. extract_feature_catalog scheduling-dependent bboxes — fixed by the
       #      canonical single-thread tessellation before the parallel fan-out;
-      #   2. a contention-expiring wall-clock-budget stage — under
-      #      corpus-regress --workers N>1 CPU contention the budget expires
-      #      early and 9/55 files flap bimodally (match 1.0 <-> ~0.25). SERIAL
-      #      runs (this job's default) are stable: rebaseline + 2 consecutive
-      #      full verifies = 55 files, 0 regressions, 0 improvements
-      #      (2026-07-03). workers>1 stays NON-authoritative for box mode.
+      #   2. a SHARED TEMP-FILE RACE (NOT a wall-clock budget — that hypothesis
+      #      was falsified by a CPU-load-only probe, 3/3 no flip): every worker
+      #      wrote its base-step scratch STEP to the same
+      #      run_logs/_tmp/reconstructed_plan_base.step and the executor
+      #      imports it, so under --workers N>1 a worker could rebuild ANOTHER
+      #      part's geometry (9/55 files flapped bimodally, match 1.0<->~0.25).
+      #      Fixed: per-plan derived '<plan stem>_base.step' path (a hostile
+      #      50ms clobber saboteur flips pre-fix 2/2, post-fix 0/2).
+      # Promotion evidence (serial lane, which this job runs): rebaseline + 2
+      # consecutive full verifies = 55 files, 0 regressions, 0 improvements.
       # The serial baseline records 3 HONEST TIMEOUTs (as1-oc-214, QFN-48,
-      # LQFP-128 — their expensive path exceeds 600s serially); the comparator
-      # treats baseline-TIMEOUT -> success as improvement, not regression, so
-      # this gate cannot flake on them.
+      # LQFP-128 exceed 600s serially); the comparator treats
+      # baseline-TIMEOUT -> success as improvement, not regression, so this
+      # gate cannot flake on them.
       - name: box root vs baseline (BLOCKING)
         shell: pwsh
         env:
