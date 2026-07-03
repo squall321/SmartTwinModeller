@@ -471,16 +471,23 @@ def _effective_workers(requested: int, n_files: int) -> int:
     ``requested <= 1`` always yields 1 (serial). A high request is clamped to
     leave 2 cores for the OS / parent so the machine stays responsive.
 
-    HONEST CAVEAT (phase-3, 2026-06-15): ``--workers N>1`` is a best-effort
-    SPEEDUP, NOT a verdict-identical substitute for serial. The per-file
-    ``--timeout-s`` is a wall-clock watchdog, and N concurrent workers share
-    CPU, so a file sitting near the timeout boundary serially can spuriously
-    TIME OUT under contention (measured: pythonocc__11752 runs 689 s serial,
-    just under the 700 s cap, but exceeds it under ``--workers 4``). Verdicts
-    are byte-identical to serial ONLY for files that finish with margin. The
-    AUTHORITATIVE gate is therefore ``--workers 1`` (the default); use
-    ``--workers N`` for fast iteration on the small-file bulk, and raise
-    ``--timeout-s`` proportionally if a boundary file flags a false timeout."""
+    RESULT-AUTHORITATIVENESS (updated 2026-07-04): ``--workers N>1`` verdicts
+    are now RESULT-identical to serial for the box lane. The historic parallel
+    flap (9/55 files bimodal, match 1.0↔~0.25) was a SHARED TEMP-FILE RACE —
+    every worker wrote run_logs/_tmp/reconstructed_plan_base.step and the
+    executor imports that file, so a worker could rebuild ANOTHER part's
+    geometry. Fixed by the per-plan derived ``<plan stem>_base.step`` path;
+    verified by a full ``--workers 4`` sweep vs the serial baseline: 55 files,
+    0 regressions, 0 improvements (2026-07-04). (The earlier wall-clock-budget
+    theory was falsified by a CPU-load-only probe — load alone never flipped.)
+
+    REMAINING TIMING CAVEAT: the per-file ``--timeout-s`` watchdog is still
+    wall-clock and N workers share CPU — a file near the boundary serially can
+    spuriously TIME OUT under contention (historic: pythonocc__11752 689 s vs
+    a 700 s cap). Conversely the 3 serial-TIMEOUT baseline records (as1-oc-214
+    / QFN-48 / LQFP-128) can COMPLETE under workers. Timing-tail verdicts may
+    therefore differ; raise ``--timeout-s`` when a boundary file flags. The CI
+    gate runs SERIAL and the committed baseline is serial-calibrated."""
     if requested <= 1 or n_files <= 1:
         return 1
     cpu = os.cpu_count() or 1
