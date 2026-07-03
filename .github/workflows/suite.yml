@@ -171,18 +171,23 @@ jobs:
         run: |
           venv\Scripts\python.exe -m phone_designer.cli corpus-regress --mode preserve_brep --subset root --timeout-s 600
 
-      # box-mode root is INFORMATIONAL ONLY (continue-on-error) — the box
-      # reconstruction is NON-DETERMINISTIC (it fails against its own baseline:
-      # ~4 match_ratio drops + a multi-1000mm hausdorff swing run-to-run from
-      # feature-ordering / planner non-determinism), so it cannot be a hard gate.
-      # It runs to surface a box-pipeline regression in the logs for review, but
-      # never fails the build. (5 fine-pitch IC files also legitimately time out;
-      # --timeout-s 600 lets borderline-slow files finish so they are not new
-      # errors vs the 300s baseline.) The DETERMINISTIC preserve_brep gate above
-      # is the real corpus guard.
-      - name: box root vs baseline (informational)
+      # box-mode root: PROMOTED TO BLOCKING (2026-07-03). The historic
+      # non-determinism ("fails against its own baseline") had two mechanisms,
+      # both now closed for the SERIAL lane this job runs:
+      #   1. extract_feature_catalog scheduling-dependent bboxes — fixed by the
+      #      canonical single-thread tessellation before the parallel fan-out;
+      #   2. a contention-expiring wall-clock-budget stage — under
+      #      corpus-regress --workers N>1 CPU contention the budget expires
+      #      early and 9/55 files flap bimodally (match 1.0 <-> ~0.25). SERIAL
+      #      runs (this job's default) are stable: rebaseline + 2 consecutive
+      #      full verifies = 55 files, 0 regressions, 0 improvements
+      #      (2026-07-03). workers>1 stays NON-authoritative for box mode.
+      # The serial baseline records 3 HONEST TIMEOUTs (as1-oc-214, QFN-48,
+      # LQFP-128 — their expensive path exceeds 600s serially); the comparator
+      # treats baseline-TIMEOUT -> success as improvement, not regression, so
+      # this gate cannot flake on them.
+      - name: box root vs baseline (BLOCKING)
         shell: pwsh
-        continue-on-error: true
         env:
           PHONE_DESIGNER_UI_HEADLESS: "1"
         run: |
