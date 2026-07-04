@@ -803,6 +803,27 @@ def cad_analyze_assembly(assembly_path: str,
         return _err(exc)
 
 
+@mcp.tool()
+def cad_get_selection() -> dict:
+    """Read the face the user CLICKED in the web viewer (viewer_server.py). Returns
+    {body_id, face_idx, centroid, normal, surface_type, area_mm2, selector} — the
+    selector is a ready-to-use faces_near_point you drop straight into a cad_modify
+    spec to target THAT face (e.g. fillet its edges via edges_on_face). This is how
+    'fillet the face I clicked' works: the user picks in the viewer, you call this,
+    then cad_modify with the returned selector. Returns {ok:False} if nothing is
+    selected yet."""
+    try:
+        sel_path = _WORKSPACE / "_viewer_selection.json"
+        if not sel_path.exists():
+            return {"ok": False, "error": "no viewer selection yet — click a face "
+                    "in the web viewer first"}
+        import json as _json
+        sel = _json.loads(sel_path.read_text(encoding="utf-8"))
+        return {"ok": True, **sel}
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
 def main() -> None:
     mcp.run()
 

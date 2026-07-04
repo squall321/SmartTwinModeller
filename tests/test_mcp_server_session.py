@@ -75,10 +75,17 @@ def test_measure_mass_and_obb(box_id):
     assert sorted(obb["obb"]["size_mm"]) == pytest.approx([10, 30, 40], abs=1e-3)
 
 
-def test_preview_headless_returns_honest_skip_not_blank_images(box_id):
+def test_preview_headless_now_renders_real_pngs(box_id):
+    # UPDATED (viewer work): cad_preview used to return skipped_no_gl under
+    # headless (GPU/GL path). It now defaults to the GL-free numpy renderer, so
+    # headless yields REAL PNGs — the old skip-marker assertion is intentionally
+    # replaced.
+    import os
     pv = M.cad_preview(body_id=box_id)
-    assert pv["ok"] is True
-    assert pv["skipped"] is True and "no_gl" in str(pv.get("note", ""))
+    assert pv["ok"] is True and pv["skipped"] is False
+    assert pv.get("renderer") == "headless_raster"
+    iso = (pv.get("images") or {}).get("iso")
+    assert iso and os.path.exists(iso) and os.path.getsize(iso) > 2000
     json.dumps(pv, allow_nan=False)  # strict-JSON-safe payload
 
 

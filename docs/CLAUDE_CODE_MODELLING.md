@@ -278,3 +278,46 @@ Read  D:/tmp/cc_preview/preview_iso.png     # ← SEE it inline, then iterate
 MCP equivalent (GL box): `cad_generate` → `cad_preview` → `Read` the `images.*` path →
 `cad_modify` → `cad_preview` again → `Read`. Views available everywhere:
 `iso · front · back · right · left · top · bottom`.
+
+---
+
+## 웹 뷰어: 3D 회전 + 면 클릭으로 지시 (viewer_server)
+
+정적 PNG 프리뷰를 넘어, 브라우저에서 **직접 회전하며 면을 클릭해 수정을 지시**할 수 있다.
+
+### 띄우기
+```bash
+# 1) Claude가 형상을 생성/수정 → cad_export 로 STEP+GLB 를 워크스페이스에 씀
+#    (MCP: cad_export(body_id, formats=["step","glb"], name="mypart"))
+# 2) 뷰어 서버 (별도 프로세스, 의존성 0 — 표준 라이브러리 http.server)
+python -m phone_designer.viewer_server --port 8765
+# 3) 브라우저 / VS Code Simple Browser 에서 http://127.0.0.1:8765/
+```
+왼쪽에서 body 선택 → **드래그=회전, 휠=줌, 우클릭=이동, 면 클릭=선택**.
+
+### "면 클릭 → Claude가 필렛" 루프
+1. 사용자가 뷰어에서 면을 **클릭** → 서버가 그 3D 지점의 가장 가까운 OCCT 면을
+   `faces_near_point` 로 해결하고 워크스페이스에 stash. 오른쪽 배지에
+   `face #N (plane) · centroid […] · selector {…}` 표시.
+2. 사용자가 Claude에게: *"방금 클릭한 면을 3mm 필렛해줘"*.
+3. Claude가 `cad_get_selection()` 호출 → `{face_idx, centroid, normal, surface_type,
+   selector}` 반환 (selector = 좌표 기반 `faces_near_point`, modify STEP 왕복에도
+   살아남음).
+4. Claude가 그 selector로 `cad_modify`:
+   ```json
+   {"op":"fillet_edges_by_predicate",
+    "args":{"selector":{"kind":"edges_on_face",
+                        "face":{"kind":"faces_near_point","point":[cx,cy,cz],"tol_mm":1.0}},
+            "radius_mm":3}}
+   ```
+   → 새 body_id. `cad_export(new_id, ["step","glb"], name=<same stem>)` 로 뷰어 갱신.
+5. `cad_undo(new_id)` 로 이전 body 로 되돌리기 (immutable lineage).
+
+**왜 이렇게:** Claude가 모델링 두뇌로 남고, 뷰어는 회전+픽만 한다 (필렛 버튼을
+뷰어에 넣지 않음 — spec 조합 로직이 분기되면 안 됨). 픽은 좌표를 주고, 좌표 selector
+는 어떤 스킬에도 (스킬 변경 0으로) 붙는다. GLB의 per-face primitive (OCCT 면 1개 =
+primitive 1개) 덕분에 브라우저 WASM 커널 없이 픽이 가능하다.
+
+**정직한 한계:** 면 선택만 (에지 픽/단면/측정은 V3 예정). 재질은 단색 steel-blue.
+GLB stem = 뷰어 body_id 이므로 `cad_export(..., name=<stem>)` 로 이름을 맞춰야
+뷰어가 같은 body 를 갱신한다.

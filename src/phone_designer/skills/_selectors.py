@@ -109,6 +109,22 @@ class FacesByAreaSelector(SelectorBase):
     max: float | None = None
 
 
+class FacesNearPointSelector(SelectorBase):
+    """The face whose CENTROID is nearest a 3D world point (within tol_mm).
+
+    This is the viewer-pick selector: a browser raycast hit gives a 3D point on
+    a face; its OCCT face is the one whose centroid is closest. Coordinate-based
+    (not a TopExp index), so it SURVIVES a cad_modify STEP round-trip — the same
+    durable property the tagged-face nearest-centroid resolver relies on. n=1 by
+    default (a single pick); raise n to grab the k nearest faces.
+    """
+
+    kind: Literal["faces_near_point"] = "faces_near_point"
+    point: tuple[float, float, float]
+    tol_mm: float = 2.0
+    n: int = 1
+
+
 class EdgesConvexOnlySelector(SelectorBase):
     kind: Literal["edges_convex_only"] = "edges_convex_only"
 
@@ -158,6 +174,7 @@ SelectorRef = Union[
     EdgesByPositionSelector,
     FacesByNormalSelector,
     FacesByAreaSelector,
+    FacesNearPointSelector,
     EdgesConvexOnlySelector,
     EdgesConcaveOnlySelector,
     AndSel,
@@ -187,6 +204,9 @@ _STABILITY_RANK: dict[str, int] = {
     "edges_by_length": 2,
     "faces_by_area": 2,
     "edges_by_position": 1,
+    # coordinate pick — durable across a modify STEP round-trip (like a tag), but
+    # a live-pick point so rank it with edges_by_position (positional, precise).
+    "faces_near_point": 1,
     # 조합 selector 의 안정성 = inner 의 min (별도 평가)
     "and": 3,
     "or": 3,
@@ -205,6 +225,7 @@ _KIND_TO_CLASS: dict[str, type[SelectorBase]] = {
     "edges_by_position": EdgesByPositionSelector,
     "faces_by_normal": FacesByNormalSelector,
     "faces_by_area": FacesByAreaSelector,
+    "faces_near_point": FacesNearPointSelector,
     "edges_convex_only": EdgesConvexOnlySelector,
     "edges_concave_only": EdgesConcaveOnlySelector,
     "and": AndSel,

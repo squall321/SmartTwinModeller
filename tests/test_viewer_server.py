@@ -115,3 +115,37 @@ def test_viewer_server_imports_without_mcp_package():
     import phone_designer.viewer_server as vs
     importlib.reload(vs)
     assert hasattr(vs, "serve") and hasattr(vs, "_glb_for")
+
+
+# ── V2: face pick → selection → Claude-fillets-it ────────────────────────────
+
+def test_pick_face_resolves_and_stashes(tmp_path):
+    from phone_designer.viewer_server import pick_face, _SELECTION_FILE
+    ws = _make_workspace_body(tmp_path)
+    # part1 is a 40x30x8 box+hole (box op is MIN-Z: top face at z=8)
+    sel = pick_face(ws, "part1", [5.0, 3.0, 8.0])
+    assert sel["ok"] and sel["surface_type"] == "plane"
+    assert abs(sel["centroid"][2] - 8.0) < 1e-3           # picked the top face
+    assert sel["selector"]["kind"] == "faces_near_point"
+    # stashed for cad_get_selection
+    assert (ws / _SELECTION_FILE).exists()
+
+
+def test_pick_unknown_body(tmp_path):
+    from phone_designer.viewer_server import pick_face
+    ws = _make_workspace_body(tmp_path)
+    assert pick_face(ws, "nope", [0, 0, 0])["ok"] is False
+
+
+def test_faces_near_point_selector_targets_the_clicked_face():
+    # the keystone: a coordinate pick resolves to exactly one face and drives a
+    # fillet — durable (coordinate-based), unlike a TopExp index.
+    from build123d import Align, Box
+    from phone_designer.skills._resolvers import _all_faces, _face_center, resolve_faces
+    from phone_designer.skills._selectors import FacesNearPointSelector
+    b = Box(40, 30, 10, align=(Align.CENTER, Align.CENTER, Align.CENTER))
+    hit = resolve_faces(b.wrapped, FacesNearPointSelector(point=(5, 3, 5), tol_mm=20, n=1))
+    assert len(hit) == 1 and abs(_face_center(hit[0])[2] - 5.0) < 1e-6
+    # far pick + tight tol → honest empty, not a wrong face
+    assert resolve_faces(b.wrapped,
+                         FacesNearPointSelector(point=(999, 999, 999), tol_mm=1, n=1)) == []

@@ -25,6 +25,11 @@
   #hud { position:absolute; left:12px; bottom:12px; background:rgba(255,255,255,.85);
          padding:6px 10px; border-radius:6px; font-size:12px; color:#556; }
   #err { position:absolute; left:12px; top:12px; color:#b23; font-size:12px; }
+  #sel { position:absolute; right:12px; top:12px; background:rgba(255,255,255,.92);
+         padding:10px 12px; border-radius:6px; font-size:12px; max-width:280px;
+         box-shadow:0 1px 6px rgba(0,0,0,.12); display:none; }
+  #sel b { color:var(--accent); }
+  #sel code { background:#eef2f7; padding:1px 4px; border-radius:3px; font-size:11px; }
   .btn { display:inline-block; margin:8px 16px; padding:6px 10px; font-size:12px;
          background:var(--accent); color:#fff; border:none; border-radius:5px; cursor:pointer; }
 </style>
@@ -44,8 +49,9 @@
   </div>
   <div id="stage">
     <div id="view"></div>
-    <div id="hud">마우스: 드래그=회전 · 휠=줌 · 우클릭=이동</div>
+    <div id="hud">마우스: 드래그=회전 · 휠=줌 · 우클릭=이동 · 면 클릭=선택</div>
     <div id="err"></div>
+    <div id="sel"></div>
   </div>
 </div>
 
@@ -73,6 +79,10 @@ grid.rotation.x = Math.PI/2; scene.add(grid);   // GLB is +Z up → put grid on 
 
 const loader = new GLTFLoader();
 let current = null;
+let currentBodyId = null;
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+let marker = null;   // small sphere at the picked point
 
 function resize(){
   const w = view.clientWidth, h = view.clientHeight;
@@ -93,8 +103,11 @@ function frameObject(obj){
 
 window.loadBody = async function(bodyId){
   document.getElementById('err').textContent = '';
+  currentBodyId = bodyId;
   document.querySelectorAll('.body').forEach(e=>e.classList.toggle('sel', e.dataset.id===bodyId));
   if (current){ scene.remove(current); current.traverse(o=>{o.geometry&&o.geometry.dispose();}); current=null; }
+  if (marker){ scene.remove(marker); marker=null; }
+  document.getElementById('sel').style.display='none';
   try {
     const gltf = await loader.loadAsync('/model/'+encodeURIComponent(bodyId)+'.glb');
     const root = gltf.scene;
@@ -125,6 +138,51 @@ window.loadBodies = async function(){
   }
   loadBody(d.bodies[0].body_id);   // auto-show the newest
 };
+
+// ── face PICK: click a face → server resolves the OCCT face → show selector ──
+let downPos = null;
+renderer.domElement.addEventListener('pointerdown', e => { downPos = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener('pointerup', async e => {
+  // only treat as a pick if the pointer didn't drag (that's a rotate)
+  if (!downPos || !current || !currentBodyId) return;
+  const moved = Math.hypot(e.clientX-downPos[0], e.clientY-downPos[1]);
+  downPos = null;
+  if (moved > 5 || e.button !== 0) return;   // dragged = orbit, not a pick
+
+  const rect = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((e.clientX-rect.left)/rect.width)*2 - 1;
+  pointer.y = -((e.clientY-rect.top)/rect.height)*2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObject(current, true);
+  if (!hits.length){ document.getElementById('sel').style.display='none'; return; }
+  const p = hits[0].point;   // 3D world point on the surface
+
+  // marker at the pick
+  if (marker) scene.remove(marker);
+  const box = new THREE.Box3().setFromObject(current);
+  const r = box.getSize(new THREE.Vector3()).length() * 0.012 || 0.5;
+  marker = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12),
+                          new THREE.MeshBasicMaterial({ color:0xff5533 }));
+  marker.position.copy(p); scene.add(marker);
+
+  // ask the server which OCCT face that is (nearest-centroid)
+  try {
+    const resp = await fetch('/pick', { method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ body_id: currentBodyId, point:[p.x, p.y, p.z] }) });
+    const s = await resp.json();
+    const box = document.getElementById('sel');
+    if (!s.ok){ box.style.display='none'; return; }
+    const sel = JSON.stringify(s.selector);
+    box.style.display='block';
+    box.innerHTML =
+      `<b>면 선택됨</b> · face #${s.face_idx} (${s.surface_type})<br>` +
+      `centroid [${s.centroid.join(', ')}]<br>` +
+      `area ${s.area_mm2} mm²<br><br>` +
+      `Claude에게: <i>"방금 클릭한 면을 3mm 필렛해줘"</i><br>` +
+      `<span style="color:#8a94a3">selector: <code>${sel}</code></span>`;
+  } catch(err){ document.getElementById('err').textContent = 'pick 실패: '+err.message; }
+});
 
 (function animate(){ requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); })();
 loadBodies();

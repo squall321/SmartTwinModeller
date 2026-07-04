@@ -203,6 +203,21 @@ def resolve_faces(shape, selector: SelectorBase, *, body=None) -> list:
                 out.append(f)
         return out
 
+    if kind == "faces_near_point":
+        # viewer-pick resolver: the n faces whose CENTROID is nearest `point`,
+        # each within tol_mm. Coordinate-based → survives a modify STEP round
+        # trip (same nearest-centroid idea as the tagged resolver).
+        px, py, pz = selector.point
+        tol2 = float(selector.tol_mm) ** 2
+        ranked = []
+        for f in _all_faces(shape):
+            cx, cy, cz = _face_center(f)
+            d2 = (cx - px) ** 2 + (cy - py) ** 2 + (cz - pz) ** 2
+            if d2 <= tol2:
+                ranked.append((d2, f))
+        ranked.sort(key=lambda t: t[0])
+        return [f for _, f in ranked[: max(1, int(selector.n))]]
+
     if kind == "face_named":
         # Phase 2 stub: body 의 named face attribute 필요.
         # 본 단계에서는 well-known 이름만 휴리스틱으로 매칭.
