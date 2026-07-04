@@ -8,7 +8,8 @@ directly unit-testable and the wiring layer stays a thin adapter.
     import_body(path)             STEP file → body + honest part metadata
     modify_body(body, spec)       run a generate_from_spec-style step list ON body
     measure_body(body, what)      mass / obb / dimensions via the inspect skills
-    preview_body(body, out_dir)   PNG previews via inspect/_report_render.build_views
+    preview_body(body, out_dir)   PNG previews via the GL-free headless raster
+                                  renderer (inspect/_render_headless)
 
 Contracts (house rules):
   * Every returned dict is STRICT-JSON-safe once the ``body`` key is removed —
@@ -21,14 +22,15 @@ Contracts (house rules):
       fm.too_many_faces / fm.empty_body / fm.bad_spec / fm.unknown_op /
       fm.unknown_measure
   * Raw per-step errors from the executor are reported verbatim (never masked).
-  * ``preview_body`` under PHONE_DESIGNER_UI_HEADLESS returns the honest skip
-    marker (skipped=True, note carries 'skipped_no_gl') — NEVER a fake/black PNG.
+  * ``preview_body`` now renders REAL PNGs everywhere via the GL-free headless
+    raster renderer (numpy z-buffer, deterministic, no GL/Qt/display), so it
+    works UNDER PHONE_DESIGNER_UI_HEADLESS instead of skipping. A view that
+    cannot be rendered comes back None with the reason in ``note`` — NEVER a
+    fake/black placeholder PNG.
 """
 from __future__ import annotations
 
-import base64
 import math
-import os
 from pathlib import Path
 from typing import Any
 
@@ -310,83 +312,82 @@ def measure_body(body: Any, what: str = "mass") -> dict:
 # preview_body
 
 
-# Requested view name → build_views image id. build_views renders ONE shaded
-# view ('iso') plus mid-plane SECTION views named by cutting-plane normal
-# (section_x/y/z). 'front'/'top'/'side' therefore honestly map to SECTION
-# renders — build_views has no orthographic shaded camera views.
+# Requested view name → the GL-free renderer's supported orthographic view.
+# render_views_to_pngs supports iso/front/back/right/left/top/bottom. The only
+# legacy alias the old build_views wiring used that the renderer does not name
+# 1:1 is 'side' (a generic right-hand side view) — map it to 'right'. Everything
+# else the renderer supports directly, so identity-map the known views and let
+# any unknown view fall through to an honest per-view failure.
 _VIEW_ALIASES = {
-    "iso": "iso",
-    "front": "section_y",   # XZ mid-plane (normal +Y) — the front cut
-    "top": "section_z",     # XY mid-plane (normal +Z) — the top cut
-    "side": "section_x",    # YZ mid-plane (normal +X)
-    "right": "section_x",
+    "side": "right",   # legacy generic side view → the renderer's right view
 }
 
 
 def preview_body(body: Any, out_dir: str,
                  views: tuple = ("iso", "front", "top")) -> dict:
-    """Render preview PNGs of ``body`` into ``out_dir``.
+    """Render preview PNGs of ``body`` into ``out_dir`` — REAL images, no GL.
 
-    Reuses inspect/_report_render.build_views exactly the way
-    emit_quality_report does (build_views(body) inside a try/except that
-    degrades to a skip marker — a render must never crash the session).
+    Uses the GL-free headless raster renderer (inspect/_render_headless.
+    render_views_to_pngs): it walks the OCCT triangulation and rasterizes a
+    shaded solid with a numpy z-buffer + Pillow. This runs ANYWHERE — no GL,
+    no Qt, no display — and is deterministic, so it produces correct shaded
+    PNGs even under PHONE_DESIGNER_UI_HEADLESS (the old GPU/build_views path
+    only returned a 'skipped_no_gl' marker there).
 
     Returns ``{'images': {view: png_path | None}, 'skipped': bool,
     'note': str}`` (STRICT-JSON-safe).
 
-    HONEST-SKIP contract: under PHONE_DESIGNER_UI_HEADLESS (or any missing-GL
-    environment) build_views returns render_status='skipped_no_gl'; this
-    function then returns skipped=True with 'skipped_no_gl' in the note and
-    every image None — it NEVER writes an empty/black placeholder PNG.
+    HONEST-FAILURE contract (replaces the old headless SKIP behaviour):
+      * A view that renders → its real PNG path (a shaded file, never black).
+      * A view that fails to render (empty mesh / unsupported view / raster
+        error) → None, with the reason recorded in ``note``. NEVER a
+        fake/black placeholder PNG.
+      * A None / geometry-less body → every image None with an honest note
+        (skipped stays False; there is nothing to render, not a GL skip).
 
-    Honest mapping note: 'iso' is a shaded render; 'front'/'top'/'side' map to
-    build_views' mid-plane SECTION renders (section_y/section_z/section_x) —
-    not orthographic shaded views. Unmappable/unrendered views come back None.
+    View names: the renderer supports iso/front/back/right/left/top/bottom;
+    the legacy 'side' alias maps to 'right'. Unknown view names come back
+    None with the reason in ``note`` (never crash the session).
     """
     views = tuple(views)
-    try:
-        from phone_designer.skills.inspect._report_render import build_views
 
-        vr = build_views(body)
-    except Exception as exc:  # render must never break the session
-        vr = {
-            "render_status": "skipped_no_gl",
-            "images": {},
-            "note": f"render error: {type(exc).__name__}: {exc}",
-        }
-
-    status = vr.get("render_status")
-    if status != "ok":
-        # Honest skip — no files written, no fake images.
+    # Honest empty-input path: nothing to render. Not a GL skip — the renderer
+    # would raise on a None shape, so short-circuit with a clear note.
+    if body is None:
         return _json_safe({
             "images": {v: None for v in views},
-            "skipped": True,
-            "note": f"{status}: {vr.get('note', '')}",
+            "skipped": False,
+            "renderer": "headless_raster",
+            "note": "empty body: nothing to render (body is None)",
         })
 
-    os.makedirs(out_dir, exist_ok=True)
-    b64_images: dict = vr.get("images", {})
-    images: dict[str, str | None] = {}
-    written: list[str] = []
-    for v in views:
-        image_id = _VIEW_ALIASES.get(v, v)
-        b64 = b64_images.get(image_id)
-        if not b64:
-            images[v] = None
-            continue
-        png_path = str(Path(out_dir) / f"{v}.png")
-        with open(png_path, "wb") as fh:
-            fh.write(base64.b64decode(b64))
-        images[v] = png_path
-        written.append(v)
+    # Map legacy view aliases to the renderer's supported view names, keeping
+    # the caller-requested names as the returned dict keys.
+    render_views = tuple(_VIEW_ALIASES.get(v, v) for v in views)
 
-    note = ("rendered " + ", ".join(written) if written
-            else "render ok but none of the requested views were produced")
-    note += (" — note: front/top/side are mid-plane SECTION renders "
-             "(build_views' section_y/section_z/section_x), not orthographic "
-             "shaded views.")
+    try:
+        from phone_designer.skills.inspect._render_headless import (
+            render_views_to_pngs,
+        )
+
+        vr = render_views_to_pngs(body, out_dir, views=render_views)
+    except Exception as exc:  # a render must never break the session
+        return _json_safe({
+            "images": {v: None for v in views},
+            "skipped": False,
+            "renderer": "headless_raster",
+            "note": f"render error: {type(exc).__name__}: {exc}",
+        })
+
+    # Re-key the renderer's per-view results back to the caller's requested
+    # view names (undo the alias mapping). A missing key → honest None.
+    rendered: dict = vr.get("images", {})
+    images: dict[str, str | None] = {
+        v: rendered.get(_VIEW_ALIASES.get(v, v)) for v in views
+    }
     return _json_safe({
         "images": images,
-        "skipped": False,
-        "note": note,
+        "skipped": bool(vr.get("skipped", False)),
+        "renderer": vr.get("renderer", "headless_raster"),
+        "note": vr.get("note", ""),
     })

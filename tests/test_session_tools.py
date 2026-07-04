@@ -221,25 +221,77 @@ def test_measure_unknown_what_refused(box_body):
 
 # ──────────────────────────────────────────────────────────────────────────────
 # preview_body
+#
+# NOTE: preview_body used to return an honest SKIP marker under
+# PHONE_DESIGNER_UI_HEADLESS (skipped=True, 'skipped_no_gl' in the note, all
+# images None). That behaviour is INTENTIONALLY REPLACED: preview_body now
+# wires the GL-free headless raster renderer (inspect/_render_headless), which
+# rasterizes real shaded PNGs with a numpy z-buffer + Pillow and needs no GL.
+# So the tests below assert the REAL-RENDER contract even under
+# PHONE_DESIGNER_UI_HEADLESS=1 (skipped=False, images are real >2 KB PNGs).
 
 
-def test_preview_headless_returns_honest_skip(box_body, tmp_path, monkeypatch):
+def test_preview_headless_renders_real_pngs(box_body, tmp_path, monkeypatch):
+    # Was test_preview_headless_returns_honest_skip. Under headless we now get
+    # REAL renders, not a 'skipped_no_gl' marker — the old skip is replaced.
     monkeypatch.setenv("PHONE_DESIGNER_UI_HEADLESS", "1")
     out_dir = tmp_path / "previews"
 
     r = preview_body(box_body, str(out_dir))
-    assert r["skipped"] is True
-    assert "skipped_no_gl" in r["note"]
+    assert r["skipped"] is False                       # no longer a GL skip
+    assert r["renderer"] == "headless_raster"          # renderer marker present
+    assert "skipped_no_gl" not in r["note"]
     assert set(r["images"]) == {"iso", "front", "top"}
-    assert all(v is None for v in r["images"].values())
-    # NEVER a fake/black placeholder PNG on the skip path
-    assert not list(out_dir.glob("*.png")) if out_dir.exists() else True
+    # every requested view is a real shaded PNG on disk, > 2 KB (not black/fake)
+    for view, png in r["images"].items():
+        assert png is not None, f"{view} failed to render"
+        p = pathlib.Path(png)
+        assert p.exists() and p.suffix == ".png"
+        assert p.stat().st_size > 2048, f"{view} png too small ({p.stat().st_size} B)"
+    # the iso view specifically is a real file > 2 KB
+    assert pathlib.Path(r["images"]["iso"]).stat().st_size > 2048
     _assert_json_safe(r)
 
 
-def test_preview_none_body_is_honest_skip(tmp_path):
-    r = preview_body(None, str(tmp_path / "previews"))
-    assert r["skipped"] is True
-    assert "empty" in r["note"]
+def test_preview_none_body_honest_note_no_fake_png(tmp_path):
+    # A None body has nothing to render: every image None with an honest note,
+    # and NO png written. skipped stays False (this is not a GL skip).
+    out_dir = tmp_path / "previews"
+    r = preview_body(None, str(out_dir))
+    assert r["skipped"] is False
     assert all(v is None for v in r["images"].values())
+    assert "empty" in r["note"]                        # honest reason
+    # never a fake/black placeholder PNG when there is nothing to render
+    assert not (out_dir.exists() and list(out_dir.glob("*.png")))
+    _assert_json_safe(r)
+
+
+def test_preview_empty_geometry_body_honest_none(tmp_path):
+    # A valid shape with NO faces (empty compound) → images None with a
+    # per-view reason in the note, and no fake PNG — the honest-failure path.
+    from OCP.BRep import BRep_Builder
+    from OCP.TopoDS import TopoDS_Compound
+
+    comp = TopoDS_Compound()
+    BRep_Builder().MakeCompound(comp)
+    out_dir = tmp_path / "previews"
+
+    r = preview_body(comp, str(out_dir), views=("iso", "front"))
+    assert set(r["images"]) == {"iso", "front"}
+    assert all(v is None for v in r["images"].values())
+    assert "empty" in r["note"]                        # honest per-view reason
+    assert not (out_dir.exists() and list(out_dir.glob("*.png")))
+    _assert_json_safe(r)
+
+
+def test_preview_side_alias_and_view_keys_preserved(box_body, tmp_path):
+    # Legacy 'side' alias maps to the renderer's 'right' view but the returned
+    # dict keeps the caller-requested key 'side'. All requested views render.
+    out_dir = tmp_path / "previews"
+    r = preview_body(box_body, str(out_dir), views=("iso", "side", "left"))
+    assert set(r["images"]) == {"iso", "side", "left"}
+    assert r["skipped"] is False
+    for view, png in r["images"].items():
+        assert png is not None, f"{view} failed to render"
+        assert pathlib.Path(png).stat().st_size > 2048
     _assert_json_safe(r)

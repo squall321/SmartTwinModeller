@@ -134,6 +134,7 @@ import phone_designer.skills.inspect.quote_package  # noqa: F401
 import phone_designer.skills.inspect.sketch_relation_check  # noqa: F401
 import phone_designer.skills.inspect.hlr_view  # noqa: F401
 import phone_designer.skills.inspect.drawing_sheet  # noqa: F401
+import phone_designer.skills.inspect.render_preview  # noqa: F401
 import phone_designer.skills.inspect.measure_assembly_fit  # noqa: F401
 import phone_designer.skills.inspect.recommend_process  # noqa: F401
 import phone_designer.skills.inspect.mesh_quality  # noqa: F401
