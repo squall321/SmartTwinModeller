@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SmartTwin CAD Viewer</title>
+<style>
+  :root { --bg:#f5f6f8; --panel:#ffffff; --ink:#1f2733; --accent:#4682c8; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; font-family:system-ui,Segoe UI,Roboto,sans-serif;
+              color:var(--ink); background:var(--bg); }
+  #app { display:flex; height:100%; }
+  #side { width:260px; background:var(--panel); border-right:1px solid #dde1e6;
+          display:flex; flex-direction:column; }
+  #side h1 { font-size:14px; margin:0; padding:14px 16px; border-bottom:1px solid #eee;
+             letter-spacing:.02em; }
+  #bodies { flex:1; overflow:auto; }
+  .body { padding:10px 16px; border-bottom:1px solid #f0f1f3; cursor:pointer; font-size:13px; }
+  .body:hover { background:#eef4fb; }
+  .body.sel { background:#e3eefb; border-left:3px solid var(--accent); padding-left:13px; }
+  .body .id { font-weight:600; }
+  .body .meta { color:#8a94a3; font-size:11px; margin-top:2px; }
+  #stage { flex:1; position:relative; }
+  #view { position:absolute; inset:0; }
+  #hud { position:absolute; left:12px; bottom:12px; background:rgba(255,255,255,.85);
+         padding:6px 10px; border-radius:6px; font-size:12px; color:#556; }
+  #err { position:absolute; left:12px; top:12px; color:#b23; font-size:12px; }
+  .btn { display:inline-block; margin:8px 16px; padding:6px 10px; font-size:12px;
+         background:var(--accent); color:#fff; border:none; border-radius:5px; cursor:pointer; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+}}
+</script>
+</head>
+<body>
+<div id="app">
+  <div id="side">
+    <h1>SmartTwin CAD Viewer</h1>
+    <button class="btn" onclick="loadBodies()">↻ 새로고침</button>
+    <div id="bodies"></div>
+  </div>
+  <div id="stage">
+    <div id="view"></div>
+    <div id="hud">마우스: 드래그=회전 · 휠=줌 · 우클릭=이동</div>
+    <div id="err"></div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+const view = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(devicePixelRatio);
+view.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf5f6f8);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+const key = new THREE.DirectionalLight(0xffffff, 0.8); key.position.set(1,1,1); scene.add(key);
+const fill = new THREE.DirectionalLight(0xffffff, 0.35); fill.position.set(-1,-0.5,-1); scene.add(fill);
+const grid = new THREE.GridHelper(400, 40, 0xcfd6df, 0xe4e9ef);
+grid.rotation.x = Math.PI/2; scene.add(grid);   // GLB is +Z up → put grid on XY
+
+const loader = new GLTFLoader();
+let current = null;
+
+function resize(){
+  const w = view.clientWidth, h = view.clientHeight;
+  renderer.setSize(w, h); camera.aspect = w/h; camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(view); resize();
+
+function frameObject(obj){
+  const box = new THREE.Box3().setFromObject(obj);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const r = Math.max(size.x, size.y, size.z) || 10;
+  controls.target.copy(center);
+  camera.position.set(center.x + r*1.4, center.y - r*1.6, center.z + r*1.2);
+  camera.near = r/100; camera.far = r*100; camera.updateProjectionMatrix();
+  controls.update();
+}
+
+window.loadBody = async function(bodyId){
+  document.getElementById('err').textContent = '';
+  document.querySelectorAll('.body').forEach(e=>e.classList.toggle('sel', e.dataset.id===bodyId));
+  if (current){ scene.remove(current); current.traverse(o=>{o.geometry&&o.geometry.dispose();}); current=null; }
+  try {
+    const gltf = await loader.loadAsync('/model/'+encodeURIComponent(bodyId)+'.glb');
+    const root = gltf.scene;
+    // solid steel-blue material so it reads as CAD (GLB has no material here)
+    const mat = new THREE.MeshStandardMaterial({ color:0x4682c8, metalness:0.1, roughness:0.65,
+                                                 side:THREE.DoubleSide, flatShading:false });
+    let nPrim = 0;
+    root.traverse(o=>{ if (o.isMesh){ o.material = mat; nPrim++; } });
+    scene.add(root); current = root; frameObject(root);
+    document.getElementById('hud').textContent =
+      `${bodyId} · ${nPrim} face-primitive · 드래그=회전 휠=줌`;
+  } catch(e){
+    document.getElementById('err').textContent = '로드 실패: ' + e.message;
+  }
+};
+
+window.loadBodies = async function(){
+  const r = await fetch('/api/bodies'); const d = await r.json();
+  const list = document.getElementById('bodies');
+  list.innerHTML = '';
+  if (!d.bodies.length){ list.innerHTML = '<div class="body">워크스페이스에 body 없음<br><span class="meta">MCP로 cad_generate 후 새로고침</span></div>'; return; }
+  for (const b of d.bodies){
+    const el = document.createElement('div');
+    el.className = 'body'; el.dataset.id = b.body_id;
+    el.innerHTML = `<div class="id">${b.body_id}</div><div class="meta">${b.step} · ${b.size_kb} KB</div>`;
+    el.onclick = ()=>loadBody(b.body_id);
+    list.appendChild(el);
+  }
+  loadBody(d.bodies[0].body_id);   // auto-show the newest
+};
+
+(function animate(){ requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); })();
+loadBodies();
+</script>
+</body>
+</html>

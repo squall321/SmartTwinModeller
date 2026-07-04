@@ -82,3 +82,4 @@ out/
 # 자동 생성 측정 보고서 (Phase 0+ 자가검증 시나리오의 산출물)
 docs/reports/
 !docs/reports/README.md
+previews/

@@ -333,8 +333,10 @@ def cad_recommend_process(part_path: str = "", body_id: str = "",
 def cad_export(body_id: str = "", part_path: str = "",
                formats: list[str] | None = None, name: str = "") -> dict:
     """Re-export a cad_generate body_id (or an existing STEP part_path) to STEP /
-    STL / editable .py in the workspace WITHOUT regenerating. `formats` ⊆
-    {"step","stl","py"} (default ["step"])."""
+    STL / editable .py / GLB in the workspace WITHOUT regenerating. `formats` ⊆
+    {"step","stl","py","glb"} (default ["step"]). GLB = the web-viewer format:
+    RWGltf_CafWriter emits ONE primitive per OCCT face, so a browser raycaster's
+    hit maps back to a face (the pick → faces_near_point selector path)."""
     try:
         _ensure_skills()
         from build123d import export_stl
@@ -348,6 +350,11 @@ def cad_export(body_id: str = "", part_path: str = "",
             elif f == "stl":
                 export_stl(body, stem + ".stl")
                 files["stl"] = stem + ".stl"
+            elif f == "glb":
+                from phone_designer.skills.io.gltf_export import GltfExport
+                GltfExport().apply(body, {"path": stem + ".glb"})
+                if os.path.exists(stem + ".glb"):
+                    files["glb"] = stem + ".glb"
             elif f == "py":
                 from phone_designer.skills.reverse_engineer.emit_parametric_script import (  # noqa: E501
                     EmitParametricScript,
