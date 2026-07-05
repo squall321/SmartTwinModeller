@@ -343,3 +343,216 @@ def test_server_class_is_threaded_and_reuses_address():
     assert issubclass(_Server, socketserver.ThreadingMixIn)
     assert _Server.allow_reuse_address is True
     assert _Server.daemon_threads is True
+
+
+# ── V3: GET /scene (feature catalog) + GET /section (cut-plane view) ──────────
+
+def _make_box_2holes_ws(tmp_path):
+    """A 40x30x8 box with TWO -Z holes; return (ws, body_id='part2'). Distinct
+    from _make_workspace_body (one hole) so /scene has 2 holes to assert on."""
+    from phone_designer.skills.create.generate_from_spec import GenerateFromSpec
+    r = GenerateFromSpec().apply(None, {"spec": [
+        {"op": "box", "args": {"length_mm": 40, "width_mm": 30, "height_mm": 8}},
+        {"op": "hole", "args": {"position": [10, 0, 8], "diameter_mm": 6,
+                                "depth_mm": 8, "direction": "-Z"}},
+        {"op": "hole", "args": {"position": [-10, 0, 8], "diameter_mm": 6,
+                                "depth_mm": 8, "direction": "-Z"}}]})
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    assert _write_step(r.body, str(ws / "part2.step"))
+    return ws
+
+
+def test_scene_returns_two_holes_with_inrange_face_indices(tmp_path):
+    # VERIFY: /scene on a box+2holes returns 2 holes each with a nonempty
+    # face_indices IN RANGE 0..n_faces-1 (those ARE the GLB primitive indices
+    # the browser highlights — the 1:1 keystone).
+    from phone_designer.viewer_server import _scene_for
+    ws = _make_box_2holes_ws(tmp_path)
+    scene = _scene_for(ws, "part2")
+    assert scene is not None and scene["ok"] is True
+    n = scene["n_faces"]
+    assert n == 8                                   # box(6) + 2 hole bores
+    holes = scene["features"]["holes"]
+    assert len(holes) == 2
+    for h in holes:
+        fis = h["face_indices"]
+        assert fis and all(0 <= i < n for i in fis)  # nonempty + in-range
+        assert h["diameters_mm"] and h["depth_mm"] > 0
+    # bbox present (initial_bbox_mm from the catalog)
+    bb = scene["bbox_mm"]
+    assert bb is not None and len(bb) == 6
+    # strict-JSON-safe: round-trips through json without NaN/inf tokens
+    import json
+    assert json.loads(json.dumps(scene)) == scene
+
+
+def test_scene_cached_next_to_step_and_reused(tmp_path):
+    # /scene caches the JSON next to the STEP (<id>.scene.json) so the SLOW
+    # extract_feature_catalog runs once; a second call reads the sidecar.
+    from phone_designer.viewer_server import _scene_for
+    ws = _make_box_2holes_ws(tmp_path)
+    a = _scene_for(ws, "part2")
+    sidecar = ws / "part2.scene.json"
+    assert sidecar.exists()
+    m0 = sidecar.stat().st_mtime_ns
+    b = _scene_for(ws, "part2")
+    assert b == a and sidecar.stat().st_mtime_ns == m0   # not rebuilt
+
+
+def test_scene_cache_invalidates_on_step_overwrite_same_mtime(tmp_path):
+    # F6 parity: overwriting the STEP with different geometry (even at the same
+    # mtime) must rebuild the scene, not serve the stale catalog.
+    import os
+    from phone_designer.viewer_server import _scene_for
+    ws = _make_box_2holes_ws(tmp_path)
+    s1 = _scene_for(ws, "part2")
+    assert len(s1["features"]["holes"]) == 2
+    step = ws / "part2.step"
+    st = step.stat()
+    from phone_designer.skills.create.generate_from_spec import GenerateFromSpec
+    r = GenerateFromSpec().apply(None, {"spec": [
+        {"op": "box", "args": {"length_mm": 40, "width_mm": 30,
+                               "height_mm": 8}}]})   # NO holes now
+    assert _write_step(r.body, str(step))
+    os.utime(step, (st.st_atime, st.st_mtime))       # force same mtime
+    s2 = _scene_for(ws, "part2")
+    assert len(s2["features"]["holes"]) == 0         # rebuilt from new geometry
+
+
+def test_scene_unknown_body_is_none(tmp_path):
+    from phone_designer.viewer_server import _scene_for
+    ws = _make_box_2holes_ws(tmp_path)
+    assert _scene_for(ws, "nope") is None
+    assert _scene_for(ws, "../../secret") is None    # F4 traversal refused
+
+
+def test_section_returns_cut_glb_smaller_or_equal_with_primitives(tmp_path):
+    # VERIFY: /section axis=z pos=0.5 returns a valid GLB with primitives>0 and
+    # size <= the full body GLB (it is a CUT half). NEVER a new body_id.
+    import pygltflib
+    from phone_designer.viewer_server import _section_for, _glb_for
+    ws = _make_box_2holes_ws(tmp_path)
+    res = _section_for(ws, "part2", "z", 0.5)
+    assert res is not None and res["ok"] is True and res["cut"] is True
+    glb = res["glb"]
+    assert glb.exists() and glb.name == "part2.sec.glb"
+    g = pygltflib.GLTF2().load(str(glb))
+    prims = sum(len(m.primitives) for m in g.meshes)
+    assert prims > 0
+    full = _glb_for(ws, "part2")
+    assert glb.stat().st_size <= full.stat().st_size
+    # section must NOT have minted a new stem (no new .step in the workspace).
+    assert sorted(p.name for p in ws.glob("*.step")) == ["part2.step"]
+
+
+def test_section_cached_by_axis_and_quantized_pos(tmp_path):
+    # cache by (body_id, axis, quantized pos): same axis+pos reuses; a different
+    # axis rebuilds. Slider drags within a 1/100th bucket stay a cache hit.
+    from phone_designer.viewer_server import _section_for
+    ws = _make_box_2holes_ws(tmp_path)
+    a = _section_for(ws, "part2", "z", 0.5)
+    m0 = a["glb"].stat().st_mtime_ns
+    b = _section_for(ws, "part2", "z", 0.5)          # same → cache hit
+    assert b["glb"].stat().st_mtime_ns == m0
+    c = _section_for(ws, "part2", "x", 0.5)          # diff axis → rebuild
+    assert c["glb"].stat().st_mtime_ns != m0
+    assert sorted(p.name for p in ws.glob("*.step")) == ["part2.step"]
+
+
+def test_section_falls_back_to_full_body_when_plane_misses(tmp_path):
+    # honest fallback: a plane at pos=0.0 leaves NO negative pieces (split_body
+    # → fm.split_no_cut). /section returns the FULL body GLB with cut=False and
+    # a note instead of a 500. The user still sees the (uncut) body.
+    from phone_designer.viewer_server import _section_for
+    ws = _make_box_2holes_ws(tmp_path)
+    res = _section_for(ws, "part2", "z", 0.0)
+    assert res["ok"] is True and res["cut"] is False
+    assert "full body" in res["note"] and res["glb"].exists()
+
+
+def test_section_unknown_body_is_none(tmp_path):
+    from phone_designer.viewer_server import _section_for
+    ws = _make_box_2holes_ws(tmp_path)
+    assert _section_for(ws, "nope", "z", 0.5) is None
+    assert _section_for(ws, "../../secret", "z", 0.5) is None   # F4
+
+
+def test_section_handler_rejects_bad_axis_and_pos(tmp_path):
+    # /section validates axis ∈ {x,y,z} and pos ∈ [0,1] → 400 (not 500). Drive
+    # the handler's validation branch directly with a tiny fake request.
+    from phone_designer.viewer_server import _Handler, _AXIS_INDEX
+
+    class _Fake(_Handler):
+        def __init__(self):            # bypass BaseHTTPRequestHandler __init__
+            self.command = "GET"
+            self._status = None
+            self._body = None
+
+        def _send(self, code, body, ctype):
+            self._status = code
+            self._body = body
+
+    assert "x" in _AXIS_INDEX and "y" in _AXIS_INDEX and "z" in _AXIS_INDEX
+    ws = _make_box_2holes_ws(tmp_path)
+    h = _Fake()
+    h.ws = ws
+    # bad axis → 400
+    h._do_section({"body_id": ["part2"], "axis": ["w"], "pos": ["0.5"]})
+    assert h._status == 400 and b"axis" in h._body
+    # pos out of range → 400
+    h._do_section({"body_id": ["part2"], "axis": ["z"], "pos": ["1.5"]})
+    assert h._status == 400
+    # non-numeric pos → 400
+    h._do_section({"body_id": ["part2"], "axis": ["z"], "pos": ["abc"]})
+    assert h._status == 400
+    # missing/unsafe body_id → 400
+    h._do_section({"body_id": ["../../x"], "axis": ["z"], "pos": ["0.5"]})
+    assert h._status == 400
+    # a VALID request streams a GLB (200-path: writes via the base _send override
+    # is bypassed by the custom header write, so assert the model isn't a 400).
+    hg = _Fake()
+    hg.ws = ws
+    captured = {}
+
+    def _cap_response(code):
+        captured["code"] = code
+
+    hg.send_response = _cap_response
+    hg.send_header = lambda *a, **k: None
+    hg.end_headers = lambda: None
+
+    class _Sink:
+        def write(self, b):
+            captured["wrote"] = len(b)
+
+    hg.wfile = _Sink()
+    hg._do_section({"body_id": ["part2"], "axis": ["z"], "pos": ["0.5"]})
+    assert captured.get("code") == 200 and captured.get("wrote", 0) > 0
+
+
+def test_scene_handler_rejects_missing_body_id(tmp_path):
+    import json
+    from phone_designer.viewer_server import _Handler
+    ws = _make_box_2holes_ws(tmp_path)
+
+    class _Fake(_Handler):
+        def __init__(self):
+            self.command = "GET"
+            self._status = None
+            self._body = None
+
+        def _send(self, code, body, ctype):
+            self._status = code
+            self._body = body
+
+    h = _Fake()
+    h.ws = ws
+    h._do_scene({})                       # no body_id → 400
+    assert h._status == 400
+    h._do_scene({"body_id": ["nope"]})    # unknown → 404
+    assert h._status == 404
+    h._do_scene({"body_id": ["part2"]})   # OK → 200 with the scene JSON
+    assert h._status == 200
+    payload = json.loads(h._body.decode())
+    assert payload["ok"] and len(payload["features"]["holes"]) == 2

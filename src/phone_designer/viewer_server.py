@@ -19,6 +19,18 @@ Claude can read it via the cad_get_selection MCP tool → compose a cad_modify s
 targeting exactly that face. Claude stays the modelling brain; the browser only
 rotates + picks.
 
+V3 adds two read-only view endpoints:
+  * GET /scene?body_id → the body's extract_feature_catalog (holes/pockets/bosses,
+    each with id/type/face_indices/diameters_mm/depth_mm) + bbox_mm + n_faces. The
+    face_indices ARE the GLB primitive indices the browser highlights (1:1). The
+    catalog is SLOW on complex parts, so it is cached next to the STEP
+    (<id>.scene.json) with a (size,mtime) sidecar that invalidates like the GLB.
+  * GET /section?body_id&axis=x|y|z&pos=0..1 → a TRANSIENT GLB of the body CUT by
+    an axis-aligned plane (split_body keep='negative') so the user sees inside.
+    A section is a VIEW artifact — it streams <id>.sec.glb and NEVER mints a new
+    body_id / .step (no lineage mutation). A missed/degenerate split honestly
+    falls back to the full body GLB (X-Section-Cut:0).
+
 Run:  python -m phone_designer.viewer_server [--port 8765] [--workspace DIR]
 Then open http://127.0.0.1:8765/ — it lists bodies (STEP files in the workspace)
 and shows the chosen one in a rotate/zoom viewer.
@@ -35,7 +47,7 @@ import sys
 import tempfile
 import threading
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 _STATIC = Path(__file__).with_name("viewer_static")
 _SELECTION_FILE = "_viewer_selection.json"   # in the workspace; read by cad_get_selection
@@ -274,6 +286,262 @@ def _glb_for(ws: Path, body_id: str) -> Path | None:
         return glb if glb.exists() else None
 
 
+# ── V3 /scene: cached feature catalog (holes/pockets/bosses) per body ────────
+# extract_feature_catalog can be SLOW on complex parts, so we run it ONCE and
+# cache the strict-JSON-safe scene next to the STEP (<id>.scene.json) with a
+# (size,mtime) sidecar that invalidates exactly like the GLB (F6 semantics).
+_SCENE_LOCKS: dict[str, threading.Lock] = {}
+_SCENE_LOCKS_GUARD = threading.Lock()
+
+
+def _scene_lock(key: str) -> "threading.Lock":
+    with _SCENE_LOCKS_GUARD:
+        lk = _SCENE_LOCKS.get(key)
+        if lk is None:
+            lk = _SCENE_LOCKS[key] = threading.Lock()
+        return lk
+
+
+def _jsonify(obj):
+    """Coerce a catalog fragment to strict-JSON-safe values (no NaN/inf, no
+    tuples-as-keys, no OCCT handles). extract_feature_catalog stores plain
+    lists/dicts/floats, but a stray NaN/inf (bbox on a degenerate face) would
+    make json.dumps emit non-strict tokens the browser's JSON.parse rejects."""
+    if isinstance(obj, dict):
+        return {str(k): _jsonify(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_jsonify(v) for v in obj]
+    if isinstance(obj, bool):
+        return obj
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
+    if isinstance(obj, int):
+        return obj
+    if obj is None or isinstance(obj, str):
+        return obj
+    # anything exotic (OCCT handle, numpy scalar) → its string form, never crash.
+    try:
+        f = float(obj)
+        return f if math.isfinite(f) else None
+    except (TypeError, ValueError):
+        return str(obj)
+
+
+def _slim_feature(feat: dict, n_faces: int) -> dict:
+    """Keep the browser-relevant keys of ONE feature and clamp its face_indices
+    to the valid GLB-primitive range [0, n_faces). The face_indices ARE the GLB
+    primitive indices the viewer highlights (1:1 keystone), so an out-of-range
+    index (a detector referencing a face that isn't in _all_faces order) would
+    highlight the wrong primitive — drop those defensively."""
+    fis = [int(i) for i in (feat.get("face_indices") or [])
+           if isinstance(i, (int, float)) and not isinstance(i, bool)
+           and 0 <= int(i) < n_faces]
+    out = {
+        "id": feat.get("id"),
+        "type": feat.get("type") or feat.get("kind"),
+        "face_indices": fis,
+    }
+    # carry the size/geometry hints the sidebar shows, when the detector has them.
+    for k in ("diameters_mm", "depth_mm", "top_d_mm", "height_mm",
+              "diameter_or_size_mm", "center", "axis_origin"):
+        if k in feat and feat[k] is not None:
+            out[k] = feat[k]
+    return _jsonify(out)
+
+
+def _build_scene(step: Path) -> dict:
+    """Import the STEP, run extract_feature_catalog ONCE, and return the
+    strict-JSON-safe scene dict: {ok, features:{holes,pockets,bosses}, bbox_mm,
+    n_faces}. Reuses _load_faces (traversal-safe, _all_faces order == GLB order)
+    for n_faces and the same ImportStep body for the catalog."""
+    os.environ.setdefault("PHONE_DESIGNER_UI_HEADLESS", "1")
+    from phone_designer.skills.create.import_step import ImportStep
+    from phone_designer.skills.reverse_engineer.extract_feature_catalog import (
+        ExtractFeatureCatalog,
+    )
+    from phone_designer.skills._resolvers import _all_faces
+
+    body = ImportStep().apply(None, {"path": str(step)}).body
+    shape = body.wrapped if hasattr(body, "wrapped") else body
+    n_faces = len(_all_faces(shape))
+    cat = ExtractFeatureCatalog().apply(body, {}).extras.get(
+        "feature_catalog", {}) or {}
+    bbox = cat.get("initial_bbox_mm")
+
+    def _kind(items):
+        return [_slim_feature(f, n_faces) for f in (items or [])
+                if isinstance(f, dict)]
+
+    return {
+        "ok": True,
+        "features": {
+            "holes":   _kind(cat.get("holes")),
+            "pockets": _kind(cat.get("pockets")),
+            "bosses":  _kind(cat.get("bosses")),
+        },
+        "bbox_mm": _jsonify(bbox) if bbox is not None else None,
+        "n_faces": int(n_faces),
+    }
+
+
+def _scene_for(ws: Path, body_id: str) -> dict | None:
+    """Return the cached scene dict for body_id, (re)building it from the STEP
+    when the sidecar is stale (same F6 size+mtime invalidation as the GLB).
+    Returns None only when the body_id is unsafe/unknown (→ handler 404s)."""
+    step = _step_for(ws, body_id)   # F4 traversal guard
+    if step is None:
+        return None
+    scene = ws / f"{body_id}.scene.json"
+    src = ws / f"{body_id}.scene.src"
+
+    def _fresh() -> bool:
+        if not scene.exists() or not src.exists():
+            return False
+        st = step.stat()
+        try:
+            size, mtime = json.loads(src.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        return int(size) == st.st_size and float(mtime) >= st.st_mtime
+
+    if _fresh():
+        try:
+            return json.loads(scene.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            pass   # corrupt cache → rebuild below
+    lk = _scene_lock(f"{ws}::{body_id}")
+    with lk:
+        if _fresh():
+            try:
+                return json.loads(scene.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                pass
+        st = step.stat()
+        data = _build_scene(step)
+        text = json.dumps(data)   # strict JSON (no NaN/inf via _jsonify)
+        tmp = ws / f"{body_id}.scene.tmp{os.getpid()}"
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, scene)    # atomic publish
+        src.write_text(json.dumps([st.st_size, st.st_mtime]), encoding="utf-8")
+        return data
+
+
+# ── V3 /section: transient cut-half GLB (a VIEW artifact — no lineage edit) ──
+# split_body(keep='negative', plane) returns a cut-half SOLID; we export it to a
+# TRANSIENT <id>.sec.glb (NEVER a new body_id / .step — sections must not touch
+# lineage). Cached by (body_id, axis, quantized pos) so slider drags reuse work.
+_SECTION_LOCKS: dict[str, threading.Lock] = {}
+_SECTION_LOCKS_GUARD = threading.Lock()
+_AXIS_INDEX = {"x": 0, "y": 1, "z": 2}
+
+
+def _section_lock(key: str) -> "threading.Lock":
+    with _SECTION_LOCKS_GUARD:
+        lk = _SECTION_LOCKS.get(key)
+        if lk is None:
+            lk = _SECTION_LOCKS[key] = threading.Lock()
+        return lk
+
+
+def _quantize_pos(pos: float) -> int:
+    """Quantize a 0..1 slider position to 1/100ths so nearby drags hit the same
+    cache slot (100 buckets is finer than the eye needs, coarse enough to cache)."""
+    return max(0, min(100, int(round(float(pos) * 100.0))))
+
+
+def _section_for(ws: Path, body_id: str, axis: str, pos: float) -> dict | None:
+    """Cut body_id by an axis-aligned plane at fractional ``pos`` (0..1 along the
+    body's bbox on that axis), export the negative (lower) half to a TRANSIENT
+    <id>.sec.glb, and return {ok, glb, cut, note}. Returns None only for an
+    unsafe/unknown body_id (→ 404). If the split misses / is degenerate we fall
+    back to the FULL body GLB with an honest note (ok stays True — the viewer
+    still shows something, just not cut). NEVER creates a new .step / body_id."""
+    step = _step_for(ws, body_id)   # F4 traversal guard
+    if step is None:
+        return None
+    ax = axis.lower()
+    ai = _AXIS_INDEX.get(ax)
+    if ai is None:
+        return None   # validated at the handler, defensive here too
+    q = _quantize_pos(pos)
+    glb = ws / f"{body_id}.sec.glb"
+    src = ws / f"{body_id}.sec.src"
+
+    def _fresh() -> bool:
+        if not glb.exists() or not src.exists():
+            return False
+        st = step.stat()
+        try:
+            size, mtime, cax, cq = json.loads(src.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        return (int(size) == st.st_size and float(mtime) >= st.st_mtime
+                and cax == ax and int(cq) == q)
+
+    if _fresh():
+        return {"ok": True, "glb": glb, "cut": True, "note": ""}
+    lk = _section_lock(f"{ws}::{body_id}")
+    with lk:
+        if _fresh():
+            return {"ok": True, "glb": glb, "cut": True, "note": ""}
+        os.environ.setdefault("PHONE_DESIGNER_UI_HEADLESS", "1")
+        from phone_designer.skills.create.import_step import ImportStep
+        from phone_designer.skills.io.gltf_export import GltfExport
+        from phone_designer.skills.transform.split_body import SplitBody
+
+        st = step.stat()
+        body = ImportStep().apply(None, {"path": str(step)}).body
+        shape = body.wrapped if hasattr(body, "wrapped") else body
+        # bbox on the chosen axis → the plane origin at fraction pos.
+        bb = _shape_bbox(shape)
+        cut = True
+        note = ""
+        cut_body = None
+        if bb is None:
+            cut, note = False, "no bbox (degenerate body); showing full body"
+        else:
+            lo, hi = bb[ai], bb[ai + 3]
+            frac = max(0.0, min(1.0, float(pos)))
+            origin = [0.0, 0.0, 0.0]
+            origin[ai] = lo + (hi - lo) * frac
+            normal = [0.0, 0.0, 0.0]
+            normal[ai] = 1.0
+            try:
+                res = SplitBody().apply(body, {
+                    "plane_origin_mm": origin, "plane_normal": normal,
+                    "keep": "negative"})
+                cut_body = res.body
+            except Exception as exc:  # noqa: BLE001
+                cut = False
+                note = f"split failed ({type(exc).__name__}); showing full body"
+        export_body = cut_body if cut_body is not None else body
+        tmp = ws / f"{body_id}.sec.glb.tmp{os.getpid()}"
+        GltfExport().apply(export_body, {"path": str(tmp), "binary": True})
+        if not tmp.exists():
+            return {"ok": False, "error": "section export produced no GLB"}
+        os.replace(tmp, glb)   # atomic publish
+        src.write_text(json.dumps([st.st_size, st.st_mtime, ax, q]),
+                       encoding="utf-8")
+        return {"ok": True, "glb": glb, "cut": cut, "note": note}
+
+
+def _shape_bbox(shape):
+    """(xmin,ymin,zmin,xmax,ymax,zmax) optimal bbox, or None if void/failed."""
+    try:
+        from OCP.Bnd import Bnd_Box
+        from OCP.BRepBndLib import BRepBndLib
+        bb = Bnd_Box()
+        try:
+            BRepBndLib.AddOptimal_s(shape, bb)
+        except Exception:  # noqa: BLE001
+            BRepBndLib.Add_s(shape, bb)
+        if bb.IsVoid():
+            return None
+        return tuple(float(c) for c in bb.Get())
+    except Exception:  # noqa: BLE001
+        return None
+
+
 class _Handler(http.server.SimpleHTTPRequestHandler):
     ws: Path = Path(".")
 
@@ -290,7 +558,8 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(body)
 
     def do_GET(self):  # noqa: N802
-        path = unquote(urlparse(self.path).path)
+        parsed = urlparse(self.path)
+        path = unquote(parsed.path)
         try:
             if path in ("/", "/index.html"):
                 html = (_STATIC / "index.html").read_bytes()
@@ -307,6 +576,10 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
                 if glb is None:
                     return self._send(404, b"unknown body_id", "text/plain")
                 return self._send(200, glb.read_bytes(), "model/gltf-binary")
+            if path == "/scene":
+                return self._do_scene(parse_qs(parsed.query))
+            if path == "/section":
+                return self._do_section(parse_qs(parsed.query))
             # any other static asset under viewer_static/
             asset = _STATIC / path.lstrip("/")
             if asset.is_file() and _STATIC in asset.resolve().parents:
@@ -315,6 +588,68 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
             return self._send(404, b"not found", "text/plain")
         except Exception as exc:  # noqa: BLE001
             self._send(500, f"{type(exc).__name__}: {exc}".encode(), "text/plain")
+
+    def _do_scene(self, qs: dict):
+        """GET /scene?body_id → {ok, features:{holes,pockets,bosses}, bbox_mm,
+        n_faces}. The feature face_indices ARE the GLB primitive indices the
+        browser highlights (1:1 keystone). Cached per body (immutable-ish, F6)."""
+        body_id = (qs.get("body_id") or [""])[0]
+        if not _safe_body_id(body_id):     # F4: refuse traversal / empty id
+            return self._send(400, json.dumps(
+                {"ok": False, "error": "missing or unsafe body_id"}).encode(),
+                "application/json")
+        scene = _scene_for(self.ws, body_id)
+        if scene is None:
+            return self._send(404, json.dumps(
+                {"ok": False, "error": f"unknown body_id '{body_id}'"}).encode(),
+                "application/json")
+        return self._send(200, json.dumps(scene).encode(), "application/json")
+
+    def _do_section(self, qs: dict):
+        """GET /section?body_id&axis=x|y|z&pos=<0..1> → a fresh TRANSIENT GLB of
+        the body CUT by a plane (keep='negative') so the user sees inside. Bad
+        axis / pos → 400. A missed/degenerate split falls back to the FULL body
+        GLB with an honest note header. NEVER creates a new .step / body_id."""
+        body_id = (qs.get("body_id") or [""])[0]
+        if not _safe_body_id(body_id):     # F4
+            return self._send(400, json.dumps(
+                {"ok": False, "error": "missing or unsafe body_id"}).encode(),
+                "application/json")
+        axis = (qs.get("axis") or ["z"])[0].lower()
+        if axis not in _AXIS_INDEX:        # validate axis ∈ {x,y,z} → 400
+            return self._send(400, json.dumps(
+                {"ok": False, "error": f"axis must be x|y|z, got {axis!r}"}
+            ).encode(), "application/json")
+        pos_raw = (qs.get("pos") or ["0.5"])[0]
+        try:
+            pos = float(pos_raw)
+        except (TypeError, ValueError):
+            return self._send(400, json.dumps(
+                {"ok": False, "error": f"pos must be a number in [0,1], got "
+                 f"{pos_raw!r}"}).encode(), "application/json")
+        if not math.isfinite(pos) or pos < 0.0 or pos > 1.0:  # validate pos∈[0,1]
+            return self._send(400, json.dumps(
+                {"ok": False, "error": f"pos must be in [0,1], got {pos}"}
+            ).encode(), "application/json")
+        res = _section_for(self.ws, body_id, axis, pos)
+        if res is None:
+            return self._send(404, json.dumps(
+                {"ok": False, "error": f"unknown body_id '{body_id}'"}).encode(),
+                "application/json")
+        if not res.get("ok"):
+            return self._send(500, json.dumps(res).encode(), "application/json")
+        glb = res["glb"]
+        data = glb.read_bytes()
+        # honest header: whether the plane actually cut (vs full-body fallback).
+        self.send_response(200)
+        self.send_header("Content-Type", "model/gltf-binary")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("X-Section-Cut", "1" if res.get("cut") else "0")
+        if res.get("note"):
+            self.send_header("X-Section-Note", res["note"])
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(data)
 
     @staticmethod
     def _pick_request_error(payload) -> str | None:

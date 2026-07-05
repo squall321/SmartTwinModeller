@@ -321,3 +321,26 @@ primitive 1개) 덕분에 브라우저 WASM 커널 없이 픽이 가능하다.
 **정직한 한계:** 면 선택만 (에지 픽/단면/측정은 V3 예정). 재질은 단색 steel-blue.
 GLB stem = 뷰어 body_id 이므로 `cad_export(..., name=<stem>)` 로 이름을 맞춰야
 뷰어가 같은 body 를 갱신한다.
+
+---
+
+## V3: 피처 오버레이 · 단면 · 측정 (실제 CAD 인스펙터)
+
+뷰어가 "파란 덩어리 orbit"에서 **"당신의 홀/포켓을 골라, 내부를 잘라 봐, 거리를 재"** 로.
+
+### 피처 오버레이 — "orbit하며 찍기" 대신 "여기 당신의 홀 4개, 하나 고르세요"
+- body 로드 시 `/scene?body_id` → 사이드바에 `Features: 4 holes, 2 pockets` + 피처별 행.
+- 행에 **hover → 그 피처의 face들이 메시에서 하이라이트**(face_indices → faceMeshes[], 검증: 1:1 매핑).
+- 행 **클릭 → 대표 face를 stash** → Claude가 `cad_get_selection`으로 그 홀을 대상으로 작업.
+- Claude 측: `cad_scene(body_id)` → `{holes:[{id,type,face_indices,diameters_mm,depth_mm}], pockets, bosses, bbox, n_faces}`.
+
+### 단면 슬라이더 — 내부 보기
+- X/Y/Z 버튼 + 0~1 슬라이더 → 표시 GLB를 `/section?body_id&axis&pos`로 스왑(절단 절반).
+- **transient view** — body_id/lineage 안 바뀜, 150ms 디바운스. 'OFF'로 전체 복원.
+- Claude 측: `cad_section(body_id, axis, pos)` → 절단 절반의 **새 body_id**(이건 lineage edit — "절반 잘라 견적" 같은 용도. 뷰어의 transient와 구분).
+
+### 측정
+- 'Measure' 토글 → 두 면/점 클릭 → 두 centroid 간 직선거리(점선+라벨, 'point-to-point (click distance)').
+- Claude 측: `cad_measure(body_id, what='distance', entity_a, entity_b)` → 스킬 기반 정밀 거리.
+
+**정직한 경계:** 피처 검출은 extract_feature_catalog(grade 있음), 단면은 뷰용(정밀 벽두께는 cad_measure/drawing_sheet), 측정 토글은 클릭점 거리(엔티티 기반은 cad_measure).

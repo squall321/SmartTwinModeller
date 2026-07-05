@@ -10,7 +10,7 @@ parser needed. See docs/MCP_CLIENT_GUIDE.md for the full tool reference + loops.
 Tools (all ``cad_*``-namespaced), grouped:
   discovery    — cad_list_skills, cad_get_skill_schema, cad_find_recipe
   session      — cad_generate, cad_import, cad_modify, cad_undo, cad_preflight,
-                 cad_measure, cad_preview, cad_export
+                 cad_measure, cad_scene, cad_section, cad_preview, cad_export
   analysis     — cad_analyze, cad_estimate_cost, cad_recommend_process,
                  cad_repair_dfm, cad_dfm_workflow, cad_analyze_assembly
   deliverables — cad_quote_package, cad_drawing, cad_compare, cad_variants,
@@ -594,15 +594,203 @@ def cad_undo(body_id: str) -> dict:
 
 @mcp.tool()
 def cad_measure(body_id: str = "", part_path: str = "",
-                what: str = "mass") -> dict:
-    """MEASURE a body (body_id or part_path, exactly one): what='mass' (volume,
-    centroid, inertia), 'obb' (minimal oriented bounding box — true stock size),
-    or 'dimensions' (auto-extracted key dimensions). Read-only."""
+                what: str = "mass",
+                entity_a: dict | None = None,
+                entity_b: dict | None = None) -> dict:
+    """MEASURE a body (body_id or part_path, exactly one). what:
+      'mass'       — volume, centroid, inertia (default)
+      'obb'        — minimal oriented bounding box (true stock size)
+      'dimensions' — auto-extracted key dimensions
+      'distance'   — Euclidean distance (mm) between entity_a and entity_b via the
+                     `measure` skill. Each entity is a dict:
+                       {"kind":"point","point":[x,y,z]}                  (raw coord)
+                       {"kind":"face_center","selector":{...}}           (a face COM)
+                       {"kind":"edge_midpoint","selector":{...}}         (an edge mid)
+                       {"kind":"bbox_center","selector":{...}}
+                     The common case is two picked centroids: pass two points, e.g.
+                     entity_a={"kind":"point","point":[0,0,0]},
+                     entity_b={"kind":"point","point":[10,0,0]} → distance_mm=10.0.
+                     Returns {distance_mm, a_pos, b_pos}. Read-only.
+    Honest fm.bad_entity refusal on a malformed / unresolvable entity spec."""
     try:
         _ensure_skills()
+        if what == "distance":
+            # point-only fast path resolves WITHOUT a body (the viewer's two picked
+            # centroids need no geometry); any selector-based entity needs one.
+            def _is_point(e):
+                return isinstance(e, dict) and e.get("kind") == "point"
+            if entity_a is None or entity_b is None:
+                return {"ok": False, "error": "fm.bad_entity: what='distance' "
+                        "requires entity_a and entity_b"}
+            body = None
+            if not (_is_point(entity_a) and _is_point(entity_b)):
+                if bool(part_path) == bool(body_id):
+                    return {"ok": False, "error": "fm.bad_entity: selector-based "
+                            "entities need exactly one of body_id | part_path"}
+                body, _ = _resolve(part_path or None, body_id or None)
+            from phone_designer.skills.inspect.measure import Measure
+            try:
+                ext = Measure().apply(body, {
+                    "entity_a": entity_a, "entity_b": entity_b,
+                    "measure_kind": "distance"}).extras
+            except (ValueError, TypeError, KeyError) as bad:
+                return {"ok": False, "error": f"fm.bad_entity: {bad}"}
+            return {"ok": True, "what": "distance",
+                    "distance_mm": ext.get("value_mm"),
+                    "a_pos": ext.get("a_pos"), "b_pos": ext.get("b_pos")}
         from phone_designer.mcp_support._session_tools import measure_body
         body, _ = _resolve(part_path or None, body_id or None)
         return {"ok": True, "what": what, **measure_body(body, what=what)}
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+def cad_scene(body_id: str = "", part_path: str = "") -> dict:
+    """SCENE GRAPH for an LLM: run extract_feature_catalog on a body (body_id OR
+    part_path, exactly one) and return a TRIMMED, strict-JSON-safe summary so Claude
+    can reason about features and TARGET one by its face_indices — e.g. 'you have 4
+    M6 holes and 2 pockets; the pocket you mean is at face_indices [7,8,9], centroid
+    [12,0,5]'. Each hole/pocket/boss carries {id, type, face_indices, diameters_mm |
+    top_d_mm, depth_mm, axis_origin}. Because the GLB emits ONE primitive per OCCT
+    face IN _all_faces ORDER (1:1), a feature's face_indices map DIRECTLY to the
+    browser's faceMeshes[] / GLB primitives — drop a face's axis_origin/centroid into
+    a faces_near_point selector (or cad_get_selection's) to act on THAT feature.
+    Drops the huge matrices (symmetry transforms, per-detector timings) an LLM does
+    not need. Also returns bbox_mm + n_faces + per-type counts. Read-only."""
+    try:
+        _ensure_skills()
+        from phone_designer.skills._resolvers import _all_faces
+        from phone_designer.skills.reverse_engineer.extract_feature_catalog import (
+            ExtractFeatureCatalog,
+        )
+        from phone_designer.mcp_support._session_tools import (
+            _bbox_mm, _json_safe,
+        )
+        body, _ = _resolve(part_path or None, body_id or None)
+        cat = ExtractFeatureCatalog().apply(body, {}).extras["feature_catalog"]
+        if cat.get("skipped"):
+            # oversize mesh-shell guard — surface it honestly instead of {}.
+            return {"ok": True, "skipped": True, "reason": cat.get("reason"),
+                    "face_count": cat.get("face_count"),
+                    "advice": cat.get("advice")}
+        try:
+            n_faces = len(_all_faces(body.wrapped if hasattr(body, "wrapped") else body))
+        except Exception:  # noqa: BLE001
+            n_faces = None
+
+        def _hole(h: dict) -> dict:
+            return {"id": h.get("id"), "type": h.get("type"),
+                    "face_indices": h.get("face_indices"),
+                    "diameters_mm": h.get("diameters_mm"),
+                    "depth_mm": h.get("depth_mm"),
+                    "axis_origin": h.get("axis_origin"),
+                    "standard_match": (h.get("standard_match") or {}).get("label")
+                    if isinstance(h.get("standard_match"), dict)
+                    else h.get("standard_match")}
+
+        def _pocket(p: dict) -> dict:
+            return {"id": p.get("id"), "type": p.get("type"),
+                    "face_indices": p.get("face_indices"),
+                    "top_d_mm": p.get("top_d_mm"), "depth_mm": p.get("depth_mm"),
+                    "axis_origin": p.get("axis_origin")}
+
+        def _boss(b: dict) -> dict:
+            return {"id": b.get("id"), "type": b.get("type"),
+                    "face_indices": b.get("face_indices"),
+                    "center": b.get("center"), "height_mm": b.get("height_mm")}
+
+        holes = [_hole(h) for h in (cat.get("holes") or []) if isinstance(h, dict)]
+        pockets = [_pocket(p) for p in (cat.get("pockets") or []) if isinstance(p, dict)]
+        bosses = [_boss(b) for b in (cat.get("bosses") or []) if isinstance(b, dict)]
+        counts = {"holes": len(holes), "pockets": len(pockets),
+                  "bosses": len(bosses),
+                  "ribs": len(cat.get("ribs") or []),
+                  "lugs": len(cat.get("lugs") or []),
+                  "patterns": len(cat.get("patterns") or []),
+                  "edge_blends": len(cat.get("edge_blends") or [])
+                  if isinstance(cat.get("edge_blends"), list) else 0}
+        return {"ok": True, "n_faces": n_faces,
+                "bbox_mm": _bbox_mm(body),
+                "counts": counts,
+                "holes": _json_safe(holes),
+                "pockets": _json_safe(pockets),
+                "bosses": _json_safe(bosses),
+                "base_thickness_mm": cat.get("base_thickness_mm")}
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+@mcp.tool()
+def cad_section(body_id: str = "", part_path: str = "",
+                axis: str = "z", pos: float = 0.5,
+                keep: str = "negative", name: str = "") -> dict:
+    """SECTION (a REAL lineage edit — cut the part in half and keep a solid half):
+    run split_body(keep='negative'|'positive') with an axis-aligned plane and MINT A
+    NEW body_id for the kept half + its volume, so Claude can 'cut the part in half
+    and quote the half', measure an interior wall, etc. `axis` ∈ {x,y,z}; `pos` is
+    the plane position — a FRACTION 0..1 across the body's bbox on that axis (0.5 =
+    mid-plane) OR, if |pos|>1, an ABSOLUTE world coordinate (mm). keep='negative'
+    (default) returns the half BELOW the plane (−axis side), 'positive' the half
+    above. body_id or part_path, exactly one.
+
+    DISTINCT from the viewer's transient /section (viewer_server.py), which is a
+    VIEW-ONLY clip that never mutates the body's lineage. THIS tool commits a cut
+    body to the session store (parent link → cad_undo returns to the input)."""
+    try:
+        _ensure_skills()
+        from phone_designer.skills.transform.split_body import SplitBody
+        body, _ = _resolve(part_path or None, body_id or None)
+
+        ax = (axis or "z").strip().lower()
+        idx = {"x": 0, "y": 1, "z": 2}.get(ax)
+        if idx is None:
+            return {"ok": False, "error": f"fm.bad_axis: axis must be x|y|z, "
+                    f"got '{axis}'"}
+        if keep not in ("negative", "positive"):
+            return {"ok": False, "error": f"fm.bad_keep: keep must be "
+                    f"'negative'|'positive', got '{keep}'"}
+
+        # bbox to resolve a fractional pos → world coordinate on the chosen axis.
+        from OCP.Bnd import Bnd_Box
+        from OCP.BRepBndLib import BRepBndLib
+        shape = body.wrapped if hasattr(body, "wrapped") else body
+        bb = Bnd_Box()
+        BRepBndLib.Add_s(shape, bb)
+        if bb.IsVoid():
+            return {"ok": False, "error": "fm.empty_body: no bbox for this body"}
+        lo = bb.Get()[idx]
+        hi = bb.Get()[idx + 3]
+        if abs(pos) <= 1.0:
+            coord = lo + float(pos) * (hi - lo)  # fraction across the bbox
+        else:
+            coord = float(pos)                   # absolute world coordinate
+        origin = [0.0, 0.0, 0.0]
+        origin[idx] = coord
+        normal = [0.0, 0.0, 0.0]
+        normal[idx] = 1.0
+
+        res = SplitBody().apply(body, {
+            "plane_origin_mm": tuple(origin),
+            "plane_normal": tuple(normal),
+            "keep": keep,
+        })
+        tr = res.extras.get("transform", {})
+        half = res.body
+        nm = _safe_name(name or f"{_body_name(body_id) or 'part'}_sect")
+        step = str(_WORKSPACE / f"{nm}_{len(_NAMES) + 1}.step")
+        files: dict[str, str] = {}
+        if _write_step(half, step):
+            files["step"] = step
+        new_id = _put_body(half, files.get("step"), nm,
+                           parent_id=body_id or None,
+                           op_note=f"section:{ax}@{round(coord, 4)}:{keep}")
+        return {"ok": True, "body_id": new_id, "parent_body_id": body_id or None,
+                "axis": ax, "plane_pos_mm": round(coord, 4), "keep": keep,
+                "volume_mm3": tr.get("volume_mm3"),
+                "n_pieces_total": tr.get("n_pieces_total"),
+                "files": files,
+                "resource_uris": [_uri(p) for p in files.values()]}
     except Exception as exc:  # noqa: BLE001
         return _err(exc)
 

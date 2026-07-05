@@ -36,6 +36,20 @@ def box_id():
     return g["body_id"]
 
 
+@pytest.fixture(scope="module")
+def box_2holes_id():
+    """A 40×30×10 slab with two Ø6 blind holes — the cad_scene target part."""
+    g = M.cad_generate([
+        {"op": "box", "args": {"length_mm": 40, "width_mm": 30, "height_mm": 10}},
+        {"op": "hole", "args": {"position": [-10, 0, 10], "diameter_mm": 6,
+                                "depth_mm": 10, "direction": "-Z"}},
+        {"op": "hole", "args": {"position": [10, 0, 10], "diameter_mm": 6,
+                                "depth_mm": 10, "direction": "-Z"}},
+    ], name="sess_box2h")
+    assert g["ok"] and g["body_id"]
+    return g["body_id"]
+
+
 # ── session flow ─────────────────────────────────────────────────────────────
 
 def test_modify_decreases_volume_and_links_parent(box_id):
@@ -204,3 +218,85 @@ def test_workspace_pointer_published_at_import():
     ptr = Path(tempfile.gettempdir()) / "pd_mcp_current.txt"
     assert ptr.exists()
     assert ptr.read_text(encoding="utf-8").strip() == str(M._WORKSPACE)
+
+
+# ── V3: cad_scene / cad_measure(distance) / cad_section — LLM reasoning tools ─
+
+def test_scene_reports_holes_with_face_indices(box_2holes_id):
+    # cad_scene surfaces the feature catalog trimmed for an LLM: two Ø6 holes,
+    # each with the face_indices that map 1:1 to GLB primitives / faceMeshes[].
+    sc = M.cad_scene(body_id=box_2holes_id)
+    assert sc["ok"] is True
+    assert sc["counts"]["holes"] == 2
+    assert sc["n_faces"] == 8            # 6 box faces + 2 hole side faces
+    assert sc["bbox_mm"] == pytest.approx([40, 30, 10], abs=0.1)
+    for h in sc["holes"]:
+        assert h["face_indices"] and all(isinstance(i, int) for i in h["face_indices"])
+        assert h["diameters_mm"] == pytest.approx([6.0], abs=0.05)
+        assert h["axis_origin"] and len(h["axis_origin"]) == 3
+    json.dumps(sc, allow_nan=False)     # strict-JSON-safe (matrices dropped)
+
+
+def test_scene_exclusivity_and_unknown_body_are_honest(box_2holes_id):
+    both = M.cad_scene(body_id=box_2holes_id, part_path="x.step")
+    assert both["ok"] is False and "exactly one" in both["error"]
+    nope = M.cad_scene(body_id="body_nope")
+    assert nope["ok"] is False and "unknown_body_id" in nope["error"]
+
+
+def test_measure_distance_two_points_is_10mm(box_id):
+    # the common case: the viewer's two picked centroids → distance. No body needed.
+    d = M.cad_measure(body_id=box_id, what="distance",
+                      entity_a={"kind": "point", "point": [0, 0, 0]},
+                      entity_b={"kind": "point", "point": [10, 0, 0]})
+    assert d["ok"] is True
+    assert d["distance_mm"] == pytest.approx(10.0, abs=1e-6)
+    assert d["a_pos"] == [0, 0, 0] and d["b_pos"] == [10, 0, 0]
+    json.dumps(d, allow_nan=False)
+
+
+def test_measure_distance_face_centers_and_bad_entity(box_id):
+    # selector-based entities resolve against the body (top→bottom face = 10mm);
+    # a malformed entity is an honest fm.bad_entity, never a crash.
+    d = M.cad_measure(body_id=box_id, what="distance",
+                      entity_a={"kind": "face_center",
+                                "selector": {"kind": "faces_by_normal",
+                                             "direction": [0, 0, 1]}},
+                      entity_b={"kind": "face_center",
+                                "selector": {"kind": "faces_by_normal",
+                                             "direction": [0, 0, -1]}})
+    assert d["ok"] is True and d["distance_mm"] == pytest.approx(10.0, abs=1e-4)
+    bad = M.cad_measure(body_id=box_id, what="distance",
+                        entity_a={"kind": "point", "point": [0, 0]},
+                        entity_b={"kind": "point", "point": [1, 1, 1]})
+    assert bad["ok"] is False and "fm.bad_entity" in bad["error"]
+    # a selector entity with no body is refused honestly (not a crash).
+    nb = M.cad_measure(what="distance",
+                       entity_a={"kind": "face_center",
+                                 "selector": {"kind": "faces_by_normal",
+                                              "direction": [0, 0, 1]}},
+                       entity_b={"kind": "point", "point": [0, 0, 0]})
+    assert nb["ok"] is False and "fm.bad_entity" in nb["error"]
+
+
+def test_section_z_mid_returns_new_body_half_volume(box_id):
+    # cad_section is a REAL lineage edit: cut a 40×30×10 (=12000mm³) slab at z-mid,
+    # keep the −Z half → a NEW body_id with ~half the volume + a parent link.
+    sec = M.cad_section(body_id=box_id, axis="z", pos=0.5)
+    assert sec["ok"] is True and sec["body_id"]
+    assert sec["body_id"] != box_id
+    assert sec["parent_body_id"] == box_id
+    assert sec["plane_pos_mm"] == pytest.approx(5.0, abs=1e-3)
+    assert sec["volume_mm3"] == pytest.approx(6000.0, rel=1e-4)
+    # the minted half is a real session body — undo returns to the input.
+    u = M.cad_undo(sec["body_id"])
+    assert u["ok"] is True and u["body_id"] == box_id
+    json.dumps(sec, allow_nan=False)
+
+
+def test_section_positive_keep_and_bad_axis(box_id):
+    pos = M.cad_section(body_id=box_id, axis="x", pos=0.5, keep="positive")
+    assert pos["ok"] is True
+    assert pos["volume_mm3"] == pytest.approx(6000.0, rel=1e-4)  # +X half of 12000
+    bad = M.cad_section(body_id=box_id, axis="w")
+    assert bad["ok"] is False and "fm.bad_axis" in bad["error"]

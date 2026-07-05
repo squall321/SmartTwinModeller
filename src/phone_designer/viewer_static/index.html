@@ -44,6 +44,40 @@
               background:rgba(31,39,51,.82); color:#fff; padding:4px 10px; border-radius:12px;
               font-size:11px; opacity:0; transition:opacity .18s; pointer-events:none; }
   #dragHint.show { opacity:1; }
+  /* ── V3 FEATURE OVERLAY: collapsible sidebar section listing detected features ── */
+  #features { border-top:1px solid #eee; }
+  #featHead { padding:10px 16px; font-size:12px; font-weight:600; cursor:pointer;
+              display:flex; justify-content:space-between; align-items:center;
+              user-select:none; background:#fafbfc; }
+  #featHead:hover { background:#eef4fb; }
+  #featHead .caret { color:#8a94a3; font-size:11px; transition:transform .15s; }
+  #features.collapsed .caret { transform:rotate(-90deg); }
+  #features.collapsed #featList { display:none; }
+  #featList { max-height:34vh; overflow:auto; }
+  .feat { padding:7px 16px; border-bottom:1px solid #f4f5f7; cursor:pointer; font-size:12px; }
+  .feat:hover, .feat.on { background:#fff2e5; }        /* warm hover matches ACCENT */
+  .feat.on { border-left:3px solid #ff8c1a; padding-left:13px; }
+  .feat .ft { font-weight:600; }
+  .feat .fm { color:#8a94a3; font-size:11px; margin-top:1px; }
+  .feat.empty { color:#8a94a3; cursor:default; }
+  .feat.empty:hover { background:transparent; }
+  /* ── V3 SECTION SLIDER: axis buttons + slider, below the toolbar ── */
+  #section { position:absolute; right:12px; top:52px; background:rgba(255,255,255,.94);
+             padding:8px 10px; border-radius:6px; font-size:12px; display:flex; gap:6px;
+             align-items:center; box-shadow:0 1px 6px rgba(0,0,0,.10); }
+  #section button { padding:4px 8px; font-size:12px; background:var(--panel);
+                    color:var(--ink); border:1px solid #cfd6df; border-radius:5px; cursor:pointer; }
+  #section button:hover { background:#eef4fb; border-color:var(--accent); }
+  #section button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #secSlider { width:120px; }
+  #secSlider:disabled { opacity:.4; }
+  #btnMeasure.on { background:#ff8c1a; color:#fff; border-color:#ff8c1a; }
+  /* ── V3 MEASURE: floating readout for point-to-point client distance ── */
+  #measure { position:absolute; left:12px; top:36px; background:rgba(255,255,255,.94);
+             padding:8px 10px; border-radius:6px; font-size:12px; color:#334;
+             box-shadow:0 1px 6px rgba(0,0,0,.10); display:none; max-width:240px; }
+  #measure b { color:#e07b00; }
+  #measure .hint { color:#8a94a3; font-size:11px; }
 </style>
 <script type="importmap">
 { "imports": {
@@ -58,6 +92,11 @@
     <h1>SmartTwin CAD Viewer</h1>
     <button class="btn" onclick="loadBodies()">↻ 새로고침</button>
     <div id="bodies"></div>
+    <!-- V3 FEATURE OVERLAY: collapsible list of detected holes/pockets/bosses -->
+    <div id="features" class="collapsed">
+      <div id="featHead"><span id="featSummary">Features</span><span class="caret">▾</span></div>
+      <div id="featList"></div>
+    </div>
   </div>
   <div id="stage">
     <div id="view"></div>
@@ -66,11 +105,23 @@
       <button id="btnFront" title="정면(+Y에서)">Front</button>
       <button id="btnTop"   title="위(+Z에서)">Top</button>
       <button id="btnIso"   title="아이소메트릭">Iso</button>
+      <button id="btnMeasure" title="두 면 클릭 → 점-점 거리(클릭 거리)">Measure</button>
       <span id="mmchip">mm · —</span>
+    </div>
+    <!-- V3 SECTION SLIDER: X/Y/Z axis + 0..1 slider swap the DISPLAYED glb (transient) -->
+    <div id="section">
+      <span style="color:#556;">Section</span>
+      <button id="secX" data-axis="x" title="X 단면">X</button>
+      <button id="secY" data-axis="y" title="Y 단면">Y</button>
+      <button id="secZ" data-axis="z" title="Z 단면">Z</button>
+      <input id="secSlider" type="range" min="0" max="1" step="0.01" value="0.5" disabled>
+      <button id="secOff" title="단면 끄기 → 원본 복원">OFF</button>
     </div>
     <div id="hud">마우스: 드래그=회전 · 휠=줌 · 우클릭=이동 · 면 클릭=선택</div>
     <div id="err"></div>
     <div id="dragHint">orbit (not a pick)</div>
+    <!-- V3 MEASURE readout (point-to-point client distance) -->
+    <div id="measure"></div>
     <div id="sel"></div>
   </div>
 </div>
@@ -112,6 +163,13 @@ let faceMeshes = [];
 let highlighted = null;          // { mesh, color }  — the currently accented face
 const ACCENT = new THREE.Color(0xff8c1a);      // orange highlight
 const BASE_COLOR = 0x4682c8;
+
+// ── V3 FEATURE OVERLAY state ──
+// A feature = a SET of face primitives (its face_indices). featHi[] holds the
+// restore records for the currently-highlighted feature set so we can un-accent
+// them exactly (mirrors the single-pick `highlighted`, but over many meshes).
+let sceneFeatures = [];          // [{id,type,kind,face_indices,centroid,label,sub}]
+let featHi = [];                 // [{ mesh, color }] — faces accented for a feature
 
 // last framed geometry (center + radius) so camera presets can reuse it
 let framed = { center: new THREE.Vector3(), r: 10 };
@@ -161,30 +219,71 @@ function clearHighlight(){
   }
 }
 
+// ── V3 FEATURE OVERLAY: accent an arbitrary SET of face primitives ──
+// Reuses the exact same ACCENT + emissive approach as single-pick highlight,
+// applied over every face_index of the feature. clearFeatureHighlight restores.
+function clearFeatureHighlight(){
+  for (const h of featHi){
+    if (!h.mesh) continue;
+    h.mesh.material.color.setHex(h.color);
+    h.mesh.material.emissive.setHex(0x000000);
+  }
+  featHi = [];
+}
+function highlightFaces(indices){
+  clearFeatureHighlight();
+  // faceMeshes[] is the REAL body's face array; while a transient section is
+  // displayed those meshes aren't in the scene, so feature highlight is a no-op.
+  if (sectionAxis) return;
+  for (const idx of (indices || [])){
+    const m = faceMeshes[idx];
+    if (!m || !m.material) continue;  // idx out of range / disposed (defensive)
+    featHi.push({ mesh: m, color: m.material.color.getHex() });
+    m.material.color.copy(ACCENT);
+    m.material.emissive.copy(ACCENT);
+    m.material.emissiveIntensity = 0.4;
+  }
+}
+
 window.loadBody = async function(bodyId){
   document.getElementById('err').textContent = '';
   currentBodyId = bodyId;
   document.querySelectorAll('.body').forEach(e=>e.classList.toggle('sel', e.dataset.id===bodyId));
   clearHighlight();
+  clearFeatureHighlight();
+  resetSection();          // a new body → drop any transient section view
+  resetMeasure();          // and any in-progress measurement
   faceMeshes = [];
   if (current){ scene.remove(current); current.traverse(o=>{o.geometry&&o.geometry.dispose(); o.material&&o.material.dispose&&o.material.dispose();}); current=null; }
   if (marker){ scene.remove(marker); marker=null; }
   document.getElementById('sel').style.display='none';
   try {
-    const gltf = await loader.loadAsync('/model/'+encodeURIComponent(bodyId)+'.glb');
-    const root = gltf.scene;
-    // solid steel-blue material so it reads as CAD (GLB has no material here).
-    // CLONE per face so per-face highlight colour works (shared material would recolour all).
-    const mat = new THREE.MeshStandardMaterial({ color:BASE_COLOR, metalness:0.1, roughness:0.65,
-                                                 side:THREE.DoubleSide, flatShading:false });
-    root.traverse(o=>{ if (o.isMesh){ o.material = mat.clone(); faceMeshes.push(o); } });
-    scene.add(root); current = root; frameObject(root);
+    await loadGlbInto('/model/'+encodeURIComponent(bodyId)+'.glb', true);
     document.getElementById('hud').textContent =
       `${bodyId} · ${faceMeshes.length} face-primitive · 드래그=회전 휠=줌`;
+    loadScene(bodyId);   // fire-and-forget: populate the feature sidebar
   } catch(e){
     document.getElementById('err').textContent = '로드 실패: ' + e.message;
   }
 };
+
+// ── shared GLB loader: used by the primary /model load AND the transient
+//    /section swap. `rebuildFaces` is true only for the real body (so
+//    faceMeshes[] stays the OCCT-face-index array); a section is a throwaway
+//    view whose primitives do NOT correspond to the body's OCCT faces. ──
+async function loadGlbInto(url, rebuildFaces){
+  const gltf = await loader.loadAsync(url);
+  const root = gltf.scene;
+  // solid steel-blue material so it reads as CAD (GLB has no material here).
+  // CLONE per face so per-face highlight colour works (shared material would recolour all).
+  const mat = new THREE.MeshStandardMaterial({ color:BASE_COLOR, metalness:0.1, roughness:0.65,
+                                               side:THREE.DoubleSide, flatShading:false });
+  if (rebuildFaces) faceMeshes = [];
+  root.traverse(o=>{ if (o.isMesh){ o.material = mat.clone(); if (rebuildFaces) faceMeshes.push(o); } });
+  if (current){ scene.remove(current); current.traverse(o=>{o.geometry&&o.geometry.dispose(); o.material&&o.material.dispose&&o.material.dispose();}); }
+  scene.add(root); current = root; frameObject(root);
+  return root;
+}
 
 window.loadBodies = async function(){
   const r = await fetch('/api/bodies'); const d = await r.json();
@@ -199,6 +298,257 @@ window.loadBodies = async function(){
     list.appendChild(el);
   }
   loadBody(d.bodies[0].body_id);   // auto-show the newest
+};
+
+// ══════════════════════════════════════════════════════════════════════════
+// V3 (1) FEATURE OVERLAY — fetch /scene?body_id → sidebar list of detected
+// holes / pockets / bosses. Each row highlights its face_indices (a feature =
+// a SET of face primitives → highlightFaces) and, on click, stashes its
+// representative face via POST /pick {face_idx: first face_index} so Claude
+// can act on it. Turns 'orbit a blue blob' into 'here are your 4 holes'.
+// ══════════════════════════════════════════════════════════════════════════
+const featHead = document.getElementById('featHead');
+const featList = document.getElementById('featList');
+const featSummary = document.getElementById('featSummary');
+const featuresBox = document.getElementById('features');
+featHead.onclick = ()=> featuresBox.classList.toggle('collapsed');
+
+// The /scene contract carries the extract_feature_catalog output. Normalise it
+// into a flat list of {kind,id,type,face_indices,centroid,label,sub} regardless
+// of whether the server returns a pre-flattened `features` array or the raw
+// `feature_catalog` dict keyed by kind (holes/pockets/bosses/...).
+const FEATURE_KINDS = ['holes','pockets','bosses','ribs','lugs'];
+function normaliseScene(d){
+  if (Array.isArray(d && d.features)) return d.features;   // server already flattened
+  const cat = (d && (d.feature_catalog || d.catalog)) || d || {};
+  const out = [];
+  for (const kind of FEATURE_KINDS){
+    const arr = cat[kind];
+    if (!Array.isArray(arr)) continue;
+    for (const f of arr){
+      out.push({
+        kind, id: f.id, type: f.type,
+        face_indices: f.face_indices || [],
+        centroid: f.centroid || f.entry_origin || f.axis_origin || null,
+        diameters_mm: f.diameters_mm, depth_mm: f.depth_mm,
+      });
+    }
+  }
+  return out;
+}
+function featLabel(f){
+  const kindName = { holes:'Hole', pockets:'Pocket', bosses:'Boss',
+                     ribs:'Rib', lugs:'Lug' }[f.kind] || (f.kind||'Feature');
+  let sub = f.type || '';
+  if (f.diameters_mm && f.diameters_mm.length) sub += (sub?' · ':'') + '⌀' + f.diameters_mm[0] + 'mm';
+  if (typeof f.depth_mm === 'number')          sub += (sub?' · ':'') + 'depth ' + f.depth_mm + 'mm';
+  sub += (sub?' · ':'') + (f.face_indices.length) + ' face';
+  return { title: `${kindName} #${f.id}`, sub };
+}
+function sceneSummary(feats){
+  const by = {};
+  for (const f of feats) by[f.kind] = (by[f.kind]||0) + 1;
+  const parts = [];
+  const label = { holes:'holes', pockets:'pockets', bosses:'bosses', ribs:'ribs', lugs:'lugs' };
+  for (const k of FEATURE_KINDS) if (by[k]) parts.push(`${by[k]} ${label[k]}`);
+  return parts.length ? 'Features: ' + parts.join(', ') : 'Features: none detected';
+}
+
+async function loadScene(bodyId){
+  sceneFeatures = [];
+  featList.innerHTML = '';
+  featSummary.textContent = 'Features …';
+  try {
+    const r = await fetch('/scene?body_id=' + encodeURIComponent(bodyId));
+    if (!r.ok){ featSummary.textContent = 'Features: (unavailable)'; return; }
+    const d = await r.json();
+    if (bodyId !== currentBodyId) return;            // body changed while fetching
+    sceneFeatures = normaliseScene(d);
+    renderFeatureList();
+  } catch(_){
+    featSummary.textContent = 'Features: (unavailable)';
+  }
+}
+
+function renderFeatureList(){
+  featSummary.textContent = sceneSummary(sceneFeatures);
+  featList.innerHTML = '';
+  if (!sceneFeatures.length){
+    const e = document.createElement('div');
+    e.className = 'feat empty';
+    e.textContent = '검출된 피처 없음';
+    featList.appendChild(e);
+    return;
+  }
+  sceneFeatures.forEach((f, i)=>{
+    const { title, sub } = featLabel(f);
+    const row = document.createElement('div');
+    row.className = 'feat'; row.dataset.i = i;
+    row.innerHTML = `<div class="ft">${title}</div><div class="fm">${sub}</div>`;
+    // HOVER → highlight this feature's face_indices set (reuses ACCENT material)
+    row.onmouseenter = ()=> highlightFaces(f.face_indices);
+    row.onmouseleave = ()=> { if (!row.classList.contains('on')) clearFeatureHighlight(); };
+    // CLICK → keep it highlighted + stash its representative face for Claude
+    row.onclick = ()=> selectFeature(i);
+    featList.appendChild(row);
+  });
+}
+
+async function selectFeature(i){
+  const f = sceneFeatures[i];
+  if (!f) return;
+  featList.querySelectorAll('.feat').forEach(e=> e.classList.toggle('on', +e.dataset.i === i));
+  highlightFaces(f.face_indices);
+  const faceIdx = (f.face_indices && f.face_indices.length) ? f.face_indices[0] : null;
+  if (faceIdx == null || !currentBodyId) return;
+  // Stash the representative face (first face_index) via the SAME /pick path a
+  // manual click uses — so 'clicked a hole in the list' == 'picked its face'.
+  try {
+    const resp = await fetch('/pick', { method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ body_id: currentBodyId, face_idx: faceIdx }) });
+    const s = await resp.json();
+    const selBox = document.getElementById('sel');
+    if (!s.ok){ selBox.style.display='none'; return; }
+    const { title } = featLabel(f);
+    selBox.style.display='block';
+    selBox.innerHTML =
+      `<b>${title} 선택됨</b> · face #${s.face_idx} (${s.surface_type})<br>` +
+      `centroid [${s.centroid.join(', ')}]<br>` +
+      `area ${s.area_mm2} mm²<br><br>` +
+      `Claude에게: <i>"방금 고른 ${title}을(를) 처리해줘"</i><br>` +
+      `<span style="color:#8a94a3">selector: <code>${JSON.stringify(s.selector)}</code></span>`;
+  } catch(err){ document.getElementById('err').textContent = 'pick 실패: '+err.message; }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// V3 (2) SECTION SLIDER — X/Y/Z + 0..1 slider swap the DISPLAYED glb to
+// /section?body_id&axis&pos (TRANSIENT — does NOT change currentBodyId or the
+// body's lineage). 'OFF' restores /model. Slider is debounced (~150ms).
+// ══════════════════════════════════════════════════════════════════════════
+const secSlider = document.getElementById('secSlider');
+const secOff = document.getElementById('secOff');
+const secBtns = { x: document.getElementById('secX'),
+                  y: document.getElementById('secY'),
+                  z: document.getElementById('secZ') };
+let sectionAxis = null;          // null = section OFF (showing /model)
+let sectionDebounce = null;
+
+function resetSection(){
+  // restore UI to OFF; does NOT reload the model (caller loads it)
+  sectionAxis = null;
+  clearTimeout(sectionDebounce); sectionDebounce = null;
+  secSlider.disabled = true;
+  Object.values(secBtns).forEach(b=> b.classList.remove('on'));
+}
+async function applySection(){
+  if (!sectionAxis || !currentBodyId) return;
+  const pos = parseFloat(secSlider.value);
+  const url = `/section?body_id=${encodeURIComponent(currentBodyId)}`
+            + `&axis=${sectionAxis}&pos=${pos}`;
+  try {
+    // TRANSIENT swap: rebuildFaces=false → does NOT touch faceMeshes[] (the
+    // section's primitives are NOT the body's OCCT faces) or currentBodyId.
+    await loadGlbInto(url, false);
+    document.getElementById('hud').textContent =
+      `${currentBodyId} · SECTION ${sectionAxis.toUpperCase()} @ ${pos.toFixed(2)} (transient view)`;
+  } catch(e){
+    document.getElementById('err').textContent = 'section 실패: ' + e.message;
+  }
+}
+function setSectionAxis(axis){
+  if (!currentBodyId) return;
+  sectionAxis = axis;
+  secSlider.disabled = false;
+  Object.entries(secBtns).forEach(([k,b])=> b.classList.toggle('on', k===axis));
+  // picking/feature highlight is meaningless on the transient section mesh
+  clearHighlight(); clearFeatureHighlight();
+  applySection();
+}
+secBtns.x.onclick = ()=> setSectionAxis('x');
+secBtns.y.onclick = ()=> setSectionAxis('y');
+secBtns.z.onclick = ()=> setSectionAxis('z');
+secSlider.oninput = ()=>{
+  if (!sectionAxis) return;
+  clearTimeout(sectionDebounce);
+  sectionDebounce = setTimeout(applySection, 150);   // debounce so it doesn't spam the server
+};
+secOff.onclick = ()=>{
+  const wasOn = sectionAxis !== null;
+  resetSection();
+  // restore the real body GLB (transient section discarded, lineage untouched)
+  if (wasOn && currentBodyId){
+    loadGlbInto('/model/'+encodeURIComponent(currentBodyId)+'.glb', true)
+      .then(()=>{ document.getElementById('hud').textContent =
+        `${currentBodyId} · ${faceMeshes.length} face-primitive · Section OFF`; })
+      .catch(e=> document.getElementById('err').textContent = '복원 실패: '+e.message);
+  }
+};
+
+// ══════════════════════════════════════════════════════════════════════════
+// V3 (3) MEASURE — 'Measure' toggle. When ON, the next TWO face picks are
+// captured as a,b; the straight-line distance is computed CLIENT-SIDE
+// (Vector3.distanceTo on the two hit points), shown as two centroid markers,
+// a dashed line + a label. Labelled 'point-to-point (click distance)' — this
+// is the instant visual, NOT the true skill-based measure (that's the MCP track).
+// ══════════════════════════════════════════════════════════════════════════
+const btnMeasure = document.getElementById('btnMeasure');
+const measureBox = document.getElementById('measure');
+let measureMode = false;
+let measurePts = [];             // [Vector3, Vector3] world hit points
+let measureMarkers = [];         // small spheres at each measured point
+let measureLine = null;          // dashed THREE.Line between the two points
+
+function clearMeasureViz(){
+  for (const m of measureMarkers) scene.remove(m);
+  measureMarkers = [];
+  if (measureLine){ scene.remove(measureLine); measureLine.geometry.dispose(); measureLine.material.dispose(); measureLine = null; }
+}
+function resetMeasure(){
+  measurePts = [];
+  clearMeasureViz();
+  measureBox.style.display = 'none';
+}
+function measureMarker(p){
+  const box = new THREE.Box3().setFromObject(current || scene);
+  const r = (box.getSize(new THREE.Vector3()).length() * 0.01) || 0.3;
+  const s = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 10),
+                           new THREE.MeshBasicMaterial({ color:0xe07b00 }));
+  s.position.copy(p); scene.add(s); measureMarkers.push(s);
+}
+function addMeasurePoint(p){
+  if (measurePts.length >= 2) resetMeasure();      // third pick starts a new measurement
+  measurePts.push(p.clone());
+  measureMarker(p);
+  measureBox.style.display = 'block';
+  if (measurePts.length === 1){
+    measureBox.innerHTML = `<b>Measure</b> · 점 A 선택됨<br>` +
+      `<span class="hint">두 번째 면을 클릭하세요</span>`;
+  } else {
+    const a = measurePts[0], b = measurePts[1];
+    // client-side straight-line distance; GLB coords are metres → ×1000 = mm
+    const dMm = a.distanceTo(b) * 1000;
+    const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
+    measureLine = new THREE.Line(geo,
+      new THREE.LineDashedMaterial({ color:0xe07b00, dashSize:(a.distanceTo(b)*0.04)||0.2,
+                                     gapSize:(a.distanceTo(b)*0.025)||0.12, linewidth:2 }));
+    measureLine.computeLineDistances();            // required for dashes to render
+    scene.add(measureLine);
+    measureBox.innerHTML =
+      `<b>${dMm.toFixed(2)} mm</b><br>` +
+      `<span class="hint">point-to-point (click distance)</span>`;
+  }
+}
+btnMeasure.onclick = ()=>{
+  measureMode = !measureMode;
+  btnMeasure.classList.toggle('on', measureMode);
+  if (measureMode){
+    measureBox.style.display = 'block';
+    measureBox.innerHTML = `<b>Measure ON</b><br>` +
+      `<span class="hint">두 면을 클릭 → 점-점 거리</span>`;
+  } else {
+    resetMeasure();
+  }
 };
 
 // ── V3 AUTO-REFRESH: poll /api/bodies; load a genuinely-new newest body, but never
@@ -258,8 +608,12 @@ renderer.domElement.addEventListener('pointerup', async e => {
   pointer.y = -((e.clientY-rect.top)/rect.height)*2 + 1;
   raycaster.setFromCamera(pointer, camera);
   const hits = raycaster.intersectObject(current, true);
-  if (!hits.length){ document.getElementById('sel').style.display='none'; return; }
+  if (!hits.length){ if (!measureMode) document.getElementById('sel').style.display='none'; return; }
   const p = hits[0].point;   // 3D world point on the surface (fallback field only)
+
+  // V3 MEASURE: in measure mode a pick is a distance point, NOT a face stash.
+  // Capture the hit point and (on the 2nd) draw the dashed line + client distance.
+  if (measureMode){ addMeasurePoint(p); return; }
 
   // F1: the hit mesh's traverse index IS the OCCT face index (GLB is 1:1 with _all_faces()).
   const faceIdx = faceMeshes.indexOf(hits[0].object);
