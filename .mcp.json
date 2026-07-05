@@ -5,7 +5,8 @@
       "args": ["-m", "phone_designer.mcp_server"],
       "env": {
         "PYTHONPATH": "src",
-        "PHONE_DESIGNER_UI_HEADLESS": "1"
+        "PHONE_DESIGNER_UI_HEADLESS": "1",
+        "PHONE_DESIGNER_MCP_WORKSPACE": "${workspaceFolder}/.pd_workspace"
       }
     }
   }

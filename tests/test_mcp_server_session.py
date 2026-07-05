@@ -138,3 +138,69 @@ def test_compare_wiring(box_id):
     c = M.cad_compare(body_a=box_id, body_b=g2["body_id"])
     assert c["ok"] is True
     assert c.get("summary", {}).get("classification")
+
+
+# ── F2: the full viewer→MCP loop (namespace bridge) is closed ────────────────
+
+def test_get_selection_reports_current_body_id_and_hint():
+    # F2: cad_get_selection surfaces current_body_id (the newest viewer stem) and
+    # a modify_hint even before/with a stash, so Claude can bridge the stem↔id gap.
+    g = M.cad_generate([{"op": "box", "args": {
+        "length_mm": 30, "width_mm": 20, "height_mm": 10}}], name="f2_probe")
+    assert g["ok"]
+    gs = M.cad_get_selection()
+    # current_body_id is the newest STEP stem in the workspace (== 'f2_probe').
+    assert gs.get("current_body_id") == "f2_probe"
+
+
+def test_full_viewer_to_modify_round_trip():
+    # THE loop-completer (F1+F2): cad_generate(name=X) → export step → viewer
+    # pick_face_by_index → cad_get_selection → cad_modify(mcp_body_id, {selector
+    # from get_selection}) == ok. The selector is body-agnostic so it lands on
+    # the clicked face of the client's OWN session body.
+    from pathlib import Path
+
+    from phone_designer import viewer_server as V
+    from phone_designer.skills._resolvers import _all_faces, _face_center
+    from phone_designer.skills.create.import_step import ImportStep
+
+    g = M.cad_generate([{"op": "box", "args": {
+        "length_mm": 40, "width_mm": 20, "height_mm": 10}}],
+        name="f2_loop", formats=["step"])
+    assert g["ok"] and g["body_id"]
+    mcp_body_id = g["body_id"]
+    ws = M._WORKSPACE
+    assert (Path(ws) / "f2_loop.step").exists()          # viewer stem == 'f2_loop'
+
+    # user picks the top face in the viewer (server uses faces[idx] directly).
+    faces = _all_faces(ImportStep().apply(
+        None, {"path": str(Path(ws) / "f2_loop.step")}).body.wrapped)
+    top_idx = max(range(len(faces)), key=lambda i: _face_center(faces[i])[2])
+    sel = V.pick_face_by_index(Path(ws), "f2_loop", top_idx)
+    assert sel["ok"] and abs(sel["centroid"][2] - 10.0) < 1e-3
+
+    # Claude reads the selection …
+    gs = M.cad_get_selection()
+    assert gs["ok"] and gs["current_body_id"] == "f2_loop"
+    selector = gs["selector"]
+
+    # … and drops the body-agnostic selector into cad_modify on its OWN body_id.
+    m = M.cad_modify(mcp_body_id, [{
+        "op": "fillet_edges_by_predicate",
+        "args": {"selector": {"kind": "edges_on_face", "face": selector},
+                 "radius_mm": 2.0}}])
+    assert m["ok"] is True and m["body_id"]               # loop closed: ok=True
+    assert m["parent_body_id"] == mcp_body_id
+    # the fillet actually landed (top face's 4 edges rounded → volume dropped).
+    assert m["volume_mm3"] < 8000.0
+    json.dumps(m, allow_nan=False)                        # strict-JSON-safe
+
+
+def test_workspace_pointer_published_at_import():
+    # F3(a): the MCP server drops its live _WORKSPACE into the well-known pointer
+    # file so the separate viewer process binds the SAME dir.
+    import tempfile
+    from pathlib import Path
+    ptr = Path(tempfile.gettempdir()) / "pd_mcp_current.txt"
+    assert ptr.exists()
+    assert ptr.read_text(encoding="utf-8").strip() == str(M._WORKSPACE)

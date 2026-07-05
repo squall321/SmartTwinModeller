@@ -66,6 +66,25 @@ def _edge_length(edge) -> float:
     return GCPnts_AbscissaPoint.Length_s(BRepAdaptor_Curve(edge))
 
 
+def _edge_midpoint(edge) -> tuple[float, float, float]:
+    """3D point at the edge's MID-PARAMETER (curve centre).
+
+    For a straight edge this is the chord midpoint; for an arc it is the true
+    on-curve mid-point (unlike the vertex-average, which cuts the chord). Used
+    by edges_near_point so a viewer click near a rounded edge still resolves to
+    the closest edge. Falls back to the vertex midpoint if the curve adaptor
+    cannot be built.
+    """
+    try:
+        curve = BRepAdaptor_Curve(edge)
+        t = 0.5 * (curve.FirstParameter() + curve.LastParameter())
+        p = curve.Value(t)
+        return (p.X(), p.Y(), p.Z())
+    except Exception:
+        p1, p2 = _edge_endpoints(edge)
+        return ((p1.X() + p2.X()) / 2, (p1.Y() + p2.Y()) / 2, (p1.Z() + p2.Z()) / 2)
+
+
 def _face_center(face) -> tuple[float, float, float]:
     props = GProp_GProps()
     BRepGProp.SurfaceProperties_s(face, props)
@@ -126,6 +145,23 @@ def resolve_edges(shape, selector: SelectorBase) -> list:
                     and mn[2] <= cz <= mx[2]):
                 out.append(e)
         return out
+
+    if kind == "edges_near_point":
+        # viewer edge-pick resolver: the n edges whose MIDPOINT is nearest
+        # `point`, each within tol_mm. Coordinate-based → survives a modify STEP
+        # round trip (same durable idea as faces_near_point). The GLB carries no
+        # edge geometry, so V1 picks off the FACE raycast hit point: a click near
+        # an edge on the surface resolves to that edge.
+        px, py, pz = selector.point
+        tol2 = float(selector.tol_mm) ** 2
+        ranked = []
+        for e in _all_edges(shape):
+            mx, my, mz = _edge_midpoint(e)
+            d2 = (mx - px) ** 2 + (my - py) ** 2 + (mz - pz) ** 2
+            if d2 <= tol2:
+                ranked.append((d2, e))
+        ranked.sort(key=lambda t: t[0])
+        return [e for _, e in ranked[: max(1, int(selector.n))]]
 
     if kind == "edges_by_length":
         out = []

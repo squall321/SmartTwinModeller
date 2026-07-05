@@ -25,13 +25,25 @@
   #hud { position:absolute; left:12px; bottom:12px; background:rgba(255,255,255,.85);
          padding:6px 10px; border-radius:6px; font-size:12px; color:#556; }
   #err { position:absolute; left:12px; top:12px; color:#b23; font-size:12px; }
-  #sel { position:absolute; right:12px; top:12px; background:rgba(255,255,255,.92);
+  #sel { position:absolute; right:12px; top:56px; background:rgba(255,255,255,.92);
          padding:10px 12px; border-radius:6px; font-size:12px; max-width:280px;
          box-shadow:0 1px 6px rgba(0,0,0,.12); display:none; }
   #sel b { color:var(--accent); }
   #sel code { background:#eef2f7; padding:1px 4px; border-radius:3px; font-size:11px; }
   .btn { display:inline-block; margin:8px 16px; padding:6px 10px; font-size:12px;
          background:var(--accent); color:#fff; border:none; border-radius:5px; cursor:pointer; }
+  /* camera presets + unit chip toolbar, top-right of the stage */
+  #toolbar { position:absolute; right:12px; top:12px; display:flex; gap:6px; align-items:center; }
+  #toolbar button { padding:5px 9px; font-size:12px; background:var(--panel);
+                    color:var(--ink); border:1px solid #cfd6df; border-radius:5px; cursor:pointer; }
+  #toolbar button:hover { background:#eef4fb; border-color:var(--accent); }
+  #mmchip { padding:5px 9px; font-size:11px; font-weight:600; background:#eef2f7;
+            color:#556; border:1px solid #dde1e6; border-radius:5px; }
+  /* drag-consumed hint (transient) */
+  #dragHint { position:absolute; left:50%; top:14px; transform:translateX(-50%);
+              background:rgba(31,39,51,.82); color:#fff; padding:4px 10px; border-radius:12px;
+              font-size:11px; opacity:0; transition:opacity .18s; pointer-events:none; }
+  #dragHint.show { opacity:1; }
 </style>
 <script type="importmap">
 { "imports": {
@@ -49,8 +61,16 @@
   </div>
   <div id="stage">
     <div id="view"></div>
+    <div id="toolbar">
+      <button id="btnReset" title="프레임 리셋">Reset</button>
+      <button id="btnFront" title="정면(+Y에서)">Front</button>
+      <button id="btnTop"   title="위(+Z에서)">Top</button>
+      <button id="btnIso"   title="아이소메트릭">Iso</button>
+      <span id="mmchip">mm · —</span>
+    </div>
     <div id="hud">마우스: 드래그=회전 · 휠=줌 · 우클릭=이동 · 면 클릭=선택</div>
     <div id="err"></div>
+    <div id="dragHint">orbit (not a pick)</div>
     <div id="sel"></div>
   </div>
 </div>
@@ -84,6 +104,18 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 let marker = null;   // small sphere at the picked point
 
+// ── F1/V-보조 pick state ──
+// faceMeshes[] holds each face Mesh IN TRAVERSE ORDER — its index is the OCCT face_idx
+// the GLB emits one primitive per OCCT face in _all_faces() order (1:1), so the traverse
+// index the browser hits IS the server's face index. No coordinate conversion needed.
+let faceMeshes = [];
+let highlighted = null;          // { mesh, color }  — the currently accented face
+const ACCENT = new THREE.Color(0xff8c1a);      // orange highlight
+const BASE_COLOR = 0x4682c8;
+
+// last framed geometry (center + radius) so camera presets can reuse it
+let framed = { center: new THREE.Vector3(), r: 10 };
+
 function resize(){
   const w = view.clientWidth, h = view.clientHeight;
   renderer.setSize(w, h); camera.aspect = w/h; camera.updateProjectionMatrix();
@@ -95,30 +127,60 @@ function frameObject(obj){
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
   const r = Math.max(size.x, size.y, size.z) || 10;
+  framed.center.copy(center); framed.r = r;
   controls.target.copy(center);
   camera.position.set(center.x + r*1.4, center.y - r*1.6, center.z + r*1.2);
   camera.near = r/100; camera.far = r*100; camera.updateProjectionMatrix();
   controls.update();
+  // mm chip: report bbox size (GLB coords are metres → ×1000 for mm)
+  const mm = v => (v*1000).toFixed(1);
+  document.getElementById('mmchip').textContent =
+    `mm · ${mm(size.x)} × ${mm(size.y)} × ${mm(size.z)}`;
+}
+
+// Camera presets — reuse framed.center / framed.r, place camera along an axis.
+function viewAlong(dir){
+  const c = framed.center, r = framed.r || 10;
+  const d = dir.clone().normalize().multiplyScalar(r * 2.4);
+  camera.position.copy(c).add(d);
+  camera.up.set(0, 0, 1);                       // GLB is +Z up
+  controls.target.copy(c);
+  camera.near = r/100; camera.far = r*100; camera.updateProjectionMatrix();
+  controls.update();
+}
+document.getElementById('btnReset').onclick = ()=>{ if (current) frameObject(current); };
+document.getElementById('btnFront').onclick = ()=> viewAlong(new THREE.Vector3(0, -1, 0));
+document.getElementById('btnTop').onclick   = ()=>{ camera.up.set(0,1,0); viewAlong(new THREE.Vector3(0, 0, 1)); };
+document.getElementById('btnIso').onclick   = ()=> viewAlong(new THREE.Vector3(1, -1, 0.8));
+
+function clearHighlight(){
+  if (highlighted){
+    highlighted.mesh.material.color.setHex(highlighted.color);
+    highlighted.mesh.material.emissive.setHex(0x000000);
+    highlighted = null;
+  }
 }
 
 window.loadBody = async function(bodyId){
   document.getElementById('err').textContent = '';
   currentBodyId = bodyId;
   document.querySelectorAll('.body').forEach(e=>e.classList.toggle('sel', e.dataset.id===bodyId));
-  if (current){ scene.remove(current); current.traverse(o=>{o.geometry&&o.geometry.dispose();}); current=null; }
+  clearHighlight();
+  faceMeshes = [];
+  if (current){ scene.remove(current); current.traverse(o=>{o.geometry&&o.geometry.dispose(); o.material&&o.material.dispose&&o.material.dispose();}); current=null; }
   if (marker){ scene.remove(marker); marker=null; }
   document.getElementById('sel').style.display='none';
   try {
     const gltf = await loader.loadAsync('/model/'+encodeURIComponent(bodyId)+'.glb');
     const root = gltf.scene;
-    // solid steel-blue material so it reads as CAD (GLB has no material here)
-    const mat = new THREE.MeshStandardMaterial({ color:0x4682c8, metalness:0.1, roughness:0.65,
+    // solid steel-blue material so it reads as CAD (GLB has no material here).
+    // CLONE per face so per-face highlight colour works (shared material would recolour all).
+    const mat = new THREE.MeshStandardMaterial({ color:BASE_COLOR, metalness:0.1, roughness:0.65,
                                                  side:THREE.DoubleSide, flatShading:false });
-    let nPrim = 0;
-    root.traverse(o=>{ if (o.isMesh){ o.material = mat; nPrim++; } });
+    root.traverse(o=>{ if (o.isMesh){ o.material = mat.clone(); faceMeshes.push(o); } });
     scene.add(root); current = root; frameObject(root);
     document.getElementById('hud').textContent =
-      `${bodyId} · ${nPrim} face-primitive · 드래그=회전 휠=줌`;
+      `${bodyId} · ${faceMeshes.length} face-primitive · 드래그=회전 휠=줌`;
   } catch(e){
     document.getElementById('err').textContent = '로드 실패: ' + e.message;
   }
@@ -139,15 +201,57 @@ window.loadBodies = async function(){
   loadBody(d.bodies[0].body_id);   // auto-show the newest
 };
 
-// ── face PICK: click a face → server resolves the OCCT face → show selector ──
+// ── V3 AUTO-REFRESH: poll /api/bodies; load a genuinely-new newest body, but never
+//    steal the view/selection while the user is orbiting or has a face selected on it. ──
+let lastNewestStem = null;
+async function pollBodies(){
+  try {
+    const r = await fetch('/api/bodies'); const d = await r.json();
+    if (!d.bodies || !d.bodies.length) return;
+    const newest = d.bodies[0].body_id;
+    if (newest === lastNewestStem) return;              // nothing new
+    lastNewestStem = newest;
+    if (newest === currentBodyId) return;               // already showing it
+    // don't steal view if user is mid-orbit or has a live selection on the current body
+    const busy = pointerDown || highlighted !== null;
+    if (busy) return;
+    await loadBodies();                                 // rebuild list + auto-show newest (reframes)
+  } catch(_){ /* transient poll error — ignore */ }
+}
+setInterval(pollBodies, 1500);
+
+// ── face PICK: click a face → server maps face_idx → OCCT face → show selector ──
+// DRAG-VS-CLICK: a pick requires (a) movement < ~9px AND (b) pointerup within ~300ms of
+// pointerdown. A slow careful click used to be eaten as orbit; the time+distance window
+// fixes that. If a drag is consumed, flash an 'orbit (not a pick)' hint.
 let downPos = null;
-renderer.domElement.addEventListener('pointerdown', e => { downPos = [e.clientX, e.clientY]; });
+let downTime = 0;
+let pointerDown = false;
+const MOVE_PX = 9;          // drag threshold (raised from 5)
+const CLICK_MS = 300;       // must release within this window to count as a pick
+
+const dragHint = document.getElementById('dragHint');
+let dragHintTimer = null;
+function flashDragHint(){
+  dragHint.classList.add('show');
+  clearTimeout(dragHintTimer);
+  dragHintTimer = setTimeout(()=>dragHint.classList.remove('show'), 700);
+}
+
+renderer.domElement.addEventListener('pointerdown', e => {
+  downPos = [e.clientX, e.clientY]; downTime = performance.now(); pointerDown = true;
+});
 renderer.domElement.addEventListener('pointerup', async e => {
-  // only treat as a pick if the pointer didn't drag (that's a rotate)
-  if (!downPos || !current || !currentBodyId) return;
+  pointerDown = false;
+  if (!downPos || !current || !currentBodyId){ downPos = null; return; }
   const moved = Math.hypot(e.clientX-downPos[0], e.clientY-downPos[1]);
+  const dt = performance.now() - downTime;
   downPos = null;
-  if (moved > 5 || e.button !== 0) return;   // dragged = orbit, not a pick
+  if (e.button !== 0) return;                  // non-left = pan/context, not a pick
+  if (moved > MOVE_PX || dt > CLICK_MS){       // dragged OR held too long = orbit
+    if (moved > MOVE_PX) flashDragHint();
+    return;
+  }
 
   const rect = renderer.domElement.getBoundingClientRect();
   pointer.x = ((e.clientX-rect.left)/rect.width)*2 - 1;
@@ -155,9 +259,23 @@ renderer.domElement.addEventListener('pointerup', async e => {
   raycaster.setFromCamera(pointer, camera);
   const hits = raycaster.intersectObject(current, true);
   if (!hits.length){ document.getElementById('sel').style.display='none'; return; }
-  const p = hits[0].point;   // 3D world point on the surface
+  const p = hits[0].point;   // 3D world point on the surface (fallback field only)
 
-  // marker at the pick
+  // F1: the hit mesh's traverse index IS the OCCT face index (GLB is 1:1 with _all_faces()).
+  const faceIdx = faceMeshes.indexOf(hits[0].object);
+
+  // V-보조 HIGHLIGHT: restore the previous face, accent the hit face so the user SEES
+  // which face was chosen (and can catch a server mispick visually).
+  clearHighlight();
+  if (faceIdx >= 0){
+    const m = hits[0].object;
+    highlighted = { mesh: m, color: m.material.color.getHex() };
+    m.material.color.copy(ACCENT);
+    m.material.emissive.copy(ACCENT);
+    m.material.emissiveIntensity = 0.45;
+  }
+
+  // marker at the pick point (visual reference)
   if (marker) scene.remove(marker);
   const box = new THREE.Box3().setFromObject(current);
   const r = box.getSize(new THREE.Vector3()).length() * 0.012 || 0.5;
@@ -165,17 +283,18 @@ renderer.domElement.addEventListener('pointerup', async e => {
                           new THREE.MeshBasicMaterial({ color:0xff5533 }));
   marker.position.copy(p); scene.add(marker);
 
-  // ask the server which OCCT face that is (nearest-centroid)
+  // Tell the server WHICH face by index; it maps faces[face_idx] directly (no centroid search).
+  // point[] kept as a fallback field only.
   try {
     const resp = await fetch('/pick', { method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ body_id: currentBodyId, point:[p.x, p.y, p.z] }) });
+      body: JSON.stringify({ body_id: currentBodyId, face_idx: faceIdx, point:[p.x, p.y, p.z] }) });
     const s = await resp.json();
-    const box = document.getElementById('sel');
-    if (!s.ok){ box.style.display='none'; return; }
+    const selBox = document.getElementById('sel');
+    if (!s.ok){ selBox.style.display='none'; return; }
     const sel = JSON.stringify(s.selector);
-    box.style.display='block';
-    box.innerHTML =
+    selBox.style.display='block';
+    selBox.innerHTML =
       `<b>면 선택됨</b> · face #${s.face_idx} (${s.surface_type})<br>` +
       `centroid [${s.centroid.join(', ')}]<br>` +
       `area ${s.area_mm2} mm²<br><br>` +

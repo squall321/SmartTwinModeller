@@ -46,6 +46,22 @@ _WORKSPACE = Path(os.environ.get("PHONE_DESIGNER_MCP_WORKSPACE")
 _WORKSPACE.mkdir(parents=True, exist_ok=True)
 
 
+def _publish_workspace_pointer() -> None:
+    """F3(a): drop this server's live _WORKSPACE path into a well-known pointer
+    file (gettempdir()/pd_mcp_current.txt) at import, so the SEPARATE viewer
+    process (viewer_server._workspace) can bind the SAME dir even when
+    PHONE_DESIGNER_MCP_WORKSPACE is unset. Best-effort — never crash the server
+    if the temp dir is unwritable."""
+    try:
+        ptr = Path(tempfile.gettempdir()) / "pd_mcp_current.txt"
+        ptr.write_text(str(_WORKSPACE), encoding="utf-8")
+    except OSError:
+        pass
+
+
+_publish_workspace_pointer()
+
+
 def _safe_name(name: str) -> str:
     """Sanitise an artifact basename — no path traversal / separators."""
     base = re.sub(r"[^A-Za-z0-9_.-]", "_", (name or "part").strip()) or "part"
@@ -803,23 +819,51 @@ def cad_analyze_assembly(assembly_path: str,
         return _err(exc)
 
 
+def _newest_stem(ws: Path) -> str | None:
+    """The body_id of the newest STEP the viewer would be showing — i.e. the STEP
+    stem with the latest mtime (matches viewer_server._list_bodies ordering).
+    Skips the viewer's own selection sidecar / snapshot artifacts (STEP-only)."""
+    try:
+        steps = sorted(ws.glob("*.step"), key=lambda p: p.stat().st_mtime,
+                       reverse=True)
+    except OSError:
+        return None
+    return steps[0].stem if steps else None
+
+
 @mcp.tool()
 def cad_get_selection() -> dict:
     """Read the face the user CLICKED in the web viewer (viewer_server.py). Returns
-    {body_id, face_idx, centroid, normal, surface_type, area_mm2, selector} — the
-    selector is a ready-to-use faces_near_point you drop straight into a cad_modify
-    spec to target THAT face (e.g. fillet its edges via edges_on_face). This is how
-    'fillet the face I clicked' works: the user picks in the viewer, you call this,
-    then cad_modify with the returned selector. Returns {ok:False} if nothing is
-    selected yet."""
+    {body_id, face_idx, centroid, normal, surface_type, area_mm2, selector,
+    current_body_id, modify_hint} — the `selector` is a ready-to-use,
+    BODY-AGNOSTIC faces_near_point (a durable centroid, so it survives modify /
+    STEP round-trips) you drop straight into a cad_modify spec to target THAT face
+    (e.g. fillet its edges via edges_on_face).
+
+    NAMESPACE BRIDGE (F2): the viewer's `body_id` is a STEP *stem* on disk, NOT a
+    live session BodyStore id — cad_modify needs the latter. Because the selector
+    is body-agnostic, drive the loop like this:
+      1. cad_generate(name=X)  → returns an mcp body_id AND writes <X>.step.
+      2. cad_export(body_id, formats=['glb','step'], name=X)  (if not already).
+      3. user picks a face in the viewer on stem X.
+      4. cad_get_selection  → returns {selector, current_body_id: 'X'}.
+      5. cad_modify(<your mcp body_id for X>, spec=[{op:'fillet', args:{selector,
+         ...}}])  — the returned selector lands on the clicked face.
+    `current_body_id` is the newest viewer stem (what the user is looking at) so
+    you can confirm it matches the body you generated. Returns {ok:False} if
+    nothing is selected yet."""
     try:
         sel_path = _WORKSPACE / "_viewer_selection.json"
+        current = _newest_stem(_WORKSPACE)
         if not sel_path.exists():
             return {"ok": False, "error": "no viewer selection yet — click a face "
-                    "in the web viewer first"}
+                    "in the web viewer first", "current_body_id": current}
         import json as _json
         sel = _json.loads(sel_path.read_text(encoding="utf-8"))
-        return {"ok": True, **sel}
+        hint = ("The selector is body-agnostic (centroid-based). Pass it to "
+                "cad_modify on YOUR session body_id for this part — the viewer's "
+                "body_id is a STEP stem, not a BodyStore id.")
+        return {"ok": True, **sel, "current_body_id": current, "modify_hint": hint}
     except Exception as exc:  # noqa: BLE001
         return _err(exc)
 

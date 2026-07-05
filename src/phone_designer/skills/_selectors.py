@@ -36,8 +36,10 @@ SelectorKind = Literal[
     "edges_on_face",
     "edges_by_length",
     "edges_by_position",
+    "edges_near_point",
     "faces_by_normal",
     "faces_by_area",
+    "faces_near_point",
     "edges_convex_only",
     "edges_concave_only",
     "and",
@@ -95,6 +97,25 @@ class BBoxModel(BaseModel):
 class EdgesByPositionSelector(SelectorBase):
     kind: Literal["edges_by_position"] = "edges_by_position"
     bbox: BBoxModel
+
+
+class EdgesNearPointSelector(SelectorBase):
+    """The n edges whose MIDPOINT is nearest a 3D world point (within tol_mm).
+
+    This is the viewer edge-pick selector. The GLB carries NO edge geometry
+    (0 LINES primitives), so V1 edge picking works off the FACE raycast hit
+    point: a browser click near an edge on the surface gives a 3D point, and
+    the OCCT edge whose curve-midpoint is closest to it is the picked edge.
+    Coordinate-based (an edge-midpoint distance, not a TopExp index), so it
+    SURVIVES a cad_modify STEP round-trip — the same durable property
+    faces_near_point relies on. n=1 by default (a single clicked edge); raise n
+    to grab the k nearest edges (e.g. n=2 for the two edges sharing a corner).
+    """
+
+    kind: Literal["edges_near_point"] = "edges_near_point"
+    point: tuple[float, float, float]
+    tol_mm: float = 2.0
+    n: int = 1
 
 
 class FacesByNormalSelector(SelectorBase):
@@ -172,6 +193,7 @@ SelectorRef = Union[
     EdgesOnFaceSelector,
     EdgesByLengthSelector,
     EdgesByPositionSelector,
+    EdgesNearPointSelector,
     FacesByNormalSelector,
     FacesByAreaSelector,
     FacesNearPointSelector,
@@ -207,6 +229,7 @@ _STABILITY_RANK: dict[str, int] = {
     # coordinate pick — durable across a modify STEP round-trip (like a tag), but
     # a live-pick point so rank it with edges_by_position (positional, precise).
     "faces_near_point": 1,
+    "edges_near_point": 1,
     # 조합 selector 의 안정성 = inner 의 min (별도 평가)
     "and": 3,
     "or": 3,
@@ -223,6 +246,7 @@ _KIND_TO_CLASS: dict[str, type[SelectorBase]] = {
     "edges_on_face": EdgesOnFaceSelector,
     "edges_by_length": EdgesByLengthSelector,
     "edges_by_position": EdgesByPositionSelector,
+    "edges_near_point": EdgesNearPointSelector,
     "faces_by_normal": FacesByNormalSelector,
     "faces_by_area": FacesByAreaSelector,
     "faces_near_point": FacesNearPointSelector,
