@@ -300,3 +300,86 @@ def test_section_positive_keep_and_bad_axis(box_id):
     assert pos["volume_mm3"] == pytest.approx(6000.0, rel=1e-4)  # +X half of 12000
     bad = M.cad_section(body_id=box_id, axis="w")
     assert bad["ok"] is False and "fm.bad_axis" in bad["error"]
+
+
+# ── V4: cad_components — LLM reasons about assembly BODIES (not only the browser)
+
+@pytest.fixture(scope="module")
+def plate_bolt_step(tmp_path_factory):
+    """A 2-solid compound STEP: a 40×30×8 plate (vol 9600) + a Ø6 bolt cylinder
+    r=3 h=15 (vol π·9·15 ≈ 424.12). The cad_components target assembly."""
+    from build123d import Box, Cylinder, Pos
+    from OCP.BRep import BRep_Builder
+    from OCP.STEPControl import STEPControl_AsIs, STEPControl_Writer
+    from OCP.TopoDS import TopoDS_Compound
+
+    plate = Box(40, 30, 8)
+    bolt = Pos(0, 0, 8) * Cylinder(radius=3, height=15)
+    builder = BRep_Builder()
+    comp = TopoDS_Compound()
+    builder.MakeCompound(comp)
+    builder.Add(comp, plate.wrapped)
+    builder.Add(comp, bolt.wrapped)
+    step = str(tmp_path_factory.mktemp("plate_bolt") / "plate_bolt.step")
+    w = STEPControl_Writer()
+    w.Transfer(comp, STEPControl_AsIs)
+    w.Write(step)
+    return step
+
+
+def test_components_two_solids_volumes_and_face_partition(plate_bolt_step):
+    # the KEYSTONE: a 2-body plate+bolt splits into 2 components; the plate is
+    # ~9600mm³ (6 faces), the bolt ~424mm³ (3 faces); the per-component
+    # face_indices PARTITION the assembly's 9 faces (GLB 1:1) with no overlap.
+    r = M.cad_components(part_path=plate_bolt_step)
+    assert r["ok"] is True and r["n_components"] == 2
+    assert r["deep"] is False
+    comps = r["components"]
+    vols = sorted(c["volume_mm3"] for c in comps)
+    assert vols[1] == pytest.approx(9600.0, rel=1e-4)          # plate
+    assert vols[0] == pytest.approx(math.pi * 9 * 15, rel=1e-3)  # bolt
+    # comp_ids are 0..n-1 and every component reports face_indices + centroid.
+    assert sorted(c["comp_id"] for c in comps) == [0, 1]
+    for c in comps:
+        assert c["face_indices"] and all(
+            isinstance(i, int) for i in c["face_indices"])
+        assert c["n_faces"] == len(c["face_indices"])
+        assert len(c["centroid"]) == 3 and len(c["bbox_mm"]) == 6
+    # the union of all face_indices is a clean partition of [0 .. total_faces).
+    all_idx = sorted(i for c in comps for i in c["face_indices"])
+    total_faces = sum(c["n_faces"] for c in comps)
+    assert all_idx == list(range(total_faces))                # no gaps, no dupes
+    assert total_faces == 9                                    # 6 plate + 3 bolt
+    json.dumps(r, allow_nan=False)                            # strict-JSON-safe
+
+
+def test_components_single_box_is_one_component(box_id):
+    # a single-solid body has EXACTLY ONE component (n=1 is normal, not an error).
+    r = M.cad_components(body_id=box_id)
+    assert r["ok"] is True and r["n_components"] == 1
+    c = r["components"][0]
+    assert c["comp_id"] == 0
+    assert c["volume_mm3"] == pytest.approx(12000.0, rel=1e-4)
+    assert c["n_faces"] == 6 and sorted(c["face_indices"]) == [0, 1, 2, 3, 4, 5]
+    json.dumps(r, allow_nan=False)
+
+
+def test_components_deep_enriches_with_standard_part(plate_bolt_step):
+    # deep=True reuses analyze_assembly (dedup + standard-part recognition); it
+    # still returns 2 components, each carrying a signature class_id, and the
+    # deep flag flips true. The Ø6 shank may be recognized as a fastener — we
+    # only assert the enrichment RAN and the schema stays strict-JSON-safe.
+    r = M.cad_components(part_path=plate_bolt_step, deep=True)
+    assert r["ok"] is True and r["n_components"] == 2
+    assert r["deep"] is True
+    for c in r["components"]:
+        assert c["class_id"] is not None          # deep attached a signature class
+        assert c["instance_count"] >= 1
+    json.dumps(r, allow_nan=False)
+
+
+def test_components_exclusivity_and_unknown_body_are_honest(box_id):
+    both = M.cad_components(body_id=box_id, part_path="x.step")
+    assert both["ok"] is False and "exactly one" in both["error"]
+    nope = M.cad_components(body_id="body_nope")
+    assert nope["ok"] is False and "unknown_body_id" in nope["error"]

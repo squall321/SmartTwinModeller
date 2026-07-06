@@ -344,3 +344,25 @@ GLB stem = 뷰어 body_id 이므로 `cad_export(..., name=<stem>)` 로 이름을
 - Claude 측: `cad_measure(body_id, what='distance', entity_a, entity_b)` → 스킬 기반 정밀 거리.
 
 **정직한 경계:** 피처 검출은 extract_feature_catalog(grade 있음), 단면은 뷰용(정밀 벽두께는 cad_measure/drawing_sheet), 측정 토글은 클릭점 거리(엔티티 기반은 cad_measure).
+
+---
+
+## 멀티바디 / 어셈블리 지원
+
+여러 솔리드가 한 STEP에 든 어셈블리(플레이트+볼트 등)를 body별로 구분·선택·격리.
+
+**문제**: 멀티바디 STEP → GLB는 **하나로 병합된 mesh**(컴포넌트 그룹 없음). 그래서 브라우저는 어느 삼각형이 어느 body인지 모름.
+
+**해결 (keystone)**: GLB primitive는 OCCT face와 1:1 순서. 서버가 **face_idx → 컴포넌트 맵**을 주면(각 솔리드의 face를 전역 index에 IsSame 매칭) 브라우저가 컴포넌트별로 처리.
+
+### 뷰어 (n_components>1일 때만 패널 표시)
+- `/components?body_id` → `{n_components, components:[{comp_id, face_indices, n_faces, volume_mm3, centroid, bbox_mm, label}]}`.
+- **By-component 색칠** — 각 body에 고유 색(HSL 스프레드) → 어셈블리가 파란 덩어리가 아니라 **여러 파트로 읽힘**. Uniform/By-component 토글.
+- 컴포넌트 행 **hover→하이라이트**, **클릭→선택**(대표 face stash → Claude가 "그 볼트" 대상 작업) + 나머지 dim.
+- **격리(eye 토글)** — 컴포넌트 hide(visible=false)로 뒤를 봄. 'Show all' 리셋.
+- 단일 파트(n=1)면 패널 자동 숨김.
+
+### Claude 측
+- `cad_components(body_id, deep=False)` → 컴포넌트별 volume/centroid/bbox/face_indices. `deep=True`면 analyze_assembly의 dedup/표준부품 인식("볼트 5개 + 플레이트 1개"). Claude가 "그 플레이트"를 face_indices centroid의 faces_near_point로 대상 지정.
+
+**검증**: plate+bolt 어셈블리 → 2 컴포넌트(plate 9600/face 0-5, bolt 565/face 6-8), bolt face가 실제 볼트 위치에, face partition 완전.

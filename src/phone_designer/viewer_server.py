@@ -525,6 +525,134 @@ def _section_for(ws: Path, body_id: str, axis: str, pos: float) -> dict | None:
         return {"ok": True, "glb": glb, "cut": cut, "note": note}
 
 
+# ── /components: the face→component map the multi-body front-end needs ───────
+# A multi-body STEP → GLB is ONE merged mesh, but the GLB emits ONE primitive
+# per OCCT face IN _all_faces ORDER (1:1 — verified keystone). So a face_idx→
+# component map lets the browser color / select / isolate per component using
+# only the face_idx RANGES the server provides (no per-component GLB grouping).
+#
+# Build (verified keystone): _load_faces(step) is the global ordered face list
+# (== GLB primitives). For each solid from iter_solid_components(shape), match
+# ITS faces back to the global index by TopoDS IsSame — a plate+bolt gives
+# {comp0: faces[0-5], comp1: faces[6-8]}, every face mapped. We use the RAW
+# iter_solid_components split (milliseconds), NOT analyze_assembly's heavier
+# dedup, to stay responsive. A single-solid body → n_components=1 (honest, not
+# an error). Cached per body (<id>.components.json + .src, F6 size+mtime).
+_COMPONENTS_LOCKS: dict[str, threading.Lock] = {}
+_COMPONENTS_LOCKS_GUARD = threading.Lock()
+
+
+def _components_lock(key: str) -> "threading.Lock":
+    with _COMPONENTS_LOCKS_GUARD:
+        lk = _COMPONENTS_LOCKS.get(key)
+        if lk is None:
+            lk = _COMPONENTS_LOCKS[key] = threading.Lock()
+        return lk
+
+
+def _solid_props(solid):
+    """(|volume_mm3|, centroid[3]) for one solid via BRepGProp — abs() because
+    an ill-oriented imported solid can integrate to a negative signed volume."""
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+    g = GProp_GProps()
+    BRepGProp.VolumeProperties_s(solid, g)
+    c = g.CentreOfMass()
+    return abs(float(g.Mass())), (c.X(), c.Y(), c.Z())
+
+
+def _build_components(step: Path) -> dict:
+    """Import the STEP once and build the strict-JSON-safe component map:
+    {ok, n_components, components:[{comp_id, face_indices, n_faces, volume_mm3,
+    centroid, bbox_mm, label}]}. face_indices index the GLOBAL _all_faces list
+    (== GLB primitive order, 1:1 keystone). Uses the RAW iter_solid_components
+    split for responsiveness (NOT analyze_assembly)."""
+    os.environ.setdefault("PHONE_DESIGNER_UI_HEADLESS", "1")
+    from phone_designer.skills._resolvers import _all_faces
+    from phone_designer.skills.assembly._compound import iter_solid_components
+    from phone_designer.skills.create.import_step import ImportStep
+
+    body = ImportStep().apply(None, {"path": str(step)}).body
+    shape = body.wrapped if hasattr(body, "wrapped") else body
+    faces = _all_faces(shape)            # global ordered list == GLB primitives
+    total = len(faces)
+
+    components: list[dict] = []
+    for ci, solid in enumerate(iter_solid_components(shape)):
+        # match this solid's faces back to the GLOBAL index by TopoDS IsSame
+        # (the verified keystone). Skip a global face already claimed so a face
+        # shared/duplicated across solids maps to exactly one component.
+        sub = _all_faces(solid)
+        fis: list[int] = []
+        for sf in sub:
+            for gi, gf in enumerate(faces):
+                if gi not in fis and sf.IsSame(gf):
+                    fis.append(gi)
+                    break
+        fis.sort()
+        vol, centroid = _solid_props(solid)
+        bbox = _shape_bbox(solid)
+        components.append(_jsonify({
+            "comp_id": ci,
+            "face_indices": fis,
+            "n_faces": len(fis),
+            "volume_mm3": vol,
+            "centroid": list(centroid),
+            "bbox_mm": list(bbox) if bbox is not None else None,
+            # keep it FAST: a raw split has no class/standard-part naming, so a
+            # plain honest default label (the browser can rename on select).
+            "label": f"component {ci}",
+        }))
+    return {
+        "ok": True,
+        "n_components": len(components),
+        "n_faces": int(total),
+        "components": components,
+    }
+
+
+def _components_for(ws: Path, body_id: str) -> dict | None:
+    """Return the cached component map for body_id, (re)building it from the
+    STEP when the sidecar is stale (same F6 size+mtime invalidation as /scene).
+    Returns None only when the body_id is unsafe/unknown (→ handler 404s)."""
+    step = _step_for(ws, body_id)   # F4 traversal guard
+    if step is None:
+        return None
+    comp = ws / f"{body_id}.components.json"
+    src = ws / f"{body_id}.components.src"
+
+    def _fresh() -> bool:
+        if not comp.exists() or not src.exists():
+            return False
+        st = step.stat()
+        try:
+            size, mtime = json.loads(src.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        return int(size) == st.st_size and float(mtime) >= st.st_mtime
+
+    if _fresh():
+        try:
+            return json.loads(comp.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            pass   # corrupt cache → rebuild below
+    lk = _components_lock(f"{ws}::{body_id}")
+    with lk:
+        if _fresh():
+            try:
+                return json.loads(comp.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                pass
+        st = step.stat()
+        data = _build_components(step)
+        text = json.dumps(data)   # strict JSON (no NaN/inf via _jsonify)
+        tmp = ws / f"{body_id}.components.tmp{os.getpid()}"
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, comp)     # atomic publish
+        src.write_text(json.dumps([st.st_size, st.st_mtime]), encoding="utf-8")
+        return data
+
+
 def _shape_bbox(shape):
     """(xmin,ymin,zmin,xmax,ymax,zmax) optimal bbox, or None if void/failed."""
     try:
@@ -578,6 +706,8 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
                 return self._send(200, glb.read_bytes(), "model/gltf-binary")
             if path == "/scene":
                 return self._do_scene(parse_qs(parsed.query))
+            if path == "/components":
+                return self._do_components(parse_qs(parsed.query))
             if path == "/section":
                 return self._do_section(parse_qs(parsed.query))
             # any other static asset under viewer_static/
@@ -604,6 +734,25 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
                 {"ok": False, "error": f"unknown body_id '{body_id}'"}).encode(),
                 "application/json")
         return self._send(200, json.dumps(scene).encode(), "application/json")
+
+    def _do_components(self, qs: dict):
+        """GET /components?body_id → {ok, n_components, n_faces, components:[
+        {comp_id, face_indices, n_faces, volume_mm3, centroid, bbox_mm, label}]}.
+        The face_indices are the GLOBAL _all_faces indices == GLB primitive
+        indices (1:1 keystone), so the browser colors / selects / isolates a
+        component by its face_idx range. A single-solid body → n_components=1
+        (honest, not an error). Cached per body (F6 size+mtime)."""
+        body_id = (qs.get("body_id") or [""])[0]
+        if not _safe_body_id(body_id):     # F4: refuse traversal / empty id
+            return self._send(400, json.dumps(
+                {"ok": False, "error": "missing or unsafe body_id"}).encode(),
+                "application/json")
+        comps = _components_for(self.ws, body_id)
+        if comps is None:
+            return self._send(404, json.dumps(
+                {"ok": False, "error": f"unknown body_id '{body_id}'"}).encode(),
+                "application/json")
+        return self._send(200, json.dumps(comps).encode(), "application/json")
 
     def _do_section(self, qs: dict):
         """GET /section?body_id&axis=x|y|z&pos=<0..1> → a fresh TRANSIENT GLB of

@@ -12,7 +12,8 @@ Tools (all ``cad_*``-namespaced), grouped:
   session      — cad_generate, cad_import, cad_modify, cad_undo, cad_preflight,
                  cad_measure, cad_scene, cad_section, cad_preview, cad_export
   analysis     — cad_analyze, cad_estimate_cost, cad_recommend_process,
-                 cad_repair_dfm, cad_dfm_workflow, cad_analyze_assembly
+                 cad_repair_dfm, cad_dfm_workflow, cad_analyze_assembly,
+                 cad_components
   deliverables — cad_quote_package, cad_drawing, cad_compare, cad_variants,
                  cad_cheapest_variant, cad_reexecute
 
@@ -1003,6 +1004,149 @@ def cad_analyze_assembly(assembly_path: str,
             args["per_component_timeout_s"] = per_component_timeout_s
         rep = AnalyzeAssembly().apply(None, args).extras["assembly_analysis"]
         return {"ok": True, **rep}
+    except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+def _component_rows(shape, deep: bool, part_path: str | None) -> tuple[list[dict], dict]:
+    """Split ``shape`` into per-SOLID components (FAST path) with per-solid
+    volume/centroid/bbox + GLB-aligned face_indices, then OPTIONALLY enrich with
+    analyze_assembly's dedup / standard-part recognition (deep=True).
+
+    face_indices are positions in ``_all_faces(shape)`` — the SAME order the GLB
+    emits one primitive per OCCT face — so each component's faces map 1:1 to the
+    browser's faceMeshes[] and a faces_near_point selector on the component's
+    centroid targets THAT body.
+    """
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+
+    from phone_designer.skills._resolvers import _all_faces
+    from phone_designer.skills.assembly._compound import iter_solid_components
+
+    all_faces = _all_faces(shape)
+    # map every top-level face → its index once (O(F)); IsSame identity is what
+    # the split solids share with the parent (proven keystone: 9/9 mapped).
+    solids = list(iter_solid_components(shape))
+    rows: list[dict] = []
+    for cid, solid in enumerate(solids):
+        props = GProp_GProps()
+        BRepGProp.VolumeProperties_s(solid, props)
+        vol = float(props.Mass())
+        c = props.CentreOfMass()
+        centroid = [round(c.X(), 4), round(c.Y(), 4), round(c.Z(), 4)]
+        # per-solid faces → their index in the parent's _all_faces order.
+        idxs: list[int] = []
+        for sf in _all_faces(solid):
+            for i, af in enumerate(all_faces):
+                if af.IsSame(sf):
+                    idxs.append(i)
+                    break
+        bb = _mesh_bbox_full(solid)
+        rows.append({
+            "comp_id": cid,
+            "n_faces": len(idxs),
+            "volume_mm3": round(vol, 4),
+            "centroid": centroid,
+            "bbox_mm": bb,
+            "face_indices": sorted(idxs),
+            "standard_part": None,
+            "instance_count": 1,
+            "class_id": None,
+        })
+    meta: dict = {"deep": False}
+
+    # DEEP enrichment: reuse analyze_assembly (dedup + standard-part). It splits
+    # via the SAME iter_solid_components order and names instances comp_{index},
+    # so a class's names list maps 1:1 back to our comp_id.
+    if deep and rows:
+        if not part_path:
+            meta["deep"] = False
+            meta["deep_note"] = ("deep enrichment needs a STEP file — pass "
+                                 "part_path or a body_id with a STEP snapshot.")
+            return rows, meta
+        from phone_designer.skills.reverse_engineer.analyze_assembly import (
+            AnalyzeAssembly,
+        )
+        rep = AnalyzeAssembly().apply(None, {
+            "assembly_path": part_path,
+            "interference": False,      # geometry rollup only — no O(n²) matrix
+        }).extras["assembly_analysis"]
+        meta["deep"] = True
+        meta["refusal"] = rep.get("refusal")
+        for cls in rep.get("components") or []:
+            cid_class = cls.get("class_id")
+            std = cls.get("standard_part")
+            std_label = None
+            if isinstance(std, dict):
+                std_label = std.get("designation") or std.get("kind")
+            count = cls.get("count")
+            for nm in cls.get("names") or []:
+                try:
+                    ci = int(str(nm).rsplit("_", 1)[-1])
+                except (ValueError, IndexError):
+                    continue
+                if 0 <= ci < len(rows):
+                    rows[ci]["standard_part"] = std_label
+                    rows[ci]["class_id"] = cid_class
+                    rows[ci]["instance_count"] = count
+        meta["signature_classes"] = (rep.get("dedup") or {}).get(
+            "signature_classes")
+    return rows, meta
+
+
+def _mesh_bbox_full(shape) -> list[float] | None:
+    """[xmin,ymin,zmin,xmax,ymax,zmax] via deterministic Add_s (not AddOptimal_s)."""
+    try:
+        from OCP.Bnd import Bnd_Box
+        from OCP.BRepBndLib import BRepBndLib
+        bb = Bnd_Box()
+        BRepBndLib.Add_s(shape, bb)
+        if bb.IsVoid():
+            return None
+        return [round(float(v), 4) for v in bb.Get()]
+    except Exception:  # noqa: BLE001
+        return None
+
+
+@mcp.tool()
+def cad_components(body_id: str = "", part_path: str = "",
+                   deep: bool = False) -> dict:
+    """LIST the constituent BODIES of a multi-body assembly so Claude (not only
+    the browser) can reason about it: split a cad_generate body_id OR a STEP
+    part_path (exactly one) into per-SOLID components and return, for each,
+    {comp_id, n_faces, volume_mm3, centroid, bbox_mm, face_indices,
+    standard_part?}. A single-solid body → n_components=1 (n=1 is normal, not an
+    error).
+
+    KEY: face_indices are positions in the OCCT _all_faces order, which is the
+    SAME order the GLB emits ONE primitive per face — so each component's
+    face_indices map 1:1 to the browser's faceMeshes[] / GLB primitives. Drop a
+    component's centroid into a faces_near_point selector (or target its
+    face_indices directly) to color / isolate / act on THAT body. E.g. a
+    plate+bolt gives comp0=faces[0-5] (plate, vol~9600) + comp1=faces[6-8]
+    (bolt, vol~424) — say 'the plate is comp0' and act on it.
+
+    FAST by default (raw iter_solid_components split — milliseconds). deep=True
+    additionally runs analyze_assembly's dedup + standard-part recognition, so
+    each component carries its signature class_id + instance_count + a
+    standard_part label ('this assembly is 5 identical M6 bolts + 1 plate'); the
+    deep path needs a STEP file (part_path or a body_id with a STEP snapshot).
+    Read-only; strict-JSON-safe; trimmed for an LLM."""
+    try:
+        _ensure_skills()
+        body, step_path = _resolve(part_path or None, body_id or None)
+        shape = body.wrapped if hasattr(body, "wrapped") else body
+        rows, meta = _component_rows(
+            shape, deep=deep, part_path=step_path)
+        out = {"ok": True, "n_components": len(rows),
+               "components": rows, "deep": meta.get("deep", False)}
+        for k in ("deep_note", "refusal", "signature_classes"):
+            if meta.get(k) is not None:
+                out[k] = meta[k]
+        import json as _json
+        _json.dumps(out, allow_nan=False)  # strict-JSON contract, asserted
+        return out
     except Exception as exc:  # noqa: BLE001
         return _err(exc)
 

@@ -556,3 +556,155 @@ def test_scene_handler_rejects_missing_body_id(tmp_path):
     assert h._status == 200
     payload = json.loads(h._body.decode())
     assert payload["ok"] and len(payload["features"]["holes"]) == 2
+
+
+# ── MULTI-BODY: GET /components (face_idx → component map for the front-end) ──
+# The verified keystone: a multi-body STEP → GLB is ONE merged mesh, but the GLB
+# emits ONE primitive per OCCT face IN _all_faces ORDER (1:1). So a face_idx→
+# component map (each solid's faces matched to the global index by TopoDS IsSame)
+# lets the browser color / select / isolate per component using face_idx ranges.
+
+
+def _make_2body_compound_ws(tmp_path):
+    """A 2-solid COMPOUND STEP: a 40x30x8 plate Box (vol 9600, 6 faces) + a
+    r=3 h=20 bolt Cylinder (3 faces) sitting on top. Return (ws, 'asm')."""
+    from OCP.BRep import BRep_Builder
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+    from OCP.TopoDS import TopoDS_Compound
+    plate = BRepPrimAPI_MakeBox(40.0, 30.0, 8.0).Shape()        # vol = 9600
+    ax = gp_Ax2(gp_Pnt(20, 15, 8), gp_Dir(0, 0, 1))
+    bolt = BRepPrimAPI_MakeCylinder(ax, 3.0, 20.0).Shape()      # 3 faces
+    b = BRep_Builder()
+    comp = TopoDS_Compound()
+    b.MakeCompound(comp)
+    b.Add(comp, plate)
+    b.Add(comp, bolt)
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    assert _write_step(comp, str(ws / "asm.step"))
+    return ws
+
+
+def test_components_two_body_compound_maps_every_face(tmp_path):
+    # VERIFY (the keystone): a plate+bolt compound → n_components=2; comp0 is the
+    # plate (6 faces [0..5], vol 9600), comp1 the bolt (3 faces [6,7,8]); every
+    # face maps exactly once (sum of n_faces == total n_faces, no gaps/dupes).
+    from phone_designer.viewer_server import _components_for
+    ws = _make_2body_compound_ws(tmp_path)
+    data = _components_for(ws, "asm")
+    assert data is not None and data["ok"] is True
+    assert data["n_components"] == 2
+    assert data["n_faces"] == 9
+    comps = data["components"]
+    c0, c1 = comps[0], comps[1]
+    assert c0["comp_id"] == 0 and c0["face_indices"] == [0, 1, 2, 3, 4, 5]
+    assert c0["n_faces"] == 6 and abs(c0["volume_mm3"] - 9600.0) < 1.0
+    assert c1["comp_id"] == 1 and c1["face_indices"] == [6, 7, 8]
+    assert c1["n_faces"] == 3
+    # every face maps exactly once: union covers 0..n-1, no overlap.
+    all_fis = [i for c in comps for i in c["face_indices"]]
+    assert sorted(all_fis) == list(range(data["n_faces"]))
+    assert sum(c["n_faces"] for c in comps) == data["n_faces"]
+    # each component carries centroid + bbox + honest default label.
+    for c in comps:
+        assert len(c["centroid"]) == 3
+        assert c["bbox_mm"] is not None and len(c["bbox_mm"]) == 6
+        assert c["label"] == f"component {c['comp_id']}"
+
+
+def test_components_single_solid_is_one_component_not_error(tmp_path):
+    # HOUSE RULE: a single-solid body has exactly ONE component (n=1, honest —
+    # NOT an error). All faces belong to that one component.
+    from phone_designer.viewer_server import _components_for
+    ws = _make_workspace_body(tmp_path)   # part1 = one box+hole solid
+    data = _components_for(ws, "part1")
+    assert data is not None and data["ok"] is True
+    assert data["n_components"] == 1
+    c0 = data["components"][0]
+    assert c0["comp_id"] == 0
+    assert c0["face_indices"] == list(range(data["n_faces"]))
+    assert c0["n_faces"] == data["n_faces"]
+    assert c0["volume_mm3"] > 0
+
+
+def test_components_strict_json_safe(tmp_path):
+    # strict-JSON-safe: the payload round-trips through json with no NaN/inf
+    # tokens (the browser's JSON.parse rejects them).
+    import json
+    from phone_designer.viewer_server import _components_for
+    ws = _make_2body_compound_ws(tmp_path)
+    data = _components_for(ws, "asm")
+    assert json.loads(json.dumps(data)) == data
+
+
+def test_components_cached_next_to_step_and_reused(tmp_path):
+    # cache the JSON next to the STEP (<id>.components.json) so the split runs
+    # once; a second call reads the sidecar (not rebuilt).
+    from phone_designer.viewer_server import _components_for
+    ws = _make_2body_compound_ws(tmp_path)
+    a = _components_for(ws, "asm")
+    sidecar = ws / "asm.components.json"
+    assert sidecar.exists()
+    m0 = sidecar.stat().st_mtime_ns
+    b = _components_for(ws, "asm")
+    assert b == a and sidecar.stat().st_mtime_ns == m0   # not rebuilt
+
+
+def test_components_cache_invalidates_on_step_overwrite_same_mtime(tmp_path):
+    # F6 parity: overwriting the STEP with a DIFFERENT body count (even at the
+    # same mtime) must rebuild the component map, not serve the stale one.
+    import os
+    from phone_designer.viewer_server import _components_for
+    ws = _make_2body_compound_ws(tmp_path)
+    s1 = _components_for(ws, "asm")
+    assert s1["n_components"] == 2
+    step = ws / "asm.step"
+    st = step.stat()
+    # overwrite with a SINGLE box (1 component now).
+    from phone_designer.skills.create.generate_from_spec import GenerateFromSpec
+    r = GenerateFromSpec().apply(None, {"spec": [
+        {"op": "box", "args": {"length_mm": 40, "width_mm": 30,
+                               "height_mm": 8}}]})
+    assert _write_step(r.body, str(step))
+    os.utime(step, (st.st_atime, st.st_mtime))       # force same mtime
+    s2 = _components_for(ws, "asm")
+    assert s2["n_components"] == 1                    # rebuilt from new geometry
+
+
+def test_components_unknown_and_traversal_body_is_none(tmp_path):
+    from phone_designer.viewer_server import _components_for
+    ws = _make_2body_compound_ws(tmp_path)
+    assert _components_for(ws, "nope") is None
+    assert _components_for(ws, "../../secret") is None   # F4 traversal refused
+
+
+def test_components_handler_200_404_and_400(tmp_path):
+    # handler: valid body → 200 with strict JSON; unknown → 404; unsafe → 400.
+    import json
+    from phone_designer.viewer_server import _Handler
+    ws = _make_2body_compound_ws(tmp_path)
+
+    class _Fake(_Handler):
+        def __init__(self):
+            self.command = "GET"
+            self._status = None
+            self._body = None
+
+        def _send(self, code, body, ctype):
+            self._status = code
+            self._body = body
+
+    h = _Fake()
+    h.ws = ws
+    h._do_components({})                          # no body_id → 400
+    assert h._status == 400
+    h._do_components({"body_id": ["../../x"]})    # unsafe → 400
+    assert h._status == 400
+    h._do_components({"body_id": ["nope"]})       # unknown → 404
+    assert h._status == 404
+    h._do_components({"body_id": ["asm"]})        # OK → 200 with the component map
+    assert h._status == 200
+    payload = json.loads(h._body.decode())
+    assert payload["ok"] and payload["n_components"] == 2
+    assert payload == json.loads(json.dumps(payload))   # strict-JSON round-trip

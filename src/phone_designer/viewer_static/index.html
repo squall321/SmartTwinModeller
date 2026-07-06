@@ -78,6 +78,39 @@
              box-shadow:0 1px 6px rgba(0,0,0,.10); display:none; max-width:240px; }
   #measure b { color:#e07b00; }
   #measure .hint { color:#8a94a3; font-size:11px; }
+  /* ── MULTI-BODY / ASSEMBLY: component panel (color / select / isolate bodies) ── */
+  /* Hidden for a single-part body (n_components<=1) so a solo solid stays clutter-free. */
+  #components { border-top:1px solid #eee; display:none; }        /* shown only when n>1 */
+  #compHead { padding:10px 16px; font-size:12px; font-weight:600; cursor:pointer;
+              display:flex; justify-content:space-between; align-items:center;
+              user-select:none; background:#fafbfc; gap:8px; }
+  #compHead:hover { background:#eef4fb; }
+  #compHead .caret { color:#8a94a3; font-size:11px; transition:transform .15s; }
+  #components.collapsed .caret { transform:rotate(-90deg); }
+  #components.collapsed #compBody { display:none; }
+  /* Uniform / By-component colour toggle + Show-all sit in a control strip. */
+  #compCtrl { padding:6px 16px; display:flex; gap:6px; align-items:center;
+              border-bottom:1px solid #f0f1f3; background:#fff; }
+  #compCtrl button { padding:4px 8px; font-size:11px; background:var(--panel);
+                     color:var(--ink); border:1px solid #cfd6df; border-radius:5px; cursor:pointer; }
+  #compCtrl button:hover { background:#eef4fb; border-color:var(--accent); }
+  #compCtrl button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #compList { max-height:34vh; overflow:auto; }
+  .comp { padding:7px 10px 7px 16px; border-bottom:1px solid #f4f5f7; cursor:pointer;
+          font-size:12px; display:flex; align-items:center; gap:8px; }
+  .comp:hover, .comp.hov, .comp.on { background:#eef4fb; }
+  .comp.on { border-left:3px solid var(--accent); padding-left:13px; }
+  .comp .swatch { width:12px; height:12px; border-radius:3px; flex:0 0 auto;
+                  border:1px solid rgba(0,0,0,.15); }
+  .comp .ctext { flex:1; min-width:0; }
+  .comp .cn { font-weight:600; }
+  .comp .cm { color:#8a94a3; font-size:11px; margin-top:1px; }
+  /* isolate (eye) toggle per row — click hides that component's faces */
+  .comp .eye { flex:0 0 auto; width:22px; text-align:center; font-size:13px;
+               color:#8a94a3; border-radius:4px; padding:2px 0; user-select:none; }
+  .comp .eye:hover { background:#dbe6f5; color:var(--accent); }
+  .comp.hidden { opacity:.5; }
+  .comp.hidden .cn { text-decoration:line-through; }
 </style>
 <script type="importmap">
 { "imports": {
@@ -96,6 +129,18 @@
     <div id="features" class="collapsed">
       <div id="featHead"><span id="featSummary">Features</span><span class="caret">▾</span></div>
       <div id="featList"></div>
+    </div>
+    <!-- MULTI-BODY / ASSEMBLY: component panel (shown only when n_components>1) -->
+    <div id="components">
+      <div id="compHead"><span id="compSummary">Components</span><span class="caret">▾</span></div>
+      <div id="compBody">
+        <div id="compCtrl">
+          <button id="compUniform" class="on" title="모든 body 단색(steel-blue)">Uniform</button>
+          <button id="compByComp" title="body마다 고유 색">By-component</button>
+          <button id="compShowAll" title="숨긴 body 모두 표시">Show all</button>
+        </div>
+        <div id="compList"></div>
+      </div>
     </div>
   </div>
   <div id="stage">
@@ -251,6 +296,7 @@ window.loadBody = async function(bodyId){
   document.querySelectorAll('.body').forEach(e=>e.classList.toggle('sel', e.dataset.id===bodyId));
   clearHighlight();
   clearFeatureHighlight();
+  resetComponents();       // a new body → drop the previous body's component panel
   resetSection();          // a new body → drop any transient section view
   resetMeasure();          // and any in-progress measurement
   faceMeshes = [];
@@ -261,7 +307,8 @@ window.loadBody = async function(bodyId){
     await loadGlbInto('/model/'+encodeURIComponent(bodyId)+'.glb', true);
     document.getElementById('hud').textContent =
       `${bodyId} · ${faceMeshes.length} face-primitive · 드래그=회전 휠=줌`;
-    loadScene(bodyId);   // fire-and-forget: populate the feature sidebar
+    loadScene(bodyId);        // fire-and-forget: populate the feature sidebar
+    loadComponents(bodyId);   // fire-and-forget: populate the assembly component panel
   } catch(e){
     document.getElementById('err').textContent = '로드 실패: ' + e.message;
   }
@@ -422,6 +469,273 @@ async function selectFeature(i){
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// MULTI-BODY / ASSEMBLY — component panel. Fetch /components?body_id → per-body
+// face_index ranges (the server's keystone: each solid's OCCT faces map 1:1 onto
+// faceMeshes[] by traverse order). With that map the browser can:
+//   (2) COLOR-BY-COMPONENT — a distinct hue per body over its face_indices,
+//   (3) HOVER→accent all its faces · CLICK→select (POST /pick its 1st face) + dim,
+//   (4) ISOLATE — eye toggle hides a body's faceMeshes so you see behind it.
+// A single-solid body (n_components<=1) has ONE component → panel hidden (no clutter).
+// Reuses faceMeshes[]/highlightFaces()/clearFeatureHighlight() from the feature overlay.
+// ══════════════════════════════════════════════════════════════════════════
+const componentsBox = document.getElementById('components');
+const compHead      = document.getElementById('compHead');
+const compSummary   = document.getElementById('compSummary');
+const compList      = document.getElementById('compList');
+const compUniformBtn= document.getElementById('compUniform');
+const compByCompBtn = document.getElementById('compByComp');
+const compShowAllBtn= document.getElementById('compShowAll');
+compHead.onclick = ()=> componentsBox.classList.toggle('collapsed');
+
+let sceneComponents = [];        // [{index,label,face_indices,face_count,volume_mm3,hue}]
+let compColorMode = 'uniform';   // 'uniform' | 'bycomponent'
+let compHovered = -1;            // row index currently hover-accented (-1 = none)
+let compSelected = -1;           // row index currently click-selected (-1 = none)
+const compHidden = new Set();    // component indices whose faceMeshes are visible=false
+
+// Distinct-hue palette: even HSL spread so N bodies read as N parts. Colours are
+// resolved per-component from its index so the swatch, the mesh tint, and the
+// selection ring all agree. Kept as THREE.Color for direct material.color.copy.
+function compHue(i, n){ return (i / Math.max(1, n)) % 1; }
+function compColor(i, n){ return new THREE.Color().setHSL(compHue(i, n), 0.55, 0.55); }
+function compSwatchCss(i, n){
+  const c = compColor(i, n); return `#${c.getHexString()}`;
+}
+
+// Normalise the /components contract defensively (mirrors normaliseScene): accept
+// {components:[...]} or a bare array, and either {index}/{id} + {face_indices} +
+// {face_count}/{n_faces} + {volume_mm3}/{volume}. face_indices are GLB primitive
+// indices (== faceMeshes[] indices) — clamp to the loaded face count.
+function normaliseComponents(d){
+  const raw = Array.isArray(d) ? d
+            : (d && (d.components || d.bodies || d.solids)) || [];
+  const n = raw.length;
+  const out = [];
+  raw.forEach((c, i)=>{
+    const fis = (c.face_indices || c.faces || [])
+      .map(x=> +x)
+      .filter(x=> Number.isInteger(x) && x >= 0 && x < faceMeshes.length);
+    out.push({
+      index: (c.index != null ? c.index : (c.id != null ? c.id : i)),
+      label: c.label || c.name || `Body ${i + 1}`,
+      face_indices: fis,
+      face_count: (c.face_count != null ? c.face_count
+                 : (c.n_faces != null ? c.n_faces : fis.length)),
+      volume_mm3: (c.volume_mm3 != null ? c.volume_mm3
+                 : (c.volume != null ? c.volume : null)),
+      hue: compSwatchCss(i, n),
+    });
+  });
+  return out;
+}
+
+function componentCountFrom(d, list){
+  const n = (d && (d.n_components != null ? d.n_components
+                 : (d.count != null ? d.count : null)));
+  return (n != null) ? n : list.length;
+}
+
+// Reset the panel to its empty/hidden state. Restores any hidden faceMeshes and
+// re-applies the current colour mode's baseline so a body switch never leaks a
+// hidden mesh or a stray tint into the next body. Called by loadBody().
+function resetComponents(){
+  sceneComponents = [];
+  compHovered = -1;
+  compSelected = -1;
+  compHidden.clear();
+  compList.innerHTML = '';
+  compSummary.textContent = 'Components';
+  componentsBox.style.display = 'none';
+  componentsBox.classList.remove('collapsed');
+}
+
+async function loadComponents(bodyId){
+  resetComponents();
+  try {
+    const r = await fetch('/components?body_id=' + encodeURIComponent(bodyId));
+    if (!r.ok) return;                                  // endpoint absent/err → stay hidden
+    const d = await r.json();
+    if (bodyId !== currentBodyId) return;               // body changed while fetching
+    if (d && d.ok === false) return;                    // honest server refusal
+    const list = normaliseComponents(d);
+    const n = componentCountFrom(d, list);
+    // Single part (n<=1): exactly ONE component is NOT an error — just hide the
+    // panel so a solo solid has no clutter, and keep the uniform steel-blue look.
+    if (n <= 1 || list.length <= 1){
+      applyComponentColors();                           // ensure uniform baseline
+      return;
+    }
+    sceneComponents = list;
+    componentsBox.style.display = 'block';
+    renderComponentList();
+    applyComponentColors();                             // paint per current mode
+  } catch(_){ /* transient fetch error → panel stays hidden */ }
+}
+
+function renderComponentList(){
+  const n = sceneComponents.length;
+  const totalFaces = sceneComponents.reduce((a, c)=> a + c.face_indices.length, 0);
+  compSummary.textContent = `Components: ${n} bodies`;
+  compList.innerHTML = '';
+  sceneComponents.forEach((c, i)=>{
+    const vol = (typeof c.volume_mm3 === 'number')
+      ? ` · ${c.volume_mm3.toLocaleString(undefined,{maximumFractionDigits:1})} mm³` : '';
+    const row = document.createElement('div');
+    row.className = 'comp'; row.dataset.i = i;
+    row.innerHTML =
+      `<span class="swatch" style="background:${c.hue}"></span>` +
+      `<span class="ctext"><span class="cn">${c.label}</span>` +
+      `<span class="cm">${c.face_count} face${vol}</span></span>` +
+      `<span class="eye" title="숨기기/보이기">👁</span>`;
+    // HOVER → accent all this component's faces (reuses highlightFaces set logic)
+    row.onmouseenter = ()=> hoverComponent(i);
+    row.onmouseleave = ()=> unhoverComponent(i);
+    // CLICK (row body, not the eye) → SELECT this component + dim the others
+    row.onclick = (e)=>{ if (e.target.classList.contains('eye')) return; selectComponent(i); };
+    // EYE → ISOLATE: hide/show this component's faceMeshes
+    row.querySelector('.eye').onclick = (e)=>{ e.stopPropagation(); toggleComponentHidden(i); };
+    compList.appendChild(row);
+  });
+  void totalFaces;   // (kept for future 'N of M faces mapped' summary)
+}
+
+// ── (2) COLOR-BY-COMPONENT ──────────────────────────────────────────────────
+// Apply the current colour mode to faceMeshes[]. 'uniform' = every face back to
+// BASE_COLOR (the classic blue blob); 'bycomponent' = each component's faces get
+// its palette hue. Selection dimming + hover accent are layered ON TOP of this
+// baseline (they restore to whatever this function set, via getHex() snapshots).
+function componentBaseHex(i){
+  return compColor(i, sceneComponents.length).getHex();
+}
+function applyComponentColors(){
+  // A section view swaps out the real faceMeshes[] — colouring is a no-op then.
+  if (sectionAxis) return;
+  if (compColorMode === 'bycomponent' && sceneComponents.length){
+    // dim toward grey when a different component is selected (focus the pick)
+    for (let ci = 0; ci < sceneComponents.length; ci++){
+      const dim = (compSelected !== -1 && compSelected !== ci);
+      const base = componentBaseHex(ci);
+      for (const idx of sceneComponents[ci].face_indices){
+        const m = faceMeshes[idx];
+        if (!m || !m.material) continue;
+        m.material.color.setHex(base);
+        if (dim){ m.material.color.lerp(new THREE.Color(0xd7dbe0), 0.75); }
+        m.material.emissive.setHex(0x000000);
+      }
+    }
+  } else {
+    // uniform: everything back to steel-blue
+    for (const m of faceMeshes){
+      if (!m || !m.material) continue;
+      m.material.color.setHex(BASE_COLOR);
+      m.material.emissive.setHex(0x000000);
+    }
+  }
+  // re-assert hidden components (colour pass doesn't touch visibility, but a
+  // hover/highlight cycle may have run clearFeatureHighlight over them)
+  reapplyHidden();
+  // re-accent a hovered row on top of the fresh baseline
+  if (compHovered !== -1 && sceneComponents[compHovered]){
+    highlightFaces(sceneComponents[compHovered].face_indices);
+  }
+}
+function setColorMode(mode){
+  compColorMode = mode;
+  compUniformBtn.classList.toggle('on', mode === 'uniform');
+  compByCompBtn.classList.toggle('on', mode === 'bycomponent');
+  clearFeatureHighlight();   // drop any stale accent snapshots before repaint
+  applyComponentColors();
+}
+compUniformBtn.onclick = ()=> setColorMode('uniform');
+compByCompBtn.onclick  = ()=> setColorMode('bycomponent');
+
+// ── (3) HOVER → accent all faces of a component ─────────────────────────────
+function hoverComponent(i){
+  const c = sceneComponents[i];
+  if (!c) return;
+  compHovered = i;
+  compList.querySelectorAll('.comp').forEach(e=>
+    e.classList.toggle('hov', +e.dataset.i === i));
+  highlightFaces(c.face_indices);        // reuse the feature-overlay accent set
+}
+function unhoverComponent(i){
+  compHovered = -1;
+  // leaving the row: drop the accent, then restore the colour-mode baseline so a
+  // by-component tint (or the selection dim) comes back instead of a hole.
+  clearFeatureHighlight();
+  applyComponentColors();
+}
+
+// ── (3) CLICK → SELECT this component (stash its 1st face) + dim the others ──
+async function selectComponent(i){
+  const c = sceneComponents[i];
+  if (!c) return;
+  compSelected = i;
+  compList.querySelectorAll('.comp').forEach(e=>
+    e.classList.toggle('on', +e.dataset.i === i));
+  // dim others by repainting in by-component mode (auto-switch so the dim reads);
+  // in uniform mode we still accent the selected body's faces so it stands out.
+  if (compColorMode === 'uniform') setColorMode('bycomponent');
+  else applyComponentColors();
+  highlightFaces(c.face_indices);        // keep the selected body accented
+  // Stash the component's representative (first) face via the SAME /pick path a
+  // manual face click uses — so 'clicked the bolt in the list' == 'picked its
+  // face', and Claude can act on 'the bolt' from cad_get_selection.
+  const faceIdx = (c.face_indices && c.face_indices.length) ? c.face_indices[0] : null;
+  if (faceIdx == null || !currentBodyId) return;
+  try {
+    const resp = await fetch('/pick', { method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ body_id: currentBodyId, face_idx: faceIdx }) });
+    const s = await resp.json();
+    const selBox = document.getElementById('sel');
+    if (!s.ok){ selBox.style.display='none'; return; }
+    selBox.style.display='block';
+    selBox.innerHTML =
+      `<b>${c.label} 선택됨</b> · ${c.face_count} face · rep face #${s.face_idx} (${s.surface_type})<br>` +
+      `centroid [${s.centroid.join(', ')}]<br>` +
+      `area ${s.area_mm2} mm²<br><br>` +
+      `Claude에게: <i>"방금 고른 ${c.label}을(를) 처리해줘"</i><br>` +
+      `<span style="color:#8a94a3">selector: <code>${JSON.stringify(s.selector)}</code></span>`;
+  } catch(err){ document.getElementById('err').textContent = 'pick 실패: '+err.message; }
+}
+
+// ── (4) ISOLATE — hide/show a component's faceMeshes ────────────────────────
+function reapplyHidden(){
+  for (const ci of compHidden){
+    const c = sceneComponents[ci];
+    if (!c) continue;
+    for (const idx of c.face_indices){
+      const m = faceMeshes[idx];
+      if (m) m.visible = false;
+    }
+  }
+}
+function toggleComponentHidden(i){
+  const c = sceneComponents[i];
+  if (!c) return;
+  const nowHidden = !compHidden.has(i);
+  if (nowHidden) compHidden.add(i); else compHidden.delete(i);
+  for (const idx of c.face_indices){
+    const m = faceMeshes[idx];
+    if (m) m.visible = !nowHidden;
+  }
+  const row = compList.querySelector(`.comp[data-i="${i}"]`);
+  if (row){
+    row.classList.toggle('hidden', nowHidden);
+    row.querySelector('.eye').textContent = nowHidden ? '🚫' : '👁';
+  }
+}
+compShowAllBtn.onclick = ()=>{
+  compHidden.clear();
+  for (const m of faceMeshes){ if (m) m.visible = true; }
+  compList.querySelectorAll('.comp').forEach(e=>{
+    e.classList.remove('hidden');
+    const eye = e.querySelector('.eye'); if (eye) eye.textContent = '👁';
+  });
+};
+
+// ══════════════════════════════════════════════════════════════════════════
 // V3 (2) SECTION SLIDER — X/Y/Z + 0..1 slider swap the DISPLAYED glb to
 // /section?body_id&axis&pos (TRANSIENT — does NOT change currentBodyId or the
 // body's lineage). 'OFF' restores /model. Slider is debounced (~150ms).
@@ -479,8 +793,13 @@ secOff.onclick = ()=>{
   // restore the real body GLB (transient section discarded, lineage untouched)
   if (wasOn && currentBodyId){
     loadGlbInto('/model/'+encodeURIComponent(currentBodyId)+'.glb', true)
-      .then(()=>{ document.getElementById('hud').textContent =
-        `${currentBodyId} · ${faceMeshes.length} face-primitive · Section OFF`; })
+      .then(()=>{
+        // faceMeshes[] was rebuilt fresh (BASE_COLOR, all visible) → re-assert the
+        // component colour mode + isolate/hide state so section round-trip is lossless.
+        applyComponentColors();
+        document.getElementById('hud').textContent =
+          `${currentBodyId} · ${faceMeshes.length} face-primitive · Section OFF`;
+      })
       .catch(e=> document.getElementById('err').textContent = '복원 실패: '+e.message);
   }
 };
