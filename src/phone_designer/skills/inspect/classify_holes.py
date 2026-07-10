@@ -15,7 +15,17 @@ Detect every cylindrical hole on the body and classify it as:
 
 If ``match_standards=True`` we look the hole up against
 ``catalogs/standards/threads_metric.yaml`` (and ``threads_imperial.yaml`` when
-available) by diameter, returning the closest entry.
+available) by diameter, returning the closest entry. GEARBOX fix (2026-07-10):
+a match below ``_THREAD_MATCH_MIN_CONFIDENCE`` is suppressed to ``None`` — an
+honest "no guess" instead of noise (the gearbox bearing counterbores drew
+M10 at confidence 0.026–0.077 purely because M10 is the largest catalog row).
+
+GEARBOX fix (2026-07-10) — angular-extent gate: a hole's cylindrical wall
+must enclose (nearly) the full 360°. The r12 corner fillets of a rectangular
+pocket are quarter-cylinder faces (~90°) that previously each became a
+spurious "d24 simple" hole row. A bore group is only classified as a hole
+when at least one radius's summed u-extent reaches
+``_HOLE_MIN_ARC_EXTENT_DEG``.
 
 Body unchanged — post ``body_present``.
 """
@@ -540,6 +550,63 @@ def _face_axis_distance_to_line(face, axis_origin, axis_dir) -> float:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Angular-extent gate (GEARBOX fix, 2026-07-10)
+#
+# A drilled hole's cylindrical wall encloses ~360° around its axis; the corner
+# fillet of a rectangular pocket is a quarter-cylinder (~90°). Both are
+# GeomAbs_Cylinder faces, so without an extent test the gearbox_housing's four
+# r12 pocket-corner fillets each produced a spurious "d24 depth85 simple" row
+# in the drawing hole table. Requiring the summed per-radius u-extent to reach
+# this floor keeps every real bore (full walls report 360°; a wall split by a
+# seam into two halves reports 180°+180°) while rejecting corner/edge fillet
+# arcs and slot end-caps (~90–180°). 300° leaves headroom for trimmed walls
+# (e.g. a bore breaking into a neighbouring feature may lose a small window
+# of its outer wire) without admitting any fillet geometry.
+_HOLE_MIN_ARC_EXTENT_DEG = 300.0
+
+
+def _cyl_face_arc_extent_deg(face) -> float:
+    """Angular extent (degrees) a cylindrical face sweeps around its axis.
+
+    U of OCCT's cylinder parameterisation IS the angle in radians, so the
+    face's restricted U-range is the wall's arc: a full drilled bore reports
+    ~360°, a rectangular pocket's corner fillet ~90°. Interior trims (a
+    cross-drilled window in the middle of a wall) do not shrink the U-range.
+    Clamped to 360° per face. Returns 360° on any probe failure — fail-open,
+    a face we cannot measure must never veto a real hole.
+    """
+    try:
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+
+        surf = BRepAdaptor_Surface(face)
+        ext = math.degrees(abs(surf.LastUParameter() - surf.FirstUParameter()))
+        if not math.isfinite(ext):
+            return 360.0
+        return min(ext, 360.0)
+    except Exception:
+        return 360.0
+
+
+def _group_max_arc_extent_deg(group, cyl_records, faces) -> float:
+    """Max per-radius summed angular extent (deg) of a bore group's members.
+
+    Coaxial faces of the SAME radius sum (a full wall split by the seam or a
+    slot is 180°+180°); different radii (counterbore stages) are judged
+    independently and the most complete stage speaks for the group — so one
+    stray partial arc that happened to land on a real counterbore's axis can
+    never veto the hole.
+    """
+    per_radius: dict[float, float] = {}
+    for idx in group:
+        fi, _o, _d, r = cyl_records[idx]
+        key = round(r, 3)
+        per_radius[key] = per_radius.get(key, 0.0) + _cyl_face_arc_extent_deg(
+            faces[fi]
+        )
+    return max(per_radius.values(), default=0.0)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Hole grouping
 
 
@@ -572,6 +639,17 @@ def _group_cylinders_by_axis(cyl_records):
 # (e.g. Ø2.5 = M2.5 outer_d AND M3 tap_drill) without ever overriding a
 # clear diameter winner. Only applied when the caller measured a pitch.
 _PITCH_WEIGHT = 2.0
+
+# GEARBOX fix (2026-07-10): _best_standard_match ALWAYS returns the nearest
+# catalog row, however far — the gearbox bearing counterbores (Ø32/Ø35 class
+# bores) drew "M10" at confidence 0.026–0.077 simply because M10 is the
+# largest metric entry. Below this floor the guess is pure noise, so the
+# emitted descriptor carries standard_match=None (honest "no guess") instead.
+# Deliberately BELOW the 0.6 floors already applied downstream
+# (plan_from_feature_catalog._STD_MATCH_MIN_CONF, normalize_varied_catalog):
+# this only strips matches every consumer already discards, so planner
+# decisions are unchanged; only the reported table rows get honest.
+_THREAD_MATCH_MIN_CONFIDENCE = 0.30
 
 
 def _best_standard_match(
@@ -848,11 +926,22 @@ def _classify_one(
     )
 
     if match_standards:
-        descriptor["standard_match"] = _best_standard_match(
+        sm = _best_standard_match(
             primary_d, cb_d, cs_d,
             # COMPLEX-CAD pass-25 (2026-06-10): None by default — inert.
             measured_pitch_mm=measured_pitch_mm,
         )
+        # GEARBOX fix (2026-07-10): a nearest-row match below the confidence
+        # floor is noise (bearing bores drew M10 at 0.026–0.077) — report an
+        # honest None instead of a junk thread guess.
+        if sm is not None:
+            try:
+                conf = float(sm.get("confidence") or 0.0)
+            except (TypeError, ValueError):
+                conf = 0.0
+            if conf < _THREAD_MATCH_MIN_CONFIDENCE:
+                sm = None
+        descriptor["standard_match"] = sm
     else:
         descriptor["standard_match"] = None
 
@@ -958,6 +1047,17 @@ class ClassifyHoles(SkillBase):
         try:
           for gi, group in enumerate(groups):
             o, d = group_axes[gi]
+            # GEARBOX fix (2026-07-10): angular-extent gate. A hole's wall
+            # must enclose ~360° of its axis; a rectangular pocket's corner
+            # fillet is a lone ~90° quarter-cylinder on its own axis. Without
+            # this gate gearbox_housing's four r12 pocket corners each became
+            # a spurious "d24 depth85 simple" hole-table row. Full bores
+            # (360°, or 180°+180° across a seam split) pass untouched.
+            if (
+                _group_max_arc_extent_deg(group, cyl_records, faces)
+                < _HOLE_MIN_ARC_EXTENT_DEG
+            ):
+                continue
             desc = _classify_one(
                 group, cyl_records, cone_records, other_records, faces,
                 o, d,

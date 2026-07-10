@@ -9,7 +9,9 @@ plus a layered DXF (VISIBLE/HIDDEN) per projection view:
     ``non_cut_ready``; one bad view NEVER kills the sheet — it is recorded
     with its raw error and the others still render);
   * optional SECTION view (reuses ``cross_section``, in-plane projected —
-    outline only, no hatch in v1);
+    per-edge polylines are chained end-to-end and CLOSED loops are filled
+    with 45° hatch lines clipped by the even-odd rule, so inner loops
+    (holes) stay clear; open profiles stay outline-only, unhatched);
   * title block (part name / date / scale / projection) with the fixed
     ``DRAFT FOR REVIEW`` label baked into the artifact (SVG watermark + title
     block + HTML banner);
@@ -25,8 +27,9 @@ Writes ``{out_dir}/{part_name}_drawing.html`` and
 the filesystem is touched.
 
 Honest limits (also stated inside the artifact): this is a DRAFT for review,
-not a released drawing — no leader lines, no GD&T frames on the sheet, no
-hatching on the section, ISO view is not-to-scale, and fallback views carry
+not a released drawing — no leader lines, no GD&T frames on the sheet,
+section hatch covers CLOSED loops only (open section profiles stay
+unhatched outline), ISO view is not-to-scale, and fallback views carry
 ``non_cut_ready``.
 """
 from __future__ import annotations
@@ -89,6 +92,7 @@ svg .pl-out { fill: none; stroke: #111; stroke-width: 0.35; }
 svg .pl-out-h { fill: none; stroke: #555; stroke-width: 0.22;
                 stroke-dasharray: 2 1.2; }
 svg .pl-sec { fill: none; stroke: #06437a; stroke-width: 0.3; }
+svg .hatch line { stroke: #06437a; stroke-width: 0.1; }
 svg .lbl { font-family: Arial, sans-serif; font-size: 4px; fill: #111;
            text-anchor: middle; }
 svg .lbl-warn { font-family: Arial, sans-serif; font-size: 3px; fill: #b00020;
@@ -215,6 +219,108 @@ def _view_to_svg(view: dict[str, Any], cell, scale: float,
     return "\n".join(parts)
 
 
+# ── section hatching (45°, even-odd) ────────────────────────────────────────
+_HATCH_SPACING_MM = 2.5    # perpendicular spacing in MODEL mm (~2-3 mm at 1:1)
+_HATCH_MAX_LINES = 400     # huge parts: widen spacing instead of exploding SVG
+_CHAIN_TOL = 1e-3          # endpoint stitch tolerance (points rounded to 1e-4)
+
+
+def _d2(a: tuple[float, float], b: tuple[float, float]) -> float:
+    return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2
+
+
+def _chain_closed_loops(
+    polys: list[list[tuple[float, float]]],
+) -> tuple[list[list[tuple[float, float]]], list[list[tuple[float, float]]]]:
+    """Stitch per-edge 2D polylines end-to-end → (closed_loops, open_profiles).
+
+    ``cross_section`` returns ONE polyline per section edge (straight edges
+    are open segments; circles may come back split at the cylinder seam), so
+    loop closure is a property of the CHAINED profile, not of the raw edge.
+    """
+    t2 = _CHAIN_TOL * _CHAIN_TOL
+    closed: list[list[tuple[float, float]]] = []
+    rest: list[list[tuple[float, float]]] = []
+    for p in polys:
+        pts = [(float(q[0]), float(q[1])) for q in p]
+        if len(pts) < 2:
+            continue
+        if len(pts) >= 4 and _d2(pts[0], pts[-1]) <= t2:
+            closed.append(pts)
+        else:
+            rest.append(pts)
+    open_profiles: list[list[tuple[float, float]]] = []
+    while rest:
+        chain = rest.pop(0)
+        grew = True
+        while grew and not (len(chain) >= 4 and _d2(chain[0], chain[-1]) <= t2):
+            grew = False
+            for i, q in enumerate(rest):
+                if _d2(chain[-1], q[0]) <= t2:
+                    chain = chain + q[1:]
+                elif _d2(chain[-1], q[-1]) <= t2:
+                    chain = chain + q[-2::-1]
+                elif _d2(chain[0], q[-1]) <= t2:
+                    chain = q[:-1] + chain
+                elif _d2(chain[0], q[0]) <= t2:
+                    chain = q[::-1][:-1] + chain
+                else:
+                    continue
+                rest.pop(i)
+                grew = True
+                break
+        if len(chain) >= 4 and _d2(chain[0], chain[-1]) <= t2:
+            closed.append(chain)
+        else:
+            open_profiles.append(chain)
+    return closed, open_profiles
+
+
+def _hatch_segments_45(
+    closed_loops: list[list[tuple[float, float]]],
+    spacing: float = _HATCH_SPACING_MM,
+) -> tuple[list[tuple[tuple[float, float], tuple[float, float]]], float | None]:
+    """Clip the 45° line family against the closed-loop set (even-odd rule).
+
+    Each hatch line ``v = u + c`` is intersected with EVERY closed-loop
+    segment; crossings are sorted along the line and paired even-odd, so
+    material (odd winding) is filled and inner loops (holes) stay clear.
+    Pure python — no new deps. Returns (segments, effective_spacing_mm).
+    """
+    if not closed_loops:
+        return [], None
+    edges = [(a, b) for lp in closed_loops for a, b in zip(lp, lp[1:])
+             if _d2(a, b) > 0.0]
+    if not edges:
+        return [], None
+    us = [p[0] for lp in closed_loops for p in lp]
+    vs = [p[1] for lp in closed_loops for p in lp]
+    c_lo, c_hi = min(vs) - max(us), max(vs) - min(us)  # offsets of v = u + c
+    if not (c_hi - c_lo > 0.0):
+        return [], None
+    step = spacing * math.sqrt(2.0)  # Δc for a perpendicular gap == spacing
+    if (c_hi - c_lo) / step > _HATCH_MAX_LINES:
+        step = (c_hi - c_lo) / _HATCH_MAX_LINES
+    segs: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    k = 0
+    c = c_lo + 0.5 * step
+    while c < c_hi:
+        ts: list[float] = []
+        for a, b in edges:
+            sa, sb = a[1] - a[0] - c, b[1] - b[0] - c
+            if (sa > 0.0) == (sb > 0.0):  # s == 0 counts as the negative side
+                continue
+            f = sa / (sa - sb)
+            ts.append(a[0] + f * (b[0] - a[0]))
+        ts.sort()
+        for i in range(0, len(ts) - 1, 2):  # even-odd pairing along the line
+            if ts[i + 1] - ts[i] > 0.05:    # drop sub-0.05 mm slivers
+                segs.append(((ts[i], ts[i] + c), (ts[i + 1], ts[i + 1] + c)))
+        k += 1
+        c = c_lo + (k + 0.5) * step
+    return segs, round(step / math.sqrt(2.0), 6)
+
+
 def _section_to_svg(section: dict[str, Any], cell) -> str:
     loops = section.get("polylines_2d", [])
     if not loops:
@@ -228,13 +334,25 @@ def _section_to_svg(section: dict[str, Any], cell) -> str:
     cx, cy = cell[0] + cell[2] / 2.0, cell[1] + cell[3] / 2.0
     mu, mv = (u0 + u1) / 2.0, (v0 + v1) / 2.0
     parts = ['<g data-view="section">']
+    hatch = section.get("hatch_segments_2d") or []
+    if hatch:  # under the outline strokes; even-odd keeps holes clear
+        parts.append('<g class="hatch">')
+        for a, b in hatch:
+            parts.append(
+                f'<line x1="{round(cx + (a[0] - mu) * scale, 3)}" '
+                f'y1="{round(cy - (a[1] - mv) * scale, 3)}" '
+                f'x2="{round(cx + (b[0] - mu) * scale, 3)}" '
+                f'y2="{round(cy - (b[1] - mv) * scale, 3)}"/>')
+        parts.append("</g>")
     for lp in loops:
         pts = " ".join(
             f"{round(cx + (p[0] - mu) * scale, 3)},"
             f"{round(cy - (p[1] - mv) * scale, 3)}" for p in lp)
         parts.append(f'<polyline class="pl-sec" points="{pts}"/>')
+    hatch_note = ("45° hatch on closed profiles, holes clear" if hatch
+                  else "outline only — no closed profile to hatch")
     parts.append(f'<text class="lbl" x="{cx}" y="{round(cell[1] + cell[3] - 1.2, 3)}"'
-                 f' style="font-size:2.6px">SECTION A-A (outline only, no hatch;'
+                 f' style="font-size:2.6px">SECTION A-A ({hatch_note};'
                  f' scale to fit)</text>')
     parts.append("</g>")
     return "\n".join(parts)
@@ -264,7 +382,8 @@ def _title_block_svg(part_name: str, generated_at: str, scale_note: str) -> str:
     summary="ONE-call third-angle engineering drawing sheet: FRONT/TOP/RIGHT "
             "+ ISO hlr_view projections (per-view face budget with honest "
             "non_cut_ready silhouette fallback; one bad view never kills the "
-            "sheet), optional cross-section, title block, auto_dimension "
+            "sheet), optional cross-section (closed profiles carry 45° "
+            "even-odd hatch — holes clear), title block, auto_dimension "
             "TABLE with anchored callouts (v1: NO automatic leader "
             "placement), classify_holes hole table — as a self-contained "
             "SVG-in-HTML sheet + a layered VISIBLE/HIDDEN DXF per view. The "
@@ -296,7 +415,8 @@ class DrawingSheet(SkillBase):
         include_section: bool = Field(
             default=False,
             description="Add a SECTION A-A inset (cross_section reuse — "
-                        "outline only, no hatch).")
+                        "closed profiles filled with 45° even-odd hatch, "
+                        "holes clear; open profiles stay outline).")
         section_origin: tuple[float, float, float] = (0.0, 0.0, 0.0)
         section_normal: tuple[float, float, float] = (1.0, 0.0, 0.0)
         samples_per_edge: int = Field(default=20, ge=2, le=500)
@@ -424,11 +544,18 @@ class DrawingSheet(SkillBase):
                          round((p[0] - o[0]) * v_ax[0] + (p[1] - o[1]) * v_ax[1]
                                + (p[2] - o[2]) * v_ax[2], 4))
                         for p in poly])
-                section = {"polylines_2d": loops_2d}
+                closed_loops, open_profiles = _chain_closed_loops(loops_2d)
+                hatch_segs, hatch_spacing = _hatch_segments_45(closed_loops)
+                section = {"polylines_2d": loops_2d,
+                           "hatch_segments_2d": hatch_segs}
                 section_meta.update(
                     origin=list(args.section_origin),
                     normal=list(args.section_normal),
-                    n_polylines=len(loops_2d))
+                    n_polylines=len(loops_2d),
+                    n_closed_loops=len(closed_loops),
+                    n_open_profiles=len(open_profiles),
+                    n_hatch_segments=len(hatch_segs),
+                    hatch_spacing_mm=hatch_spacing)
                 section_svg = _section_to_svg(section, _SECTION_CELL)
                 if not loops_2d:
                     section_meta["note"] = ("section plane misses the body — "
@@ -531,7 +658,9 @@ class DrawingSheet(SkillBase):
                 "notes": [n for n in (dim_note, hole_note) if n] + [
                     "v1: anchored callouts + dimension table only — no "
                     "automatic leader placement; ISO view not to scale; "
-                    "section (when included) is outline-only, no hatch.",
+                    "section (when included) fills CLOSED profiles with 45° "
+                    "even-odd hatch (holes stay clear); open section "
+                    "profiles stay outline-only, unhatched.",
                 ],
             },
         })

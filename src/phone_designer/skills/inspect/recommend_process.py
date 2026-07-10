@@ -151,7 +151,11 @@ class RecommendProcess(SkillBase):
         pull_direction: list[float] = Field(default=[0.0, 0.0, 1.0],
                                              min_length=3, max_length=3)
         candidates: list[str] | None = Field(
-            default=None, description="Subset of cost-processes; None = all.")
+            default=None,
+            description="Subset of cost-processes; None = all. DFM-vocabulary "
+                        "names are accepted and expand to their family "
+                        "(cnc_milling → cnc_3axis+cnc_5axis, sheet_metal → "
+                        "sheet_*, injection_molding → injection_mold_pa).")
         volume_ladder: list[int] = Field(
             default_factory=lambda: [1, 10, 100, 1000, 10000, 100000, 1000000])
         allow_side_action: bool = Field(
@@ -183,8 +187,26 @@ class RecommendProcess(SkillBase):
                                 "duration_s": round(time.perf_counter() - t0, 3)}
                 return default
 
+        # Accept BOTH vocabularies in `candidates`: a DFM family name expands
+        # to every cost candidate in the family (cnc_milling → cnc_3axis +
+        # cnc_5axis, sheet_metal → all three sheet processes, ...). Canonical
+        # candidate keys pass through byte-identically; unknown names are
+        # (as before) simply not matched by any candidate row.
+        cand_set: set[str] | None = None
+        if args.candidates is not None:
+            from phone_designer.skills._process_names import expand_cost_candidates
+
+            expanded, cand_aliases = expand_cost_candidates(args.candidates)
+            cand_set = set(expanded)
+            if cand_aliases:
+                assumptions.append(
+                    "candidate aliases accepted: "
+                    + "; ".join(f"'{k}' → {v}"
+                                for k, v in sorted(cand_aliases.items()))
+                    + " (dfm-vocabulary names expand to their cost-process "
+                      "family).")
         chosen = [c for c in _CANDIDATES
-                  if args.candidates is None or c[0] in set(args.candidates)]
+                  if cand_set is None or c[0] in cand_set]
         cost_keys = {c[1] for c in chosen if c[4]}
         assert cost_keys <= _COSTABLE, f"unknown cost-process: {cost_keys - _COSTABLE}"
 

@@ -16,8 +16,12 @@ path. These tests pin that:
        ON vs OFF, for a hole-bearing build123d slab AND (when present) a
        corpus body.
     2. The cache never makes detection SLOWER (cache_time <= no_cache_time).
-    3. The cache really removes redundant AddOptimal_s calls (face-bbox
-       AddOptimal_s count drops with the cache on).
+    3. The cache never ADDS AddOptimal_s calls (face-bbox count with the
+       cache on is <= off). GEARBOX fix (2026-07-10): this was a strict
+       reduction pin (Ventilator 2986 -> 269) until the angular-extent gate
+       started dropping partial-arc groups BEFORE _classify_one — the
+       redundant per-group bbox passes are now gone at the source, so the
+       memo is a safety net rather than the active saver on these bodies.
 
 Toggling: ``_BBOX_CACHE_DISABLED`` is a module flag consulted by both
 ``_bbox_cache_get`` and ``_bbox_cache_scope.__enter__``; flipping it gives a
@@ -127,6 +131,11 @@ def test_holes_byte_identical_cache_on_vs_off_build123d():
         f"cache INCREASED face-bbox AddOptimal_s calls "
         f"(on={faces_on} off={faces_off})"
     )
+    # (GEARBOX fix 2026-07-10: the historic strict reduction on Ventilator —
+    # 2986 -> 269 — no longer reproduces because the angular-extent gate drops
+    # partial-arc groups BEFORE _classify_one, removing the redundant
+    # per-group band/cone/threaded bbox passes at the source. The corpus test
+    # below now pins <= like this one; byte-identity stays strict.)
 
 
 def test_cache_not_slower_than_no_cache_build123d():
@@ -169,7 +178,13 @@ def test_holes_byte_identical_on_corpus_body():
         "Ventilator classify_holes output DIFFERS with the bbox memo on vs "
         "off — byte-identity broken on a corpus body"
     )
-    assert faces_on < faces_off, (
-        f"cache did not reduce face-bbox AddOptimal_s on Ventilator "
+    # GEARBOX fix (2026-07-10): was `faces_on < faces_off` (2986 -> 269).
+    # The angular-extent gate now drops Ventilator's partial-arc fillet
+    # groups BEFORE _classify_one, so the redundant per-group band / cone /
+    # threaded-face bbox passes never run and each face is bbox'd at most
+    # once EVEN WITHOUT the memo (on == off == 256 measured). The memo must
+    # simply never make things worse; byte-identity above stays the gate.
+    assert faces_on <= faces_off, (
+        f"cache INCREASED face-bbox AddOptimal_s on Ventilator "
         f"(on={faces_on} off={faces_off})"
     )

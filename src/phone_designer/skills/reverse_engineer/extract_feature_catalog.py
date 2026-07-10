@@ -897,6 +897,27 @@ class ExtractFeatureCatalog(SkillBase):
         # consumers (plan_from_feature_catalog) can size the placeholder
         # base box to the *original* extents instead of the inflated post-
         # detector cache.
+        #
+        # MESH-HISTORY DETERMINISM (2026-07-10): useTriangulation=False.
+        # AddOptimal_s defaults useTriangulation=True, so whenever ANY prior
+        # skill tessellated this body in-process (dfm_verdict/detect_sheet_
+        # metal inside recommend_process, stl/gltf export, a preview render,
+        # or simply a PREVIOUS ExtractFeatureCatalog run — its canonical
+        # 0.5 mm tessellation below persists on the shape), the "snapshot"
+        # silently became a MESH bbox inflated by the stored per-face
+        # deflection of whichever mesher ran FIRST. Measured on
+        # gearbox_housing.step: exact 140×90×90 → stock 1134.000 cm³
+        # ($84.7008 @lot1000) vs +0.003 mm/side after dfm ($84.7224) vs
+        # +~0.1 mm/side after the 0.5 mm canonical mesh ($85.0478) — the
+        # live ±$0.02 cost drift. useTriangulation=False forces the precise
+        # geometry evaluators regardless of triangulation state, so
+        # initial_bbox_mm is one value per shape, independent of what ran
+        # before in the process. On an UNMESHED body this is bit-identical
+        # to the old call (no triangulation existed to consult), so fresh
+        # single-run catalogs — including every committed corpus baseline —
+        # are unchanged. Cost: measured on the meshed gearbox shape the
+        # exact evaluators take 0.11 ms vs 0.04 ms for the mesh walk —
+        # +0.07 ms absolute on a ~1 s catalog build (<0.01%).
         _initial_bbox: tuple[float, float, float, float, float, float] | None
         try:
             from OCP.Bnd import Bnd_Box
@@ -904,9 +925,13 @@ class ExtractFeatureCatalog(SkillBase):
             _shape_for_bbox = _occt_shape(body)
             _bb = Bnd_Box()
             try:
-                BRepBndLib.AddOptimal_s(_shape_for_bbox, _bb)
+                BRepBndLib.AddOptimal_s(
+                    _shape_for_bbox, _bb,
+                    False,   # useTriangulation — NEVER read a stale mesh
+                    False,   # useShapeTolerance — geometry only, no pad
+                )
             except Exception:
-                BRepBndLib.Add_s(_shape_for_bbox, _bb)
+                BRepBndLib.Add_s(_shape_for_bbox, _bb, False)
             if not _bb.IsVoid():
                 _initial_bbox = tuple(float(c) for c in _bb.Get())  # type: ignore[assignment]
             else:
@@ -1153,6 +1178,15 @@ class ExtractFeatureCatalog(SkillBase):
         base_thickness = _safe(_estimate_base_thickness, body)
         timings_sec["estimate_base_thickness"] = round(time.perf_counter() - t0, 4)
         base_z_max: float | None = None
+        # KNOWN RESIDUAL (2026-07-10, deliberate): this read keeps the default
+        # useTriangulation=True, so zmin here comes from the canonical 0.5 mm
+        # tessellation above — the value every committed corpus baseline was
+        # captured against. If a FINER mesh pre-exists (e.g. dfm_verdict ran
+        # first in this process), zmin can shift by ~1e-3 mm, which is far
+        # below any _detect_swept_loft_revolve threshold. Switching it to
+        # exact bounds (like the initial_bbox snapshot) would change fresh-run
+        # base_z_max on curved-bottom corpus parts and needs a full
+        # corpus-regress gate — out of scope for the cost-drift fix.
         try:
             from OCP.Bnd import Bnd_Box
             from OCP.BRepBndLib import BRepBndLib

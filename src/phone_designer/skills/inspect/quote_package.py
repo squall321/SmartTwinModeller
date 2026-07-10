@@ -187,7 +187,10 @@ class QuotePackage(SkillBase):
             default=None,
             description="Subset of the costable process keys "
                         f"{_COSTABLE_KEYS} to price AND to hand "
-                        "recommend_process as candidates. None -> "
+                        "recommend_process as candidates. DFM-vocabulary "
+                        "names are accepted and expand to their costable "
+                        "family (cnc_milling -> cnc_3axis+cnc_5axis, "
+                        "sheet_metal -> sheet_*). None -> "
                         "recommend_process sees all candidates and the cost "
                         "table prices the RECOMMENDED process (fallback "
                         "cnc_3axis). Unknown keys RAISE (a typo is a bug).")
@@ -225,12 +228,27 @@ class QuotePackage(SkillBase):
                 raise ValueError(
                     "fm.invalid_args: processes must be a non-empty subset of "
                     f"{_COSTABLE_KEYS}, or None for all")
-            bad = [p for p in v if p not in _COSTABLE_KEYS]
+            # Accept BOTH vocabularies: a DFM family name expands to its
+            # costable keys (cnc_milling → cnc_3axis+cnc_5axis, ...);
+            # canonical keys pass through byte-identically. A name whose
+            # expansion is not fully costable is refused under its ORIGINAL
+            # spelling — the existing honest refusal, unchanged.
+            from phone_designer.skills._process_names import (
+                expand_cost_candidates,
+            )
+            expanded: list[str] = []
+            bad: list[str] = []
+            for p in v:
+                targets, _ = expand_cost_candidates([p])
+                if any(t not in _COSTABLE_KEYS for t in targets):
+                    bad.append(p)
+                    continue
+                expanded += [t for t in targets if t not in expanded]
             if bad:
                 raise ValueError(
                     f"fm.invalid_args: unknown process key(s) {bad}; known "
                     f"costable keys: {_COSTABLE_KEYS}")
-            return v
+            return expanded
 
     # ──────────────────────────────────────────────────────────────────────
     def _apply(self, body: Any, args: Args) -> SkillResult:

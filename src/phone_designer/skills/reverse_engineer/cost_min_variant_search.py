@@ -126,8 +126,11 @@ class CostMinVariantSearch(SkillBase):
         processes: list[str] | None = Field(
             default=None,
             description="Subset of recommend_process candidate KEYS "
-                        f"{_ALL_KEYS}. None -> all. Unknown names RAISE "
-                        "(a typo is a bug, not a silently-dropped extra).")
+                        f"{_ALL_KEYS}. DFM-vocabulary names are accepted and "
+                        "expand to their costable family (cnc_milling -> "
+                        "cnc_3axis+cnc_5axis). None -> all. Unknown names "
+                        "RAISE (a typo is a bug, not a silently-dropped "
+                        "extra).")
         max_deviation_mm: float | None = Field(
             default=None, gt=0.0,
             description="HARD fidelity gate: a variant whose fidelity vs the "
@@ -176,11 +179,25 @@ class CostMinVariantSearch(SkillBase):
                 raise ValueError(
                     "processes must be a non-empty subset of the costable keys, "
                     f"or None for all: {_ALL_KEYS}")
-            bad = [p for p in v if p not in _ALL_KEYS]
+            # Accept BOTH vocabularies: DFM family names expand to their
+            # costable keys (cnc_milling → cnc_3axis+cnc_5axis, ...); a name
+            # whose expansion is not fully costable is refused under its
+            # ORIGINAL spelling — the existing honest refusal, unchanged.
+            from phone_designer.skills._process_names import (
+                expand_cost_candidates,
+            )
+            expanded: list[str] = []
+            bad: list[str] = []
+            for p in v:
+                targets, _ = expand_cost_candidates([p])
+                if any(t not in _ALL_KEYS for t in targets):
+                    bad.append(p)
+                    continue
+                expanded += [t for t in targets if t not in expanded]
             if bad:
                 raise ValueError(
                     f"unknown process key(s) {bad}; known costable keys: {_ALL_KEYS}")
-            return v
+            return expanded
 
     # ──────────────────────────────────────────────────────────────────────────
     def _apply(self, body: Any, args: Args) -> SkillResult:

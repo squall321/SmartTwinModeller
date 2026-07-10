@@ -559,9 +559,14 @@ class EstimateCost(SkillBase):
     class Args(BaseModel):
         process: str = Field(
             default="cnc_3axis",
-            description="cnc_3axis | cnc_5axis | injection_mold_pa | cnc_milling | "
+            description="cnc_3axis | cnc_5axis | injection_mold_pa | "
                         "sheet_laser_brake (default sheet) | sheet_turret_brake | "
-                        "sheet_progressive_die (stamping)",
+                        "sheet_progressive_die (stamping). DFM-vocabulary "
+                        "aliases accepted: cnc_milling→cnc_3axis (family "
+                        "default — name cnc_5axis explicitly), "
+                        "injection_molding→injection_mold_pa; output "
+                        "'process' is the canonical cost name (the caller's "
+                        "spelling is kept in 'process_requested').",
         )
         material: str = Field(
             default="aluminum",
@@ -630,11 +635,23 @@ class EstimateCost(SkillBase):
             ExtractFeatureCatalog,
         )
 
+        from phone_designer.skills._process_names import to_cost_process
+
         R = dict(_DEFAULT_RATES)
         R.update({k: float(v) for k, v in (args.rates or {}).items() if k in R})
         density, price_per_kg, mat_label = _density_and_price(args.material)
-        proc = (args.process or "cnc_3axis").strip().lower()
+        proc_requested = (args.process or "cnc_3axis").strip().lower()
+        # Accept BOTH vocabularies (dfm 'cnc_milling' == cost 'cnc_3axis'
+        # family default, 'injection_molding' == 'injection_mold_pa') via the
+        # single alias table; canonical spellings pass through untouched, so
+        # canonical callers stay byte-identical.
+        proc = to_cost_process(proc_requested)
         assumptions: list[str] = []
+        if proc != proc_requested:
+            assumptions.append(
+                f"process alias '{proc_requested}' → '{proc}' (dfm-vocabulary "
+                "name accepted; canonical cost model used — name cnc_5axis "
+                "explicitly for the 5-axis factor)")
 
         # ── measured drivers (re-extracted, OR injected via precomputed) ───────
         pre = args.precomputed if isinstance(args.precomputed, dict) else None
@@ -836,5 +853,9 @@ class EstimateCost(SkillBase):
             "assumptions": assumptions,
             "grade": "estimate",
         }
+        if proc != proc_requested:
+            # preserve the caller's spelling — added ONLY when aliased, so
+            # canonical callers stay byte-identical.
+            out["process_requested"] = proc_requested
         return SkillResult(body=body, history=EntityHistoryMap(),
                            extras={"cost_estimate": out})

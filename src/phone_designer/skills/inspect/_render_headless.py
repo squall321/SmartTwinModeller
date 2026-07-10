@@ -14,14 +14,31 @@ Cameras: an orthographic projection along a fixed direction per named view
 (iso / front / top / right / left / back / bottom), auto-fit to the body bbox.
 Not photoreal — a clean shaded solid a human (or a vision model) can read for
 "did the modelling do what I meant".
+
+Depth cue: flat Lambert alone gave coplanar-normal faces at DIFFERENT depths
+the IDENTICAL color (a housing's top flange vs its cavity floor are both +Z —
+an open cavity was indistinguishable from a solid top). Shading is therefore
+modulated by TWO deterministic depth terms — a per-face recession factor
+(carries the visible separation; constant across a planar face so a flat plate
+stays uniform) and a gentle per-pixel z-buffer fog (nearer = brighter). See
+render_view for the tuning rationale.
 """
 from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import Any
 
 import numpy as np
+
+# ── depth-cue tuning (see render_view) ───────────────────────────────────────
+# per-face recession: the deepest-recessed face keeps this fraction of its
+# Lambert shade (1.0 would disable the cue). 0.72 puts a housing's top flange
+# vs its cavity floor/inner walls ~15-30 gray levels apart on every channel.
+_DEPTH_FACE_LO = 0.72
+# per-pixel z-buffer fog: the farthest pixel loses this fraction (nearer =
+# brighter). Kept gentle so a planar face slanted across the depth range (a box
+# top in iso spans ~75-90% of it) stays visually uniform (<6 gray levels).
+_DEPTH_FOG = 0.03
 
 # view name -> (camera direction pointing AT the body, up hint). The camera looks
 # from -dir toward the origin; +Z is up unless the view looks down/up Z.
@@ -142,7 +159,36 @@ def render_view(shape, view: str = "iso", *, size: int = 640,
     nrm = nrm / ln
     lambert = np.abs(nrm @ (-fwd))           # |n·light|, two-sided
     shade = (0.30 + 0.70 * lambert)          # ambient 0.30
+
+    # ── deterministic depth cue ──────────────────────────────────────────────
+    # Flat Lambert gives coplanar-normal faces at different depths the SAME
+    # color (top flange vs cavity floor: both +Z). Two modulations fix that:
+    #  (1) per-face recession: d = n·(centroid - center) is CONSTANT across a
+    #      planar face (a flat plate stays perfectly uniform) yet separates
+    #      parallel faces — for camera-facing parallel planes a larger offset
+    #      along the shared normal is NEARER the camera, so it shades brighter;
+    #      recessed surfaces (cavity floors, hole walls) shade darker in every
+    #      view. This term carries the required >=8-gray-level separation.
+    #  (2) per-pixel z-buffer fog in the raster loop below (nearer = brighter).
+    # A single per-pixel term cannot do both jobs: in iso a full-footprint top
+    # face spans most of the scene depth range, so any fog strong enough to
+    # split flange/floor by >=8 levels would band a flat top far beyond the
+    # <6-level uniformity budget. Both terms are pure numpy, no randomness.
+    tri_centroid = (verts[a] + verts[b] + verts[c]) / 3.0
+    plane_off = np.einsum("ij,ij->i", nrm, tri_centroid - center)
+    off_lo = plane_off.min()
+    off_span = plane_off.max() - off_lo
+    if off_span > 1e-9:
+        t_face = (plane_off - off_lo) / off_span
+    else:                                    # single plane / sphere: no cue
+        t_face = np.ones_like(plane_off)
+    shade = shade * (_DEPTH_FACE_LO + (1.0 - _DEPTH_FACE_LO) * t_face)
     base_col = np.array([70, 130, 200], dtype=float)   # steel blue solid
+
+    # per-pixel fog normalization from the scene depth range (z-buffer values
+    # are barycentric blends of vertex depths, so they stay inside this range).
+    depth_lo = float(depth.min())
+    depth_span = float(depth.max() - depth_lo)
 
     # z-buffer painter's rasterizer (numpy, per-triangle scanline via bbox fill).
     img = bg.astype(float).copy()
@@ -174,12 +220,44 @@ def render_view(shape, view: str = "iso", *, size: int = 640,
         if not closer.any():
             continue
         sub_z[closer] = zvals[closer]
-        col = np.clip(base_col * shade[i], 0, 255)
+        # per-pixel z-buffer fog: nearer (smaller depth) = brighter.
+        if depth_span > 1e-9:
+            t_pix = np.clip((zvals[closer] - depth_lo) / depth_span, 0.0, 1.0)
+        else:
+            t_pix = np.zeros(int(closer.sum()))
+        fog = 1.0 - _DEPTH_FOG * t_pix
+        col = np.clip(base_col[None, :] * shade[i] * fog[:, None], 0, 255)
         sub_img = img[miny:maxy + 1, minx:maxx + 1]
         sub_img[closer] = col
 
+    # projection metadata (plain floats — JSON-safe) so a caller/test can map a
+    # WORLD point to its pixel via project_to_pixel() and sample colors.
+    projection = {
+        "center": [float(x) for x in center],
+        "right": [float(x) for x in right],
+        "up": [float(x) for x in true_up],
+        "fwd": [float(x) for x in fwd],
+        "cu": float(cu), "cv": float(cv),
+        "scale": float(scale), "size": int(size),
+    }
     return np.clip(img, 0, 255).astype(np.uint8), {
-        "view": view, "n_triangles": int(len(tris)), "empty": False}
+        "view": view, "n_triangles": int(len(tris)), "empty": False,
+        "projection": projection}
+
+
+def project_to_pixel(point_xyz, info) -> tuple[int, int]:
+    """Map a WORLD point to (col, row) pixel coords of a render_view image.
+
+    Uses the ``projection`` metadata returned in render_view's info dict —
+    lets a test (or a measuring caller) sample the pixel where a known feature
+    (flange top, cavity floor, ...) lands, without duplicating camera math."""
+    pr = info["projection"]
+    rel = np.asarray(point_xyz, dtype=float) - np.asarray(pr["center"])
+    u = float(rel @ np.asarray(pr["right"]))
+    v = float(rel @ np.asarray(pr["up"]))
+    x = (u - pr["cu"]) * pr["scale"] + pr["size"] / 2.0
+    y = pr["size"] / 2.0 - (v - pr["cv"]) * pr["scale"]
+    return int(round(x)), int(round(y))
 
 
 def render_views_to_pngs(shape, out_dir: str, views=("iso", "front", "top"),

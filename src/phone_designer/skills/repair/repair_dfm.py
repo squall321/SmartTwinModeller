@@ -313,7 +313,11 @@ class RepairDfm(SkillBase):
 
         processes: list[str] = Field(
             default_factory=lambda: ["cnc_milling", "injection_molding"],
-            description="Processes to evaluate + repair (same names as dfm_verdict).")
+            description="Processes to evaluate + repair (same names as "
+                        "dfm_verdict; cost-vocabulary spellings like "
+                        "cnc_3axis/cnc_5axis/injection_mold_pa are accepted "
+                        "and fold into their DFM family — the result is "
+                        "identical either way).")
         pull_direction: list[float] = Field(
             default=[0.0, 0.0, 1.0], min_length=3, max_length=3,
             description="Mold-open / tool axis; sign of Z -> draft_apply_auto "
@@ -364,6 +368,15 @@ class RepairDfm(SkillBase):
         if body is None:
             raise ValueError("repair_dfm: body is None")
 
+        # Accept BOTH vocabularies (cost 'cnc_3axis'/'cnc_5axis' == dfm
+        # 'cnc_milling' family, ...) — canonicalise ONCE so the spelling can
+        # never change the result: repair_dfm(['cnc_3axis']) is
+        # result-IDENTICAL to repair_dfm(['cnc_milling']). Output 'processes'
+        # carries the canonical DFM names (unchanged for canonical callers).
+        from phone_designer.skills._process_names import canon_dfm_processes
+
+        processes, _ = canon_dfm_processes(args.processes)
+
         original_shape = _occt_shape(body)
         if original_shape is None:
             raise ValueError("repair_dfm: body has no OCCT shape")
@@ -384,7 +397,7 @@ class RepairDfm(SkillBase):
         oblique = (abs(px) > 1e-6 or abs(py) > 1e-6)
         pull_z = "+Z" if pz >= 0 else "-Z"
 
-        before_verdict = _run_verdict(working, args.processes, args.pull_direction,
+        before_verdict = _run_verdict(working, processes, args.pull_direction,
                                       args.quality_report)
         # Worst consulted grade (provenance cap) — estimate => grade_limited.
         grade_limited = any(
@@ -397,7 +410,7 @@ class RepairDfm(SkillBase):
         # ─── analyze -> fix -> verify rounds ────────────────────────────────
         for _round in range(args.max_rounds):
             rounds_used = _round + 1
-            cur_verdict = _run_verdict(working, args.processes,
+            cur_verdict = _run_verdict(working, processes,
                                        args.pull_direction)
             kept_this_round = 0
 
@@ -411,7 +424,7 @@ class RepairDfm(SkillBase):
 
             # (1) DRAFT — sub-min-draft walls (bulk form, applied first).
             if "draft" in cats and not oblique:
-                dcs = _draft_candidates(cur_verdict, args.processes)
+                dcs = _draft_candidates(cur_verdict, processes)
                 if dcs:
                     # one draft to the largest required angle clears all. The
                     # applied angle must also clear the inspector floor (the
@@ -429,7 +442,7 @@ class RepairDfm(SkillBase):
 
             # (2) FILLET — internal tool radius / sharp corner (finishing, last).
             if "fillet" in cats:
-                r_req = _required_radius(cur_verdict, args.processes)
+                r_req = _required_radius(cur_verdict, processes)
                 if r_req is not None:
                     viol, _tot = _enforce_radius_violations(working, r_req)
                     if viol:
@@ -441,7 +454,7 @@ class RepairDfm(SkillBase):
                             "r_req": r_req, "r_applied": r_applied,
                             "viol_before": len(viol),
                             "process_origin": [
-                                p for p in args.processes
+                                p for p in processes
                                 if (_check(cur_verdict.get(p, {}), "min_tool_radius")
                                     or _check(cur_verdict.get(p, {}), "min_fillet"))],
                         })
@@ -457,7 +470,7 @@ class RepairDfm(SkillBase):
                 # (a prior candidate this round may already have changed it), so
                 # the GATE-1 owning + cross-process checks compare against the
                 # real pre-fix state, not the stale start-of-round verdict.
-                base_verdict = _run_verdict(working, args.processes,
+                base_verdict = _run_verdict(working, processes,
                                             args.pull_direction)
                 if cand["kind"] == "fillet":
                     # re-measure the violation count on the current working body.
@@ -500,7 +513,7 @@ class RepairDfm(SkillBase):
 
                 # GATE 1 — verdict moved + no cross-process regression (compared
                 # against the per-candidate base_verdict, not the round start).
-                after_verdict = _run_verdict(new_body, args.processes,
+                after_verdict = _run_verdict(new_body, processes,
                                              args.pull_direction)
                 owning_ok, dfm_before, dfm_after = self._owning_improved(
                     cand, base_verdict, after_verdict, working, new_body, args)
@@ -510,7 +523,7 @@ class RepairDfm(SkillBase):
                         dfm_before=dfm_before, dfm_after=dfm_after))
                     continue
                 regr = _cross_process_regressed(base_verdict, after_verdict,
-                                                args.processes)
+                                                processes)
                 if regr is not None:
                     fixes_rejected.append(_reject(
                         cand, "cross_process_regression", None, None,
@@ -572,8 +585,8 @@ class RepairDfm(SkillBase):
                 break  # fixpoint
 
         # ─── after verdict (final body) + suggestions ───────────────────────
-        after_verdict = _run_verdict(working, args.processes, args.pull_direction)
-        suggestions = _build_suggestions(after_verdict, args.processes)
+        after_verdict = _run_verdict(working, processes, args.pull_direction)
+        suggestions = _build_suggestions(after_verdict, processes)
 
         body_changed = bool(fixes_applied) and bool(args.apply)
         total_h = 0.0
@@ -582,14 +595,14 @@ class RepairDfm(SkillBase):
             total_h = round(ht, 4) if ht is not None else 0.0
 
         grade = _repair_grade(fixes_applied, after_verdict, suggestions,
-                              args.processes, body_changed)
+                              processes, body_changed)
 
         out_body = body if not body_changed else working
 
         extras = {
             "dfm_repair": {
                 "schema_version": SCHEMA_VERSION,
-                "processes": list(args.processes),
+                "processes": list(processes),
                 "pull_direction": [round(float(c), 6) for c in args.pull_direction],
                 "apply": bool(args.apply),
                 "before": _verdict_summary(before_verdict),

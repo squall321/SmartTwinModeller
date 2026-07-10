@@ -525,7 +525,13 @@ class DfmVerdict(SkillBase):
             default_factory=lambda: ["cnc_milling", "injection_molding"],
             description="Manufacturing processes to evaluate. Known: "
                         f"{sorted(set(_PROCESS_TO_CODE) | set(_EMBEDDED_DEFAULTS))}. "
-                        "Unknown names are listed in "
+                        "Cost-vocabulary spellings are accepted too "
+                        "(cnc_3axis/cnc_5axis→cnc_milling, "
+                        "injection_mold_pa→injection_molding, "
+                        "sheet_*→sheet_metal, die_cast_al→die_casting); the "
+                        "verdict keys stay canonical DFM names and the fold "
+                        "is recorded in _meta.process_aliases. Unknown names "
+                        "are listed in "
                         "dfm_verdict['_meta']['unknown_processes'].",
         )
         pull_direction: list[float] = Field(
@@ -558,9 +564,16 @@ class DfmVerdict(SkillBase):
         five_axis = _five_axis_spec()
         five_axis_ok = bool(five_axis and five_axis.get("undercut_allowed"))
 
+        # Accept BOTH vocabularies: cost spellings (cnc_3axis/cnc_5axis/
+        # injection_mold_pa/...) fold into their DFM family via the single
+        # alias table; canonical DFM callers pass through byte-identically.
+        # Unknown names pass through UNCHANGED into unknown_processes.
+        from phone_designer.skills._process_names import canon_dfm_processes
+
+        canon_procs, alias_map = canon_dfm_processes(args.processes)
         known = set(_PROCESS_TO_CODE) | set(_EMBEDDED_DEFAULTS)
-        requested = [p for p in args.processes if p in known]
-        unknown = [p for p in args.processes if p not in known]
+        requested = [p for p in canon_procs if p in known]
+        unknown = [p for p in canon_procs if p not in known]
 
         processes: dict[str, Any] = {}
         for proc in requested:
@@ -587,6 +600,10 @@ class DfmVerdict(SkillBase):
                 "unknown_processes": unknown,
             },
         }
+        if alias_map:
+            # record the spelling fold ONLY when it happened — canonical
+            # callers stay byte-identical.
+            verdict["_meta"]["process_aliases"] = alias_map
         return SkillResult(
             body=body,
             history=EntityHistoryMap(),
