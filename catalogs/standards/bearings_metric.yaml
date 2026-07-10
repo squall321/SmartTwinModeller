@@ -1,5 +1,5 @@
 # Metric deep-groove ball bearings — bore × outer × width (mm).
-# Reference: ISO 15 dimension series 60xx/62xx + miniature 608/625.
+# Reference: ISO 15 dimension series 60xx/62xx/63xx + miniature 608/625.
 # Key: ISO bearing designation. Values: bore_id_mm, outer_d_mm, width_mm.
 bearings:
   "608":
@@ -54,3 +54,59 @@ bearings:
     bore_id_mm: 17
     outer_d_mm: 40
     width_mm: 12
+  "6204":
+    bore_id_mm: 20
+    outer_d_mm: 47
+    width_mm: 14
+  "6205":
+    bore_id_mm: 25
+    outer_d_mm: 52
+    width_mm: 15
+  "6206":
+    bore_id_mm: 30
+    outer_d_mm: 62
+    width_mm: 16
+  "6207":
+    bore_id_mm: 35
+    outer_d_mm: 72
+    width_mm: 17
+  "6208":
+    bore_id_mm: 40
+    outer_d_mm: 80
+    width_mm: 18
+  "6209":
+    bore_id_mm: 45
+    outer_d_mm: 85
+    width_mm: 19
+  "6210":
+    bore_id_mm: 50
+    outer_d_mm: 90
+    width_mm: 20
+  "6300":
+    bore_id_mm: 10
+    outer_d_mm: 35
+    width_mm: 11
+  "6301":
+    bore_id_mm: 12
+    outer_d_mm: 37
+    width_mm: 12
+  "6302":
+    bore_id_mm: 15
+    outer_d_mm: 42
+    width_mm: 13
+  "6303":
+    bore_id_mm: 17
+    outer_d_mm: 47
+    width_mm: 14
+  "6304":
+    bore_id_mm: 20
+    outer_d_mm: 52
+    width_mm: 15
+  "6305":
+    bore_id_mm: 25
+    outer_d_mm: 62
+    width_mm: 17
+  "6306":
+    bore_id_mm: 30
+    outer_d_mm: 72
+    width_mm: 19
