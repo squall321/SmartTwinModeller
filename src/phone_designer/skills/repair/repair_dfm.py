@@ -260,13 +260,19 @@ def _enforce_radius_violations(body, min_radius_mm: float):
 
 
 def _enforce_radius_fix(body, min_radius_mm: float):
-    """Run enforce_min_tool_radius auto_fix=True -> (new_body, edges_filleted)."""
+    """Run enforce_min_tool_radius auto_fix=True ->
+    (new_body, edges_filleted, edges_skipped_unsafe).
+
+    edges_skipped_unsafe: violations excluded from the fillet build by the
+    skill's crash guard (osculating tangent junction — filleting them would
+    ACCESS_VIOLATION the process). Surfaced, never silently dropped."""
     from phone_designer.skills.inspect.enforce_min_tool_radius import (
         EnforceMinToolRadius,
     )
     res = EnforceMinToolRadius().apply(
         body, {"min_radius_mm": float(min_radius_mm), "auto_fix": True})
-    return res.body, int(res.extras.get("edges_filleted", 0))
+    return (res.body, int(res.extras.get("edges_filleted", 0)),
+            list(res.extras.get("edges_skipped_unsafe", [])))
 
 
 def _draft_fix(body, min_draft_deg: float, pull: str, parting_z):
@@ -485,10 +491,16 @@ class RepairDfm(SkillBase):
                 # GATE 0 — op did not raise.
                 try:
                     if cand["kind"] == "fillet":
-                        new_body, n_filleted = _enforce_radius_fix(
-                            working, cand["r_applied"])
+                        new_body, n_filleted, skipped_unsafe = \
+                            _enforce_radius_fix(working, cand["r_applied"])
                         cand["edge_count"] = n_filleted
+                        cand["edges_skipped_unsafe"] = skipped_unsafe
                         if n_filleted == 0:
+                            if skipped_unsafe:
+                                raise RuntimeError(
+                                    f"0 edges filleted ({len(skipped_unsafe)} "
+                                    "crash-prone edge(s) skipped by guard: "
+                                    f"{skipped_unsafe[0]['reason'][:80]})")
                             raise RuntimeError("0 edges filleted")
                     else:
                         new_body = _draft_fix(working, cand["min_draft"],
@@ -564,17 +576,23 @@ class RepairDfm(SkillBase):
                 # KEEP.
                 working = new_body
                 kept_this_round += 1
+                if cand["kind"] == "fillet":
+                    fix_params = {"min_radius_mm": round(cand["r_applied"], 4),
+                                  "edge_count": cand.get("edge_count", 0)}
+                    # Crash-guard skips (osculating tangent junction) — surfaced
+                    # only when present so pre-guard results stay byte-identical.
+                    if cand.get("edges_skipped_unsafe"):
+                        fix_params["edges_skipped_unsafe"] = \
+                            cand["edges_skipped_unsafe"]
+                else:
+                    fix_params = {"min_draft_deg": round(cand["min_draft"], 4),
+                                  "pull_direction": pull_z,
+                                  "parting_z_mm": args.parting_z_mm}
                 fixes_applied.append({
                     "issue": cand["issue"],
                     "process_origin": cand.get("process_origin", []),
                     "op": cand["op"],
-                    "params": (
-                        {"min_radius_mm": round(cand["r_applied"], 4),
-                         "edge_count": cand.get("edge_count", 0)}
-                        if cand["kind"] == "fillet" else
-                        {"min_draft_deg": round(cand["min_draft"], 4),
-                         "pull_direction": pull_z,
-                         "parting_z_mm": args.parting_z_mm}),
+                    "params": fix_params,
                     "hausdorff_mm": round(h_step, 4),
                     "hausdorff_budget_mm": round(budget_step, 4),
                     "dfm_before": dfm_before,
