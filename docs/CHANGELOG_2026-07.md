@@ -281,3 +281,62 @@ All five roadmap Phase-2 tracks:
    partially met at catalog level), corpus expansion (industrial 70 + revolved 37,
    first-sweep TIMEOUTs recorded honestly), NL→spec LIVE eval lane on the shipped
    replay skeleton (private hold-out split; nightly/manual only, never CI-blocking).
+
+## 7. Web viewer V1→V3 + multi-body — SEE-and-POINT modelling loop (`6eebf4f`, `94f4b91`, `f1dae4c`)
+
+The GL-free preview grew into a real browser CAD inspector; Claude stays the
+modelling brain, the browser rotates/picks/shows.
+
+- **The silently-broken pick loop, found and fixed** (`6eebf4f`): GLB is
+  metres/Y-up, pick_face compared OCCT mm/Z-up centroids — a 1000×/90°
+  mismatch my own probe had missed by feeding OCCT-mm points (false
+  confidence). Fix: pick by GLB **primitive index** (prim[i] == _all_faces[i],
+  1:1 in-order — re-proven raw); killed five mispick bugs at once. Plus F2
+  namespace bridge (full generate→pick→get_selection→modify round-trip
+  ok=True), F3 workspace pointer coupling, F4 traversal/CORS, F5 threading,
+  F6 cache-by-size+mtime, F7 honest 400s; edge pick (`edges_near_point`
+  fillets ONE clicked edge); per-face highlight, auto-refresh, camera presets.
+- **V3** (`94f4b91`): `/scene` feature overlay (extract_feature_catalog
+  face_indices map 1:1 to GLB primitives — hole idx → cylinder bore, verified
+  0.06 mm), `/section` transient cut view (never mints a body), measure;
+  MCP `cad_scene` / `cad_section` / `cad_measure(distance)` (24→26 tools).
+- **Multi-body** (`f1dae4c`): face_idx→component map via iter_solid_components
+  + IsSame (plate+bolt: comp0 faces[0-5], comp1 faces[6-8], partition
+  complete); `/components` + `cad_components` (27 tools); per-component HSL
+  color / select / isolate in the browser.
+
+## 8. The gearbox live-fire exercise → 10 findings, all fixed (`ab9a547`, `f7e82b9`, `3b3449a`)
+
+Built a real single-stage reducer housing via the MCP spec loop (11 steps,
+engineered from the gear pair outward), produced the full deliverable set
+(cover+assembly, cost/DFM, HLR drawing + RFQ zip), then fixed everything the
+exercise exposed:
+
+- **Design**: v2 split housing (parting through the shaft axis) kills the 12
+  shoulder-bore undercuts (upper 0 / lower 1 = the drain cross-hole only);
+  M5 tap-drill↔clearance pairing fixed; oil seals, dowels, breather, drain,
+  external feet. v2.1 adds bearing-boss flange bulges — max unclamped flange
+  span 100→40 mm, all 14 parting stacks ok_threaded. Cost sweep's honest
+  refutation: for CNC-from-billet, thinner walls RAISE cost; height is the
+  lever (h78 → $77.78, −8.3%).
+- **System** (batch 1 `ab9a547`, batch 2 `f7e82b9`): rib ±X/±Y wall ribs;
+  bearing catalog 62xx/63xx (+14 ISO 15 entries); classify_holes 300°
+  angular-extent gate (pocket corner fillets are not holes — the 4 phantom
+  Ø24 drawing rows died) + thread-guess confidence floor; **joint_check** (new
+  skill, manifest 426) — coaxial-stack clearance/tap-drill verdicts, catches
+  the both-sides-drilled-Ø5.5 bug mechanically; process-name aliases
+  (cnc_3axis == cnc_milling, full-dict pinned); renderer depth cue (open
+  cavity finally reads darker than the flange, deterministic); drawing
+  section 45° even-odd hatch; bbox determinism (mesh-history-dependent
+  AddOptimal → exact BRep bounds; cost reproduces to the cent).
+- **Honest corpus rebaseline**: the arc gate dropped 4 preserve_brep root
+  scores; adjudicated by measuring the parts — Crystal_SMD has only 90-92°
+  castellation arcs, zero real holes, so the old 1.0 was inflated. Baselines
+  regenerated, verify sweep 55 files / 0 regressions.
+- **OCCT ACCESS_VIOLATION root-caused** (`3b3449a`): a hole-opening circle
+  osculating a corner line (seam at the tangency vertex → zero-angle cusp)
+  crashes MakeFillet's ChFi3d corner processing, and the poison rides
+  G1-tangent chains. _fillet_crash_guard pre-validates (SEH catching is
+  impossible — OSD::SetSignal unbound in this OCP build); skipped edges
+  reported honestly; v1 results byte-stable. Minimal fixture in
+  tests/skills/test_repair_dfm_segfault_guard.py.
