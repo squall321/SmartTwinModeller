@@ -101,6 +101,9 @@ import phone_designer.skills.assembly.mate_at_distance  # noqa: F401
 import phone_designer.skills.assembly.mate_axis  # noqa: F401
 import phone_designer.skills.assembly.mate_concentric  # noqa: F401
 import phone_designer.skills.assembly.mate_planar  # noqa: F401
+import phone_designer.skills.assembly.mate_tag  # noqa: F401
+import phone_designer.skills.assembly.assembly_dof  # noqa: F401
+import phone_designer.skills.assembly.kinematic_sweep  # noqa: F401
 import phone_designer.skills.assembly.move_component  # noqa: F401
 import phone_designer.skills.create.bspline_surface  # noqa: F401
 import phone_designer.skills.create.coil_spring_rectangular  # noqa: F401
@@ -133,6 +136,7 @@ import phone_designer.skills.inspect.curvature_comb  # noqa: F401
 import phone_designer.skills.inspect.cosmetic_thread  # noqa: F401
 import phone_designer.skills.inspect.quote_package  # noqa: F401
 import phone_designer.skills.inspect.sketch_relation_check  # noqa: F401
+import phone_designer.skills.inspect.sketch_solve_lite  # noqa: F401
 import phone_designer.skills.inspect.hlr_view  # noqa: F401
 import phone_designer.skills.inspect.drawing_sheet  # noqa: F401
 import phone_designer.skills.inspect.render_preview  # noqa: F401
