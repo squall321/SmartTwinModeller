@@ -7,14 +7,17 @@
 <style>
   :root { --bg:#f5f6f8; --panel:#ffffff; --ink:#1f2733; --accent:#4682c8; }
   * { box-sizing:border-box; }
-  html,body { margin:0; height:100%; font-family:system-ui,Segoe UI,Roboto,sans-serif;
+  html,body { margin:0; height:100%; overflow:hidden;  /* fullscreen app — a page
+              scrollbar toggling on canvas resize oscillates the whole layout */
+              font-family:system-ui,Segoe UI,Roboto,sans-serif;
               color:var(--ink); background:var(--bg); }
   #app { display:flex; height:100%; }
   #side { width:260px; background:var(--panel); border-right:1px solid #dde1e6;
-          display:flex; flex-direction:column; }
+          display:flex; flex-direction:column; overflow:hidden; }
   #side h1 { font-size:14px; margin:0; padding:14px 16px; border-bottom:1px solid #eee;
              letter-spacing:.02em; }
-  #bodies { flex:1; overflow:auto; }
+  #bodies { flex:1; overflow:auto; min-height:0; }  /* min-height:0 defeats the flexbox
+              min-height:auto trap: 27 bodies must scroll INSIDE, not blow out the page */
   .body { padding:10px 16px; border-bottom:1px solid #f0f1f3; cursor:pointer; font-size:13px; }
   .body:hover { background:#eef4fb; }
   .body.sel { background:#e3eefb; border-left:3px solid var(--accent); padding-left:13px; }
@@ -219,8 +222,11 @@ let featHi = [];                 // [{ mesh, color }] — faces accented for a f
 // last framed geometry (center + radius) so camera presets can reuse it
 let framed = { center: new THREE.Vector3(), r: 10 };
 
+let _lastW = 0, _lastH = 0;
 function resize(){
   const w = view.clientWidth, h = view.clientHeight;
+  if (!w || !h || (w === _lastW && h === _lastH)) return;  // no-op on same size:
+  _lastW = w; _lastH = h;       // breaks any ResizeObserver→setSize feedback cycle
   renderer.setSize(w, h); camera.aspect = w/h; camera.updateProjectionMatrix();
 }
 new ResizeObserver(resize).observe(view); resize();
