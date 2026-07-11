@@ -384,10 +384,17 @@ def _build_scene(step: Path) -> dict:
     }
 
 
+# Bump when the scene's DETECTION changes (classify_holes/extract_feature_catalog
+# behaviour), not just its schema. Audit finding: a scene cached before the
+# classify_holes arc-gate kept serving 4 phantom Ø24 "holes" — the STEP never
+# changed, so size+mtime alone can never notice a detector-code change.
+_SCENE_VER = 2
+
+
 def _scene_for(ws: Path, body_id: str) -> dict | None:
     """Return the cached scene dict for body_id, (re)building it from the STEP
-    when the sidecar is stale (same F6 size+mtime invalidation as the GLB).
-    Returns None only when the body_id is unsafe/unknown (→ handler 404s)."""
+    when the sidecar is stale (F6 size+mtime invalidation + _SCENE_VER detector
+    version). Returns None only when the body_id is unsafe/unknown (→ 404)."""
     step = _step_for(ws, body_id)   # F4 traversal guard
     if step is None:
         return None
@@ -399,10 +406,13 @@ def _scene_for(ws: Path, body_id: str) -> dict | None:
             return False
         st = step.stat()
         try:
-            size, mtime = json.loads(src.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+            rec = json.loads(src.read_text(encoding="utf-8"))
+            size, mtime = rec[0], rec[1]
+            ver = rec[2] if len(rec) > 2 else 0   # pre-versioned sidecar → stale
+        except (OSError, ValueError, IndexError, TypeError):
             return False
-        return int(size) == st.st_size and float(mtime) >= st.st_mtime
+        return (int(size) == st.st_size and float(mtime) >= st.st_mtime
+                and int(ver) == _SCENE_VER)
 
     if _fresh():
         try:
@@ -422,7 +432,8 @@ def _scene_for(ws: Path, body_id: str) -> dict | None:
         tmp = ws / f"{body_id}.scene.tmp{os.getpid()}"
         tmp.write_text(text, encoding="utf-8")
         os.replace(tmp, scene)    # atomic publish
-        src.write_text(json.dumps([st.st_size, st.st_mtime]), encoding="utf-8")
+        src.write_text(json.dumps([st.st_size, st.st_mtime, _SCENE_VER]),
+                       encoding="utf-8")
         return data
 
 

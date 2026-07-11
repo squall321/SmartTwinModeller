@@ -28,7 +28,9 @@
   #hud { position:absolute; left:12px; bottom:12px; background:rgba(255,255,255,.85);
          padding:6px 10px; border-radius:6px; font-size:12px; color:#556; }
   #err { position:absolute; left:12px; top:12px; color:#b23; font-size:12px; }
-  #sel { position:absolute; right:12px; top:56px; background:rgba(255,255,255,.92);
+  #sel { position:absolute; right:12px; top:100px; background:rgba(255,255,255,.92);
+         /* below the #section bar (audit: at top:56 it covered the section
+            controls — Z/slider clicks were swallowed while a selection showed) */
          padding:10px 12px; border-radius:6px; font-size:12px; max-width:280px;
          box-shadow:0 1px 6px rgba(0,0,0,.12); display:none; }
   #sel b { color:var(--accent); }
@@ -193,8 +195,13 @@ controls.enableDamping = true;
 scene.add(new THREE.AmbientLight(0xffffff, 0.55));
 const key = new THREE.DirectionalLight(0xffffff, 0.8); key.position.set(1,1,1); scene.add(key);
 const fill = new THREE.DirectionalLight(0xffffff, 0.35); fill.position.set(-1,-0.5,-1); scene.add(fill);
+// The rendered scene is Y-UP: GLB vertices are OCCT-frame metres and the glTF
+// node quaternion (−90°X) maps OCCT +Z → scene +Y (audit: the old `rotation.x`
+// stood the grid up as a WALL through the model, and presets aimed at the
+// wrong OCCT axes with a view-parallel up vector → rolled, unrepeatable poses).
+// OCCT (x,y,z) → scene (x, z, −y).
 const grid = new THREE.GridHelper(400, 40, 0xcfd6df, 0xe4e9ef);
-grid.rotation.x = Math.PI/2; scene.add(grid);   // GLB is +Z up → put grid on XY
+scene.add(grid);   // GridHelper's default XZ plane IS the ground in a Y-up scene
 
 const loader = new GLTFLoader();
 let current = null;
@@ -238,29 +245,42 @@ function frameObject(obj){
   const r = Math.max(size.x, size.y, size.z) || 10;
   framed.center.copy(center); framed.r = r;
   controls.target.copy(center);
-  camera.position.set(center.x + r*1.4, center.y - r*1.6, center.z + r*1.2);
+  camera.up.set(0, 1, 0);                       // ALWAYS reset (audit: presets left
+  // a mutated up behind → the next Reset/preset inherited a rolled pose)
+  // iso from OCCT front-right-top: OCCT (+1.4, −1.6, +1.2)·r → scene (x, z, −y)
+  camera.position.set(center.x + r*1.4, center.y + r*1.2, center.z + r*1.6);
   camera.near = r/100; camera.far = r*100; camera.updateProjectionMatrix();
+  grid.scale.setScalar(Math.max(r / 100, 1e-4));   // grid ≈ 4·r, not 400 metres
+  grid.position.y = box.min.y;                     // ground under the part
   controls.update();
-  // mm chip: report bbox size (GLB coords are metres → ×1000 for mm)
+  // mm chip: OCCT x × y × z order (scene y=OCCT z, scene z=OCCT y); metres → mm
   const mm = v => (v*1000).toFixed(1);
   document.getElementById('mmchip').textContent =
-    `mm · ${mm(size.x)} × ${mm(size.y)} × ${mm(size.z)}`;
+    `mm · ${mm(size.x)} × ${mm(size.z)} × ${mm(size.y)}`;
 }
 
-// Camera presets — reuse framed.center / framed.r, place camera along an axis.
-function viewAlong(dir){
+// Camera presets — OCCT-semantic views mapped into the Y-up scene, each with an
+// EXPLICIT perpendicular up (audit: up ∥ view direction made lookAt degenerate —
+// the 'Top' preset rolled arbitrarily and aimed at the wrong wall).
+function viewAlong(dir, up){
   const c = framed.center, r = framed.r || 10;
   const d = dir.clone().normalize().multiplyScalar(r * 2.4);
+  camera.up.copy(up);
   camera.position.copy(c).add(d);
-  camera.up.set(0, 0, 1);                       // GLB is +Z up
   controls.target.copy(c);
   camera.near = r/100; camera.far = r*100; camera.updateProjectionMatrix();
   controls.update();
 }
 document.getElementById('btnReset').onclick = ()=>{ if (current) frameObject(current); };
-document.getElementById('btnFront').onclick = ()=> viewAlong(new THREE.Vector3(0, -1, 0));
-document.getElementById('btnTop').onclick   = ()=>{ camera.up.set(0,1,0); viewAlong(new THREE.Vector3(0, 0, 1)); };
-document.getElementById('btnIso').onclick   = ()=> viewAlong(new THREE.Vector3(1, -1, 0.8));
+// FRONT = view from OCCT −Y → scene (0,0,+1); screen-up = OCCT +Z → scene +Y
+document.getElementById('btnFront').onclick = ()=>
+  viewAlong(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0));
+// TOP = view from OCCT +Z → scene (0,+1,0); screen-up = OCCT +Y → scene −Z
+document.getElementById('btnTop').onclick = ()=>
+  viewAlong(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, -1));
+// ISO = view from OCCT (1,−1,0.8) → scene (1, 0.8, 1)
+document.getElementById('btnIso').onclick = ()=>
+  viewAlong(new THREE.Vector3(1, 0.8, 1), new THREE.Vector3(0, 1, 0));
 
 function clearHighlight(){
   if (highlighted){
@@ -297,6 +317,7 @@ function highlightFaces(indices){
 }
 
 window.loadBody = async function(bodyId){
+  currentMtime = 0;   // re-init from the next /api/bodies poll (same-stem reload)
   document.getElementById('err').textContent = '';
   currentBodyId = bodyId;
   document.querySelectorAll('.body').forEach(e=>e.classList.toggle('sel', e.dataset.id===bodyId));
@@ -373,7 +394,10 @@ featHead.onclick = ()=> featuresBox.classList.toggle('collapsed');
 const FEATURE_KINDS = ['holes','pockets','bosses','ribs','lugs'];
 function normaliseScene(d){
   if (Array.isArray(d && d.features)) return d.features;   // server already flattened
-  const cat = (d && (d.feature_catalog || d.catalog)) || d || {};
+  // ACTUAL server contract (audit finding): /scene sends {features:{holes:[...],…}}
+  // — a DICT under `features`. Accept it FIRST; the older fallbacks stay behind it.
+  const cat = (d && ((d.features && typeof d.features === 'object') ? d.features
+                     : (d.feature_catalog || d.catalog))) || d || {};
   const out = [];
   for (const kind of FEATURE_KINDS){
     const arr = cat[kind];
@@ -879,19 +903,48 @@ btnMeasure.onclick = ()=>{
 // ── V3 AUTO-REFRESH: poll /api/bodies; load a genuinely-new newest body, but never
 //    steal the view/selection while the user is orbiting or has a face selected on it. ──
 let lastNewestStem = null;
+let currentMtime = 0;   // mtime of the shown stem's STEP — same-stem reload detection
+window.__pollDbg = [];   // observability: last poll decisions (audit/testing hook)
+function _dbg(rec){ window.__pollDbg.push(rec); if (window.__pollDbg.length > 30) window.__pollDbg.shift(); }
 async function pollBodies(){
   try {
     const r = await fetch('/api/bodies'); const d = await r.json();
     if (!d.bodies || !d.bodies.length) return;
+    // busy = mid-orbit OR the selection panel is showing (face OR component pick —
+    // audit: `highlighted` missed component selections and never expired; #sel
+    // visibility is the honest proxy for "user is working with this view")
+    const selVisible = document.getElementById('sel').style.display === 'block';
+    const busy = pointerDown || selVisible;
+    // SAME-STEM RELOAD (audit: the pick→modify→export loop never closed): if the
+    // STEP behind the CURRENT body was overwritten (cad_export back to the same
+    // stem), reload it in place. mtime comes from /api/bodies.
+    const cur = d.bodies.find(b => b.body_id === currentBodyId);
+    _dbg({ t: Date.now()%1e6, cur: cur && cur.body_id, curM: cur && cur.mtime,
+           mem: currentMtime, busy, sel: selVisible });
+    if (cur){
+      if (!currentMtime) currentMtime = cur.mtime;      // init on first sight
+      else if (cur.mtime > currentMtime + 1e-6){
+        if (busy){   // selection targets OUTDATED geometry — say so, reload later
+          document.getElementById('hud').textContent =
+            `${currentBodyId} · 형상이 갱신됨 — 선택 해제 시 자동 리로드`;
+          return;
+        }
+        const prev = currentMtime;   // commit AFTER success — a transient load
+        _dbg({ reload: currentBodyId });   // failure must RETRY next poll (a silent
+        try {                              // one-shot loss was observed live)
+          await loadBody(currentBodyId);   // reload in place
+          currentMtime = cur.mtime;
+        } catch (e) { currentMtime = prev; _dbg({ reloadErr: String(e).slice(0,120) }); }
+        return;
+      }
+    }
     const newest = d.bodies[0].body_id;
     if (newest === lastNewestStem) return;              // nothing new
-    lastNewestStem = newest;
-    if (newest === currentBodyId) return;               // already showing it
-    // don't steal view if user is mid-orbit or has a live selection on the current body
-    const busy = pointerDown || highlighted !== null;
-    if (busy) return;
-    await loadBodies();                                 // rebuild list + auto-show newest (reframes)
-  } catch(_){ /* transient poll error — ignore */ }
+    if (newest === currentBodyId){ lastNewestStem = newest; return; }
+    if (busy) return;   // do NOT consume lastNewestStem — retry when selection clears
+    lastNewestStem = newest;                            // (audit: was consumed BEFORE
+    await loadBodies();                                 // the guard → stems dropped)
+  } catch(err){ _dbg({ err: String(err).slice(0, 200) }); }
 }
 setInterval(pollBodies, 1500);
 
