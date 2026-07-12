@@ -290,7 +290,7 @@ MCP equivalent (GL box): `cad_generate` → `cad_preview` → `Read` the `images
 # 1) Claude가 형상을 생성/수정 → cad_export 로 STEP+GLB 를 워크스페이스에 씀
 #    (MCP: cad_export(body_id, formats=["step","glb"], name="mypart"))
 # 2) 뷰어 서버 (별도 프로세스, 의존성 0 — 표준 라이브러리 http.server)
-python -m phone_designer.viewer_server --port 8765
+venv/Scripts/python.exe -m phone_designer.viewer_server --port 8765
 # 3) 브라우저 / VS Code Simple Browser 에서 http://127.0.0.1:8765/
 ```
 왼쪽에서 body 선택 → **드래그=회전, 휠=줌, 우클릭=이동, 면 클릭=선택**.

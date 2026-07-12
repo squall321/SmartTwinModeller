@@ -42,8 +42,16 @@ from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("phone-designer-cad")
 
-_WORKSPACE = Path(os.environ.get("PHONE_DESIGNER_MCP_WORKSPACE")
-                  or tempfile.mkdtemp(prefix="pd_mcp_"))
+_ws_env = os.environ.get("PHONE_DESIGNER_MCP_WORKSPACE") or ""
+if "${" in _ws_env:
+    # audit footgun: launched outside Claude Code, "${workspaceFolder}/…" arrives
+    # LITERALLY (only the client expands it) — mkdir would create a directory
+    # literally named '${workspaceFolder}'. Fall back to a temp dir instead.
+    import sys
+    print(f"[mcp_server] unexpanded workspace {_ws_env!r} — using a temp dir",
+          file=sys.stderr)
+    _ws_env = ""
+_WORKSPACE = Path(_ws_env or tempfile.mkdtemp(prefix="pd_mcp_"))
 _WORKSPACE.mkdir(parents=True, exist_ok=True)
 
 
@@ -112,8 +120,31 @@ def _err(exc: Exception) -> dict:
 
 
 def _ensure_skills() -> None:
+    # AUDIT FIX (first-call deadlock): the MCP stdio transport keeps a thread
+    # blocked reading sys.stdin (holding its io lock); something in the 400+
+    # skill import chain touches sys.stdin and blocks on that lock — the first
+    # skills-touching call of a fresh session hung >=900 s on an idle
+    # connection (minimal repro: a thread in sys.stdin.readline makes
+    # _import_all_skills take 90 s+ vs 2.7 s standalone). Shield the import:
+    # point sys.stdin at devnull for its duration. main() also imports EAGERLY
+    # before mcp.run() so the reader thread doesn't even exist yet.
+    import sys
     from phone_designer.plan.executor import _import_all_skills
-    _import_all_skills()
+    real_stdin = sys.stdin
+    try:
+        sys.stdin = open(os.devnull, encoding="utf-8")
+    except OSError:
+        sys.stdin = real_stdin
+        _import_all_skills()
+        return
+    try:
+        _import_all_skills()
+    finally:
+        try:
+            sys.stdin.close()
+        except OSError:
+            pass
+        sys.stdin = real_stdin
 
 
 def _import_step(path: str):
@@ -1201,6 +1232,15 @@ def cad_get_selection() -> dict:
 
 
 def main() -> None:
+    # AUDIT FIX (first-call deadlock): import the skill library BEFORE mcp.run()
+    # spawns the stdio reader thread — the import can never contend with the
+    # transport's stdin lock, and the first tool call answers at full speed
+    # instead of paying a 60-90 s (worst: indefinite) import on the connection.
+    try:
+        _ensure_skills()
+    except Exception as exc:  # noqa: BLE001 — a broken env must still serve
+        import sys                            # discovery tools + honest errors
+        print(f"[mcp_server] eager skill import failed: {exc}", file=sys.stderr)
     mcp.run()
 
 

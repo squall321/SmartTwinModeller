@@ -5,8 +5,16 @@ integrator wiring it up. **The client IS the natural-language → spec interpret
 is no custom NL parser in the server. You discover ops, compose a build spec, execute it,
 read the structured failures, and repair your own spec. This document is the contract.
 
-Server name: `phone-designer-cad` · Launch: `python -m phone_designer.mcp_server` (stdio)
-Skill library behind the tools: **419 registered skills** (measured via
+Server name: `phone-designer-cad` · Launch: `venv/Scripts/python.exe -m phone_designer.mcp_server` (stdio)
+> ⚠️ **venv python 필수.** bare `python`(시스템 파이썬)은 mcp 패키지가 있으면 서버가 뜨고 tools/list까지
+> 답하지만 — build123d가 없어 **모든 geometry 툴이 ModuleNotFoundError로 죽습니다** (감사에서 실증:
+> discovery green / build dead). `.mcp.json`도 `venv/Scripts/python.exe`를 명시합니다.
+>
+> **알려진 한계 (head-of-line blocking):** 27개 툴은 sync def라 mcp 1.28 FastMCP가 이벤트루프에서
+> 직접 실행합니다 — 긴 CAD 호출 1건이 도는 동안 tools/list조차 큐에 대기합니다 (감사 실측: 427초).
+> 단일 클라이언트(Claude Code)에선 지연일 뿐 교착은 아니며, 호출 자체의 행은 워커 watchdog이 격리합니다.
+> 구조적 해결(툴별 async offload)은 백로그.
+Skill library behind the tools: **430 registered skills** (measured via
 `build_manifest()`; the module docstring's "~383" predates the Tier-1..4 + Phase-1/2
 batches). Category breakdown: inspect 132, modify/pocket 77, create 38, modify/boss 27,
 reverse_engineer 20, modify/curvature 16, assembly 14, modify/pattern 11, modify/sheet 10,
@@ -27,7 +35,11 @@ comes back as `{ok: false, error: "<ExcType>: <msg>", trace: "..."}`.
 
 ---
 
-## 1. Tool reference (all 23 `@mcp.tool`s, complete)
+## 1. Tool reference (27 `@mcp.tool`s)
+
+> 이후 추가된 4개: `cad_scene`(피처 카탈로그+face_indices), `cad_section`(절단 절반 → 새 body),
+> `cad_components`(멀티바디 분해), `cad_get_selection`(뷰어 픽 브리지). `cad_measure`는
+> `what='distance'` 모드 추가. 아래 23개 서술은 그대로 유효.
 
 ### Discovery — call these before composing a spec
 
@@ -275,8 +287,8 @@ Step 5: iterate with `cad_modify` / `cad_undo`, then look at it.
 
 ```json
 cad_modify {"body_id": "body_3fa8c21d", "spec": [
-  {"op": "fillet_predicate", "args": {
-     "edge_selector": {"kind": "axis_aligned_edges", "axis": "Z"}, "radius_mm": 2}}]}
+  {"op": "fillet_edges_by_predicate", "args": {
+     "selector": {"kind": "axis_aligned_edges", "axis": "Z"}, "radius_mm": 2}}]}
 → {"ok": true, "body_id": "body_91b02e77", "parent_body_id": "body_3fa8c21d",
    "is_solid": true, "volume_mm3": 8809.1, "...": "..."}
 

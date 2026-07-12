@@ -181,6 +181,29 @@ def build_parametric_script(
             return {"cx": _r(pos[0]), "cy": _r(pos[1]), "zc": _r(zmax - depth / 2.0),
                     "solid": f"Cylinder({_diam_token(_r(a.get('diameter_mm')))}/2, {depth})",
                     "op": "hole", "sk": sk}
+        if sk in ("clearance_hole", "tap_drill_hole"):
+            # standard-hole plan steps (audit: these were silently skipped, so the
+            # 'editable parametric model' rebuilt a plain box even for box+1hole).
+            # Resolve the cut Ø the SKILL itself would drill (threads_metric.yaml).
+            try:
+                from phone_designer.skills.modify_pocket.clearance_hole import (
+                    _thread_entry,
+                )
+                ent = _thread_entry(str(a.get("thread_spec") or ""))
+                dia = (ent.get(f"clearance_{a.get('fit', 'medium')}_mm")
+                       if sk == "clearance_hole" else ent.get("tap_drill_mm"))
+            except Exception:  # noqa: BLE001 — unknown spec → honest skip below
+                dia = None
+            if not dia:
+                return None
+            xy = a.get("position_xy") or [0, 0]
+            depth = _r(a.get("depth_mm"))
+            entry = ((a.get("face_selector") or {}).get("name") or "top").lower()
+            zc = (_r(bbox[2] + depth / 2.0) if entry == "bottom"
+                  else _r(zmax - depth / 2.0))
+            return {"cx": _r(xy[0]), "cy": _r(xy[1]), "zc": zc,
+                    "solid": f"Cylinder({_diam_token(_r(dia))}/2, {depth})",
+                    "op": "hole", "sk": sk}
         return None
 
     descriptors: list[dict] = []
